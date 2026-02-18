@@ -1,0 +1,20 @@
+node_modules/
+dist/
+coverage/
+.nyc_output/
+*.log
+*.tsbuildinfo
+
+# Editor/OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Local env
+.env
+.env.*
+!.env.example
+
+# Prevent accidental nested clone commits
+ai2-tax-plugins/

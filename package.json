@@ -1,0 +1,59 @@
+{
+  "name": "@ai2/tax-plugins",
+  "version": "1.0.0",
+  "description": "Country-specific tax filing plugins for BAS, VAT, GST, and activity statement returns — ai2fin.com",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "clean": "rimraf dist",
+    "test": "jest",
+    "lint": "eslint src/**/*.ts --fix",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.0",
+    "@types/node": "^20.10.0",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "eslint": "^8.57.0",
+    "jest": "^29.7.0",
+    "rimraf": "^5.0.5",
+    "ts-jest": "^29.1.0",
+    "typescript": "^5.3.3"
+  },
+  "files": [
+    "dist/**/*",
+    "package.json",
+    "README.md",
+    "CONTRIBUTING.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/embracingearth-space/ai2-tax-plugins.git"
+  },
+  "homepage": "https://github.com/embracingearth-space/ai2-tax-plugins#readme",
+  "bugs": {
+    "url": "https://github.com/embracingearth-space/ai2-tax-plugins/issues"
+  },
+  "keywords": [
+    "tax",
+    "bas",
+    "vat",
+    "gst",
+    "tax-return",
+    "tax-filing",
+    "australia",
+    "uk",
+    "india",
+    "canada",
+    "singapore",
+    "ai2fin"
+  ],
+  "author": "AI2 Enterprise Platform Team — ai2fin.com",
+  "license": "MIT"
+}
