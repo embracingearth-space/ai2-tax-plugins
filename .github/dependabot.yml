@@ -1,0 +1,47 @@
+# ═══════════════════════════════════════════════════════════════════════
+# Dependabot — automated dependency updates · embracingearth.space
+# ═══════════════════════════════════════════════════════════════════════
+# Strategy:
+#   • VERSION updates here do MINOR + PATCH only, grouped into one low-risk
+#     PR per ecosystem. MAJOR bumps are deliberately IGNORED — they are
+#     breaking changes (e.g. MUI 5→9, recharts 2→3, typescript 5→6) that
+#     need a planned, tested upgrade, not an auto-PR flood.
+#   • SECURITY updates (enabled via Settings → Code security → "Dependabot
+#     security updates" — a repo toggle, not set in this file) still bump
+#     ANY version, INCLUDING majors, when a CVE specifically requires it.
+#     The `version-update:` prefix on the ignore rules below scopes them to
+#     version updates only, so security fixes are never suppressed.
+# ═══════════════════════════════════════════════════════════════════════
+version: 2
+updates:
+  # ── Core package (repo root) ──
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+    groups:
+      npm-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+    ignore:
+      # Skip MAJOR version-updates — breaking changes need a deliberate,
+      # tested upgrade. Security updates still bump majors for CVEs.
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+
+  # ── GitHub Actions workflow dependencies ──
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
