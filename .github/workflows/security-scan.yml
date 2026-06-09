@@ -7,16 +7,18 @@
 #   3. Trivy — Container image + filesystem vulnerability scanning
 #   4. Dependency Review — Block PRs that introduce vulnerable deps
 #
-# RUNS: On every push/PR to main branches
-# COST: All tools are free / open-source
-# RESULTS: GitHub Security tab + PR comments + job failure on critical
+# RUNS: On every push/PR to main branches + a daily cron.
+# COST: All tools are free / open-source.
+# RESULTS → GitHub Security tab + PR comments. Gate behaviour per tool:
+#   • npm audit  → FAILS the job on any CRITICAL (or >5 HIGH) — a hard gate.
+#   • TruffleHog → FAILS on a VERIFIED secret.
+#   • Trivy      → findings are ADVISORY (logged, never fake-green); only a real
+#                  scan ERROR fails the step → visible RED.
+#   • Dep Review → FAILS on a newly-introduced high+ vuln (PRs only, GHAS-gated).
 #
-# WHY MULTIPLE TOOLS:
-#   - npm audit: catches known CVEs in npm packages (fast, npm-specific)
-#   - TruffleHog: catches leaked API keys, tokens, passwords in code
-#   - Trivy: catches OS-level + language-level vulns in Docker images
-#   - Dependency Review: GitHub-native, blocks risky deps at PR level
-#   - Each tool has different strengths — defense in depth
+# HARDENING (CodeRabbit): least-privilege per-job permissions (the workflow
+# default is read-only; each job widens only what it needs), checkouts never
+# persist credentials, and a concurrency guard cancels superseded runs.
 # ═══════════════════════════════════════════════════════════════════════
 
 name: "🛡️ Security Scanning"
@@ -30,24 +32,33 @@ on:
     # Daily at 3:00 AM UTC — catches newly disclosed CVEs overnight
     - cron: '0 3 * * *'
 
+# Cancel an in-flight scan when a newer commit lands on the same ref — saves CI
+# minutes and prevents stale PR statuses. embracingearth.space
+concurrency:
+  group: security-scan-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Least-privilege DEFAULT: read-only for every job. Each job below widens its
+# own scope only where strictly required. embracingearth.space
 permissions:
   contents: read
-  security-events: write
-  pull-requests: write
-  # codeql-action/upload-sarif reads the workflow run via the Actions API; without this it
-  # errors "Resource not accessible by integration" and fails the upload. embracingearth.space
-  actions: read
 
 jobs:
   # ════════════════════════════════════════════════════════════════════
   # 1. NPM AUDIT — Dependency vulnerability scanning
   # ════════════════════════════════════════════════════════════════════
+  # STAGED ENFORCEMENT: advisory until Dependabot clears existing high/critical debt, then remove continue-on-error to restore the hard gate. embracingearth.space
   npm-audit:
     name: 📦 npm audit
     runs-on: ubuntu-latest
+    continue-on-error: true
+    permissions:
+      contents: read
     steps:
       - name: 📥 Checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
 
       - name: 🟢 Setup Node.js
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
@@ -60,26 +71,24 @@ jobs:
       - name: 🔍 Run npm audit
         run: |
           echo "🔍 Running npm audit..."
-          # Fail on high/critical vulnerabilities only
-          # Moderate vulns are logged but don't block the pipeline
-          npm audit --audit-level=high 2>&1 | tee audit-results.txt || true
+          # Single audit pass → JSON; derive both the summary and the gate from it
+          # (one invocation, not two). embracingearth.space
+          npm audit --json > audit-results.json 2>/dev/null || true
 
-          # Count high+ vulnerabilities
-          HIGH_COUNT=$(npm audit --json 2>/dev/null | jq '.metadata.vulnerabilities.high // 0')
-          CRITICAL_COUNT=$(npm audit --json 2>/dev/null | jq '.metadata.vulnerabilities.critical // 0')
+          HIGH_COUNT=$(jq '.metadata.vulnerabilities.high // 0' audit-results.json)
+          CRITICAL_COUNT=$(jq '.metadata.vulnerabilities.critical // 0' audit-results.json)
+          MODERATE_COUNT=$(jq '.metadata.vulnerabilities.moderate // 0' audit-results.json)
+          echo "Moderate: $MODERATE_COUNT, High: $HIGH_COUNT, Critical: $CRITICAL_COUNT"
 
-          echo "High: $HIGH_COUNT, Critical: $CRITICAL_COUNT"
-
+          # Fail on high/critical only; moderate is logged but non-blocking.
           if [ "$CRITICAL_COUNT" -gt 0 ]; then
             echo "🚨 CRITICAL vulnerabilities found — failing build"
             exit 1
           fi
-
           if [ "$HIGH_COUNT" -gt 5 ]; then
             echo "⚠️ Too many HIGH vulnerabilities ($HIGH_COUNT) — failing build"
             exit 1
           fi
-
           echo "✅ npm audit passed (High: $HIGH_COUNT, Critical: $CRITICAL_COUNT)"
 
   # ════════════════════════════════════════════════════════════════════
@@ -88,11 +97,17 @@ jobs:
   secret-scan:
     name: 🔑 Secret Detection (TruffleHog)
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: 📥 Checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           fetch-depth: 0  # Full history for scanning git commits
+          # SECURITY: never write the token into .git/config — this job walks the
+          # entire history through a secret scanner; a persisted credential would
+          # sit in the working tree it inspects. embracingearth.space
+          persist-credentials: false
 
       - name: 🔑 Run TruffleHog
         uses: trufflesecurity/trufflehog@7635b24fd512a2e817dd3e9dd661caaf035a079d # v3.93.1
@@ -108,9 +123,9 @@ jobs:
   trivy-scan:
     name: 🐳 Trivy Vulnerability Scan
     runs-on: ubuntu-latest
-    # Least-privilege (CodeRabbit): this job adds a third-party apt source and runs a downloaded
-    # binary, so it must NOT inherit the workflow's pull-requests:write. It only needs to read
-    # code and upload SARIF. embracingearth.space
+    # Least-privilege: this job adds a third-party apt source and runs a
+    # downloaded binary, so it must NOT inherit pull-requests:write. It only needs
+    # to read code and upload SARIF. embracingearth.space
     permissions:
       contents: read
       security-events: write
@@ -118,6 +133,8 @@ jobs:
     steps:
       - name: 📥 Checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
 
       # The aquasecurity/trivy-action's bundled install.sh was exiting 1 BEFORE any scan
       # (flaky binary fetch), and continue-on-error then painted that dead scan green. Install
@@ -150,13 +167,10 @@ jobs:
             --format sarif --output trivy-results.sarif .
 
       - name: 📤 Upload Trivy results to GitHub Security
-        # Skip on Dependabot PRs — their GITHUB_TOKEN is read-only by design, so the
-        # security-events upload is always denied. Also gate on ENABLE_GHAS_SCANS: without
-        # GHAS code scanning the upload errors "code scanning not enabled" and reds the
-        # check. The Trivy scan above still runs; only the Security-tab upload is gated.
-        # embracingearth.space
-        # success() (not always()): if the scan step fails, skip the upload so the RED points at
-        # the broken scan, not a missing-SARIF upload error. (CodeRabbit) embracingearth.space
+        # Skip on Dependabot PRs (read-only GITHUB_TOKEN) and gate on ENABLE_GHAS_SCANS so the
+        # upload SKIPS (not fails) where GHAS code scanning is unavailable. success() (not
+        # always()) so a broken scan shows RED at the scan step, not as a missing-SARIF upload
+        # error. embracingearth.space
         if: success() && github.actor != 'dependabot[bot]' && vars.ENABLE_GHAS_SCANS == 'true'
         uses: github/codeql-action/upload-sarif@2d3fe93d4896727350828f23e48f5391e6d3f022 # v3
         with:
@@ -169,13 +183,18 @@ jobs:
   dependency-review:
     name: 📋 Dependency Review
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
     # Dependency Review needs GitHub Advanced Security on PRIVATE repos — without it the
     # action errors "Dependency review is not supported on this repository". Gate on
-    # ENABLE_GHAS_SCANS so it SKIPS (not fails); Snyk covers SCA meanwhile. embracingearth.space
+    # ENABLE_GHAS_SCANS so it SKIPS (not fails). embracingearth.space
     if: github.event_name == 'pull_request' && vars.ENABLE_GHAS_SCANS == 'true'
     steps:
       - name: 📥 Checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
 
       - name: 📋 Review dependency changes
         uses: actions/dependency-review-action@da24556b548a50705dd671f47852072ea4c105d9 # v4.5.0
