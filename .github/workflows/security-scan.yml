@@ -24,6 +24,8 @@
 name: "🛡️ Security Scanning"
 
 on:
+  # Manual scan-now trigger (Actions tab / gh workflow run)
+  workflow_dispatch:
   push:
     branches: [ "main", "master", "develop", "release" ]
   pull_request:
@@ -66,7 +68,7 @@ jobs:
           node-version: '20'
 
       - name: 📦 Install dependencies
-        run: npm install --legacy-peer-deps
+        run: npm install --ignore-scripts --legacy-peer-deps
 
       - name: 🔍 Run npm audit
         run: |
