@@ -67,10 +67,9 @@ jobs:
           node-version: '20'
 
       - name: 📦 Install dependencies
-        run: npm install --ignore-scripts --legacy-peer-deps
+        run: npm install --package-lock-only --ignore-scripts --legacy-peer-deps
 
       - name: 🔍 Run npm audit
-        continue-on-error: true  # ADVISORY (staged): reports vulns but does not gate the merge; remove once Dependabot clears the high/critical debt to restore the hard gate. embracingearth.space
         run: |
           echo "🔍 Running npm audit..."
           # Single audit pass → JSON; derive both the summary and the gate from it
