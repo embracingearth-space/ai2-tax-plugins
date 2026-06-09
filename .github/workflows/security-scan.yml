@@ -49,7 +49,7 @@ jobs:
   # ════════════════════════════════════════════════════════════════════
   # 1. NPM AUDIT — Dependency vulnerability scanning
   # ════════════════════════════════════════════════════════════════════
-  # STAGED ENFORCEMENT: advisory until Dependabot clears existing high/critical debt, then remove continue-on-error to restore the hard gate. embracingearth.space
+  # npm-audit is HONEST here (fails on real critical/high debt, no continue-on-error); intentionally NOT a required merge check while Dependabot clears the pre-existing debt — promote to required once green. embracingearth.space
   npm-audit:
     name: 📦 npm audit
     runs-on: ubuntu-latest
