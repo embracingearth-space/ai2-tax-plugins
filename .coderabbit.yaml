@@ -1,0 +1,33 @@
+# CodeRabbit AI code review — ai2fin.com (embracingearth.space)
+# Augments, does not replace, human CODEOWNERS approval.
+# See docs/compliance/reference/CI-CD-SECURITY-PIPELINE.md
+# Schema: https://docs.coderabbit.ai/reference/configuration
+language: en-US
+early_access: false
+reviews:
+  # Thorough reviews — appropriate for a regulated fintech codebase.
+  profile: assertive
+  request_changes_workflow: true
+  high_level_summary: true
+  review_status: true
+  poem: false
+  auto_review:
+    enabled: true
+    drafts: false
+    # Review PRs targeting the trunk + integration branches.
+    base_branches:
+      - release
+      - main
+      - develop
+  path_filters:
+    - "!**/dist/**"
+    - "!**/node_modules/**"
+    - "!**/*.lock"
+    - "!**/package-lock.json"
+    - "!**/*.min.js"
+  # Lean on the same linters the CI gate uses, so review and CI agree.
+  tools:
+    eslint:
+      enabled: true
+chat:
+  auto_reply: true
