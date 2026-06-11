@@ -223,7 +223,7 @@ const ghanaPlugin: TaxFilingPlugin = {
   getFilingPeriods(): FilingPeriodConfig {
     return {
       monthly: true,
-      quarterly: true,
+      quarterly: false,
       annual: false,
       defaultFrequency: 'monthly',
     };
@@ -263,10 +263,12 @@ const ghanaPlugin: TaxFilingPlugin = {
 
     // Input tax: extract from purchases + direct import/capital VAT
     const inputTaxCalc = roundGH((taxablePurchases * VAT_RATE) / (1 + VAT_RATE)) + importVat + capitalGoodsVat;
-    // Allow manual override if user has edited the field
-    const inputTax = (v.input_tax !== undefined && v.input_tax !== '' && v.input_tax !== null)
+    // Allow manual override if user has edited the field — but never let a
+    // non-numeric override inject NaN into net_vat / credit_carried_forward.
+    const overrideRaw = (v.input_tax !== undefined && v.input_tax !== '' && v.input_tax !== null)
       ? Number(v.input_tax)
-      : inputTaxCalc;
+      : NaN;
+    const inputTax = Number.isFinite(overrideRaw) ? overrideRaw : inputTaxCalc;
 
     const netVat = roundGH(outputTax - inputTax - priorCredit + otherAdj);
     const creditCarried = netVat < 0 ? Math.abs(netVat) : 0;
@@ -309,6 +311,9 @@ const ghanaPlugin: TaxFilingPlugin = {
     }
     if (Number(v.exempt_supplies) < 0) {
       results.push({ fieldId: 'exempt_supplies', message: 'Exempt supplies cannot be negative', severity: 'error' });
+    }
+    if (Number(v.capital_goods_vat) < 0) {
+      results.push({ fieldId: 'capital_goods_vat', message: 'Capital goods VAT cannot be negative', severity: 'error' });
     }
     if (Number(v.import_vat) < 0) {
       results.push({ fieldId: 'import_vat', message: 'Import VAT cannot be negative', severity: 'error' });

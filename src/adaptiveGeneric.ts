@@ -57,7 +57,7 @@ const DEFAULT_RATES: Record<string, number> = {
   FI: 0.255, FR: 0.20,
   GB: 0.20, GH: 0.20, GR: 0.24,
   HK: 0, HR: 0.25, HU: 0.27,
-  ID: 0.11, IE: 0.23, IL: 0.18, IN: 0.18, IT: 0.22,
+  ID: 0.12, IE: 0.23, IL: 0.18, IN: 0.18, IT: 0.22,
   JP: 0.10,
   KE: 0.16, KR: 0.10, KW: 0,
   LT: 0.21, LU: 0.17, LV: 0.21,
