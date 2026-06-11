@@ -304,11 +304,11 @@ const ghanaPlugin: TaxFilingPlugin = {
     if (Number(v.taxable_purchases) < 0) {
       results.push({ fieldId: 'taxable_purchases', message: 'Taxable purchases cannot be negative', severity: 'error' });
     }
-    const zeroRated = Number(v.zero_rated_supplies) || 0;
-    const exempt = Number(v.exempt_supplies) || 0;
-    const standardRated = Number(v.standard_rated_supplies) || 0;
-    if (zeroRated + exempt > standardRated + zeroRated + exempt) {
-      // This is always false; check if exports exceed total
+    if (Number(v.zero_rated_supplies) < 0) {
+      results.push({ fieldId: 'zero_rated_supplies', message: 'Zero-rated supplies cannot be negative', severity: 'error' });
+    }
+    if (Number(v.exempt_supplies) < 0) {
+      results.push({ fieldId: 'exempt_supplies', message: 'Exempt supplies cannot be negative', severity: 'error' });
     }
     if (Number(v.import_vat) < 0) {
       results.push({ fieldId: 'import_vat', message: 'Import VAT cannot be negative', severity: 'error' });
@@ -340,10 +340,21 @@ const ghanaPlugin: TaxFilingPlugin = {
     ];
   },
 
-  async generateExport(values: FieldValues): Promise<ExportOutput> {
+  async generateExport(values: FieldValues, format: string): Promise<ExportOutput> {
+    const date = new Date().toISOString().slice(0, 10);
+    if (format === 'csv') {
+      // Quote fields containing CSV-special chars (comma, quote, newline) per RFC 4180.
+      const esc = (s: string) => (/[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s);
+      const rows = Object.entries(values).map(([k, v]) => `${esc(k)},${esc(String(v ?? ''))}`);
+      return {
+        data: ['field,value', ...rows].join('\r\n'),
+        filename: `VAT-GH-${date}.csv`,
+        mimeType: 'text/csv',
+      };
+    }
     return {
       data: JSON.stringify(values, null, 2),
-      filename: `VAT-GH-${new Date().toISOString().slice(0, 10)}.json`,
+      filename: `VAT-GH-${date}.json`,
       mimeType: 'application/json',
     };
   },
