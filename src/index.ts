@@ -103,6 +103,7 @@ export { default as philippinesPlugin } from './countries/philippines';
 export { default as indonesiaPlugin } from './countries/indonesia';
 export { default as mexicoPlugin } from './countries/mexico';
 export { default as madagascarPlugin } from './countries/madagascar';
+export { default as ghanaPlugin } from './countries/ghana';
 
 // Income tax plugins (compound keys)
 export { default as ukSelfAssessmentPlugin } from './countries/ukSelfAssessment';

@@ -31,6 +31,7 @@ import singaporePlugin from './countries/singapore';
 import indiaPlugin from './countries/india';
 import usaPlugin from './countries/usa';
 import madagascarPlugin from './countries/madagascar';
+import ghanaPlugin from './countries/ghana';
 import japanPlugin from './countries/japan';
 import southKoreaPlugin from './countries/southKorea';
 import chinaPlugin from './countries/china';
@@ -97,6 +98,7 @@ const OFFICIAL_PLUGINS: Record<string, TaxFilingPlugin> = {
   ID: indonesiaPlugin,
   MX: mexicoPlugin,
   MG: madagascarPlugin,
+  GH: ghanaPlugin,
 
   // ── Income tax plugins (compound keys) ──
   'GB-SA': ukSelfAssessmentPlugin,
@@ -255,6 +257,7 @@ export function getCountryTaxFilingLabel(countryCode?: string): string {
     IN: 'GST Filing (GSTR-3B)',
     US: 'Tax Filing (941)',
     MG: 'Déclaration TVA',
+    GH: 'VAT Return (GRA)',
     JP: 'Consumption Tax (消費税)',
     KR: 'VAT Return (부가세)',
     CN: 'VAT Return (增值税)',
