@@ -48,7 +48,7 @@ export const COUNTRY_TAX_RATES: Record<string, CountryTaxRateInfo> = {
   'GR': { countryCode: 'GR', countryName: 'Greece', taxFamily: 'VAT', standardRate: 0.24, reducedRate: 0.13, localName: 'ΦΠΑ' },
   'CZ': { countryCode: 'CZ', countryName: 'Czech Republic', taxFamily: 'VAT', standardRate: 0.21, reducedRate: 0.12, localName: 'DPH' },
   'HU': { countryCode: 'HU', countryName: 'Hungary', taxFamily: 'VAT', standardRate: 0.27, reducedRate: 0.05, localName: 'ÁFA' },
-  'RO': { countryCode: 'RO', countryName: 'Romania', taxFamily: 'VAT', standardRate: 0.19, reducedRate: 0.09, localName: 'TVA' },
+  'RO': { countryCode: 'RO', countryName: 'Romania', taxFamily: 'VAT', standardRate: 0.21, reducedRate: 0.11, localName: 'TVA' },
   'BG': { countryCode: 'BG', countryName: 'Bulgaria', taxFamily: 'VAT', standardRate: 0.20, reducedRate: 0.09, localName: 'ДДС' },
   'HR': { countryCode: 'HR', countryName: 'Croatia', taxFamily: 'VAT', standardRate: 0.25, reducedRate: 0.13, localName: 'PDV' },
   'TR': { countryCode: 'TR', countryName: 'Turkey', taxFamily: 'VAT', standardRate: 0.20, reducedRate: 0.10, localName: 'KDV' },
@@ -63,7 +63,7 @@ export const COUNTRY_TAX_RATES: Record<string, CountryTaxRateInfo> = {
   'ZA': { countryCode: 'ZA', countryName: 'South Africa', taxFamily: 'VAT', standardRate: 0.15, localName: 'VAT' },
   'NG': { countryCode: 'NG', countryName: 'Nigeria', taxFamily: 'VAT', standardRate: 0.075, localName: 'VAT' },
   'KE': { countryCode: 'KE', countryName: 'Kenya', taxFamily: 'VAT', standardRate: 0.16, localName: 'VAT' },
-  'GH': { countryCode: 'GH', countryName: 'Ghana', taxFamily: 'VAT', standardRate: 0.15, localName: 'VAT' },
+  'GH': { countryCode: 'GH', countryName: 'Ghana', taxFamily: 'VAT', standardRate: 0.20, localName: 'VAT' },
   'EG': { countryCode: 'EG', countryName: 'Egypt', taxFamily: 'VAT', standardRate: 0.14, localName: 'VAT' },
 
   // ─── Sales Tax / Hybrid ─────────────────────────────────────────────────
