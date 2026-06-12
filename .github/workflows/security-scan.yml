@@ -73,8 +73,10 @@ jobs:
         run: |
           echo "🔍 Running npm audit..."
           # Single audit pass → JSON; derive both the summary and the gate from it
-          # (one invocation, not two). embracingearth.space
-          npm audit --json > audit-results.json 2>/dev/null || true
+          # (one invocation, not two). Audit the COMMITTED lockfile
+          # (--package-lock-only) so the gate reflects what's in the repo, not a
+          # freshly re-resolved tree. embracingearth.space
+          npm audit --package-lock-only --json > audit-results.json 2>/dev/null || true
 
           HIGH_COUNT=$(jq '.metadata.vulnerabilities.high // 0' audit-results.json)
           CRITICAL_COUNT=$(jq '.metadata.vulnerabilities.critical // 0' audit-results.json)

@@ -49,8 +49,6 @@ function paramsForYear(year: number) {
   };
 }
 
-const STD_DEDUCTION_SINGLE = STD_DEDUCTION_SINGLE_BY_YEAR[currentTaxYear() >= 2026 ? 2026 : 2025];
-
 function calcFederalTax(taxable: number, year = currentTaxYear()): number {
   let tax = 0;
   for (const [lower, upper, rate] of paramsForYear(year).brackets) {
@@ -197,7 +195,7 @@ const usItPlugin: TaxFilingPlugin = {
 
     const { seTax, deduction: seDeduction } = calcSelfEmploymentTax(Math.max(0, net_profit_loss));
     const adjusted_gross_income = net_profit_loss - seDeduction;
-    const standard_deduction = STD_DEDUCTION_SINGLE;
+    const standard_deduction = paramsForYear(currentTaxYear()).stdDeduction;
     const taxable_income = Math.max(0, adjusted_gross_income - standard_deduction);
     const federal_tax = calcFederalTax(taxable_income);
     const total_tax = Math.round((federal_tax + seTax) * 100) / 100;
