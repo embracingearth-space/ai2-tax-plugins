@@ -264,11 +264,12 @@ const ghanaPlugin: TaxFilingPlugin = {
     // Input tax: extract from purchases + direct import/capital VAT
     const inputTaxCalc = roundGH((taxablePurchases * VAT_RATE) / (1 + VAT_RATE)) + importVat + capitalGoodsVat;
     // Allow manual override if user has edited the field — but never let a
-    // non-numeric override inject NaN into net_vat / credit_carried_forward.
+    // non-numeric OR negative override through (negative input tax would inflate
+    // the refund / credit_carried_forward, and is never valid on a VAT return).
     const overrideRaw = (v.input_tax !== undefined && v.input_tax !== '' && v.input_tax !== null)
       ? Number(v.input_tax)
       : NaN;
-    const inputTax = Number.isFinite(overrideRaw) ? overrideRaw : inputTaxCalc;
+    const inputTax = (Number.isFinite(overrideRaw) && overrideRaw >= 0) ? overrideRaw : inputTaxCalc;
 
     const netVat = roundGH(outputTax - inputTax - priorCredit + otherAdj);
     const creditCarried = netVat < 0 ? Math.abs(netVat) : 0;

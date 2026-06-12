@@ -47,11 +47,14 @@ const COUNTRY_NAMES: Record<string, string> = {
   ZA: 'South Africa',
 };
 
-// Default tax rates when no API - ai2fin.com fallbacks.
+// Default tax rates when no API - ai2fin.com fallbacks. These are STANDARD
+// statutory rates: a single per-country value can't encode reduced-rate bands,
+// sector exclusions or temporary cuts, so the fallback intentionally uses the
+// stable standard rate and relies on the live API for finer detail.
 // Verified against current law 2026-06. Scheduled changes worth re-checking:
-//   VN reverts to 0.10 on 2027-01-01 (Decree 174/2025 2% cut expires);
-//   TH 0.07 is a rolling royal-decree reduction of the statutory 10%;
-//   EE 0.24 is the temporary "security tax" rate (through 2028).
+//   TH 0.07 is itself a rolling royal-decree reduction of the statutory 10%
+//     (kept because it has held continuously for years and is the de-facto rate);
+//   EE 0.24 is the temporary "security tax" standard rate (through 2028).
 const DEFAULT_RATES: Record<string, number> = {
   AU: 0.10, AT: 0.20, AE: 0.05,
   BD: 0.15, BE: 0.21, BG: 0.20, BH: 0.10, BR: 0.0925,
@@ -76,9 +79,11 @@ const DEFAULT_RATES: Record<string, number> = {
   SA: 0.15, SE: 0.25, SG: 0.09, SI: 0.22, SK: 0.23,
   TH: 0.07, TR: 0.20, TW: 0.05,
   US: 0,
-  // VN: 2% cut (10% -> 8%) extended through 2026-12-31, Decree 174/2025.
-  // Finance/banking/insurance/securities/telecom/real-estate stay at 0.10.
-  VN: 0.08,
+  // VN standard rate is 10%. A temporary 2% cut (-> 8%) runs through 2026-12-31
+  // (Decree 174/2025) but EXCLUDES finance/banking/insurance/securities/telecom/
+  // real-estate, so a single fallback can't represent it — keep the 10% standard
+  // and let the API apply the 8% where it actually applies.
+  VN: 0.10,
   ZA: 0.15,
 };
 

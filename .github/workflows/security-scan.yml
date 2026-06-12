@@ -66,16 +66,15 @@ jobs:
         with:
           node-version: '20'
 
-      - name: 📦 Install dependencies
-        run: npm install --package-lock-only --ignore-scripts --legacy-peer-deps
-
       - name: 🔍 Run npm audit
         run: |
-          echo "🔍 Running npm audit..."
-          # Single audit pass → JSON; derive both the summary and the gate from it
-          # (one invocation, not two). Audit the COMMITTED lockfile
-          # (--package-lock-only) so the gate reflects what's in the repo, not a
-          # freshly re-resolved tree. embracingearth.space
+          # Audit the COMMITTED lockfile, never a freshly re-resolved tree. We do
+          # NOT run `npm install --package-lock-only` first — that would rewrite
+          # package-lock.json from package.json ranges and the gate would then
+          # audit a tree that isn't what's in the repo. embracingearth.space
+          test -f package-lock.json || { echo "::error::package-lock.json is required for the audit gate"; exit 1; }
+          echo "🔍 Running npm audit (committed lockfile)..."
+          # Single audit pass → JSON; derive both the summary and the gate from it.
           npm audit --package-lock-only --json > audit-results.json 2>/dev/null || true
 
           HIGH_COUNT=$(jq '.metadata.vulnerabilities.high // 0' audit-results.json)
