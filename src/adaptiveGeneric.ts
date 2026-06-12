@@ -47,7 +47,11 @@ const COUNTRY_NAMES: Record<string, string> = {
   ZA: 'South Africa',
 };
 
-// Default tax rates when no API - ai2fin.com fallbacks (2025-2026 rates)
+// Default tax rates when no API - ai2fin.com fallbacks.
+// Verified against current law 2026-06. Scheduled changes worth re-checking:
+//   VN reverts to 0.10 on 2027-01-01 (Decree 174/2025 2% cut expires);
+//   TH 0.07 is a rolling royal-decree reduction of the statutory 10%;
+//   EE 0.24 is the temporary "security tax" rate (through 2028).
 const DEFAULT_RATES: Record<string, number> = {
   AU: 0.10, AT: 0.20, AE: 0.05,
   BD: 0.15, BE: 0.21, BG: 0.20, BH: 0.10, BR: 0.0925,
@@ -57,6 +61,8 @@ const DEFAULT_RATES: Record<string, number> = {
   FI: 0.255, FR: 0.20,
   GB: 0.20, GH: 0.20, GR: 0.24,
   HK: 0, HR: 0.25, HU: 0.27,
+  // ID: statutory 12% applies only to luxury goods; ordinary supplies use the
+  // 11/12 DPP base => effective 11%.
   ID: 0.11, IE: 0.23, IL: 0.18, IN: 0.18, IT: 0.22,
   JP: 0.10,
   KE: 0.16, KR: 0.10, KW: 0,
@@ -65,11 +71,14 @@ const DEFAULT_RATES: Record<string, number> = {
   NG: 0.075, NL: 0.21, NO: 0.25, NP: 0.13, NZ: 0.15,
   OM: 0.05,
   PE: 0.18, PH: 0.12, PK: 0.18, PL: 0.23, PT: 0.23,
-  QA: 0, RO: 0.21, RU: 0.20,
+  // RU: 20% -> 22% from 2026-01-01 (Law 425-FZ; 10% reduced rate retained).
+  QA: 0, RO: 0.21, RU: 0.22,
   SA: 0.15, SE: 0.25, SG: 0.09, SI: 0.22, SK: 0.23,
   TH: 0.07, TR: 0.20, TW: 0.05,
   US: 0,
-  VN: 0.10,
+  // VN: 2% cut (10% -> 8%) extended through 2026-12-31, Decree 174/2025.
+  // Finance/banking/insurance/securities/telecom/real-estate stay at 0.10.
+  VN: 0.08,
   ZA: 0.15,
 };
 

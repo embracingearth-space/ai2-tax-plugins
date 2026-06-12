@@ -3,8 +3,10 @@
  * Australian Taxation Office (ATO)
  * Reference: https://www.ato.gov.au/individuals-and-families/your-tax-return
  * ARCHITECTURE: Compound-key plugin 'AU-IT' alongside 'AU' (BAS).
- *   2024-25 tax rates: 0% ($0-$18,200), 16% ($18,201-$45,000), 30% ($45,001-$135,000),
- *   37% ($135,001-$190,000), 45% ($190,001+). Medicare levy: 2%.
+ *   Brackets: 0% ($0-$18,200), then $18,201-$45,000 / 30% ($45,001-$135,000) /
+ *   37% ($135,001-$190,000) / 45% ($190,001+). Medicare levy: 2%.
+ *   First-bracket rate is FY-dependent (legislated cuts): 16% to FY2025-26,
+ *   15% from FY2026-27 (1 Jul 2026), 14% from FY2027-28 (1 Jul 2027).
  *   FY: Jul 1 - Jun 30. Annual filing by Oct 31 (self) or May (via agent).
  */
 
@@ -15,10 +17,22 @@ import type {
 
 const TAX_FREE = 18200;
 
-function calcAuTax(taxable: number): number {
+// FY starts 1 July: months Jul-Dec belong to the FY starting that year.
+function currentFyStartYear(now = new Date()): number {
+  return now.getMonth() >= 6 ? now.getFullYear() : now.getFullYear() - 1;
+}
+
+// Legislated first-bracket cuts: 16% to FY2025-26, 15% FY2026-27, 14% FY2027-28+.
+function firstBracketRate(fyStartYear: number): number {
+  if (fyStartYear >= 2027) return 0.14;
+  if (fyStartYear === 2026) return 0.15;
+  return 0.16;
+}
+
+function calcAuTax(taxable: number, fyStartYear = currentFyStartYear()): number {
   if (taxable <= TAX_FREE) return 0;
   let tax = 0;
-  if (taxable > TAX_FREE) tax += Math.min(taxable - TAX_FREE, 45000 - TAX_FREE) * 0.16;
+  if (taxable > TAX_FREE) tax += Math.min(taxable - TAX_FREE, 45000 - TAX_FREE) * firstBracketRate(fyStartYear);
   if (taxable > 45000) tax += Math.min(taxable - 45000, 135000 - 45000) * 0.30;
   if (taxable > 135000) tax += Math.min(taxable - 135000, 190000 - 135000) * 0.37;
   if (taxable > 190000) tax += (taxable - 190000) * 0.45;
@@ -60,7 +74,7 @@ const auItPlugin: TaxFilingPlugin = {
         id: 'deductions',
         title: 'Deductions',
         fields: [
-          { id: 'work_related_car', label: 'Work-related car expenses', type: 'currency', editable: true, required: false, helpText: 'Cents per km (85c/km 2024-25, max 5,000 km) or logbook' },
+          { id: 'work_related_car', label: 'Work-related car expenses', type: 'currency', editable: true, required: false, helpText: 'Cents per km (88c/km 2025-26, max 5,000 km) or logbook' },
           { id: 'work_related_travel', label: 'Work-related travel expenses', type: 'currency', editable: true, required: false },
           { id: 'work_related_clothing', label: 'Clothing, laundry, dry-cleaning', type: 'currency', editable: true, required: false },
           { id: 'work_from_home', label: 'Working from home expenses', type: 'currency', editable: true, required: false, helpText: 'Fixed rate: 67c/hour. Or actual cost method.' },
@@ -79,7 +93,7 @@ const auItPlugin: TaxFilingPlugin = {
           { id: 'taxable_income', label: 'Taxable income', type: 'currency', calculated: true, editable: false, required: true },
           { id: 'income_tax', label: 'Tax on taxable income', type: 'currency', calculated: true, editable: false, required: true },
           { id: 'medicare_levy', label: 'Medicare levy (2%)', type: 'currency', calculated: true, editable: false, required: true },
-          { id: 'medicare_surcharge', label: 'Medicare levy surcharge', type: 'currency', editable: true, required: false, helpText: '1-1.5% if no private health insurance and income >$93,000 single' },
+          { id: 'medicare_surcharge', label: 'Medicare levy surcharge', type: 'currency', editable: true, required: false, helpText: '1-1.5% if no private health insurance and income >$101,000 single (2025-26)' },
           { id: 'lito', label: 'Low Income Tax Offset (LITO)', type: 'currency', calculated: true, editable: false, required: false, helpText: 'Up to $700 for income ≤$45,000' },
           { id: 'franking_credit_offset', label: 'Franking credit tax offset', type: 'currency', calculated: true, editable: false, required: false },
           { id: 'total_tax', label: 'Total tax liability', type: 'currency', calculated: true, editable: false, required: true },

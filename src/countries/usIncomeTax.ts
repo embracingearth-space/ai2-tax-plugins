@@ -3,10 +3,11 @@
  * Internal Revenue Service (IRS)
  * Reference: https://www.irs.gov/forms-pubs/about-schedule-c-form-1040
  * ARCHITECTURE: Compound-key plugin 'US-IT' alongside 'US' (Form 941 payroll).
- *   2025 tax brackets (single): 10/12/22/24/32/35/37%.
- *   Self-employment tax: 15.3% (12.4% SS up to $176,100 + 2.9% Medicare).
+ *   Tax brackets (single): 10/12/22/24/32/35/37% — year-selected (2025 / 2026
+ *   per Rev. Proc. 2025-32 + OBBBA).
+ *   Self-employment tax: 15.3% (12.4% SS up to wage base + 2.9% Medicare).
  *   Quarterly estimated payments: Apr 15, Jun 15, Sep 15, Jan 15.
- *   Standard deduction 2025: $15,000 single, $30,000 MFJ.
+ *   Standard deduction (single): $15,750 (2025, OBBBA), $16,100 (2026).
  */
 
 import type {
@@ -17,8 +18,11 @@ import type {
 
 const SS_RATE = 0.124;
 const MEDICARE_RATE = 0.029;
-const SS_WAGE_BASE_2025 = 176100;
-const STD_DEDUCTION_SINGLE = 15000;
+
+// Year-indexed parameters. 2025 std deduction is the OBBBA-amended $15,750
+// (not the originally-announced $15,000). 2026 per Rev. Proc. 2025-32.
+const SS_WAGE_BASE: Record<number, number> = { 2025: 176100, 2026: 184500 };
+const STD_DEDUCTION_SINGLE_BY_YEAR: Record<number, number> = { 2025: 15750, 2026: 16100 };
 
 const BRACKETS_2025 = [
   [0, 11925, 0.10], [11925, 48475, 0.12], [48475, 103350, 0.22],
@@ -26,9 +30,30 @@ const BRACKETS_2025 = [
   [626350, Infinity, 0.37],
 ] as const;
 
-function calcFederalTax(taxable: number): number {
+const BRACKETS_2026 = [
+  [0, 12400, 0.10], [12400, 50400, 0.12], [50400, 105700, 0.22],
+  [105700, 201775, 0.24], [201775, 256225, 0.32], [256225, 640600, 0.35],
+  [640600, Infinity, 0.37],
+] as const;
+
+function currentTaxYear(now = new Date()): number {
+  return now.getFullYear();
+}
+
+function paramsForYear(year: number) {
+  const y = year >= 2026 ? 2026 : 2025;
+  return {
+    brackets: y === 2026 ? BRACKETS_2026 : BRACKETS_2025,
+    ssWageBase: SS_WAGE_BASE[y],
+    stdDeduction: STD_DEDUCTION_SINGLE_BY_YEAR[y],
+  };
+}
+
+const STD_DEDUCTION_SINGLE = STD_DEDUCTION_SINGLE_BY_YEAR[currentTaxYear() >= 2026 ? 2026 : 2025];
+
+function calcFederalTax(taxable: number, year = currentTaxYear()): number {
   let tax = 0;
-  for (const [lower, upper, rate] of BRACKETS_2025) {
+  for (const [lower, upper, rate] of paramsForYear(year).brackets) {
     if (taxable > lower) {
       tax += Math.min(taxable - lower, upper - lower) * rate;
     }
@@ -36,9 +61,9 @@ function calcFederalTax(taxable: number): number {
   return Math.round(tax * 100) / 100;
 }
 
-function calcSelfEmploymentTax(netProfit: number): { seTax: number; deduction: number } {
+function calcSelfEmploymentTax(netProfit: number, year = currentTaxYear()): { seTax: number; deduction: number } {
   const seEarnings = netProfit * 0.9235; // 92.35% of net SE earnings
-  const ssSE = Math.min(seEarnings, SS_WAGE_BASE_2025) * SS_RATE;
+  const ssSE = Math.min(seEarnings, paramsForYear(year).ssWageBase) * SS_RATE;
   const medicareSE = seEarnings * MEDICARE_RATE;
   const additionalMedicare = seEarnings > 200000 ? (seEarnings - 200000) * 0.009 : 0;
   const seTax = Math.round((ssSE + medicareSE + additionalMedicare) * 100) / 100;
@@ -96,7 +121,7 @@ const usItPlugin: TaxFilingPlugin = {
         title: 'Part II — Expenses (Schedule C)',
         fields: [
           { id: 'advertising', label: 'Advertising', officialLabel: 'Line 8', type: 'currency', editable: true, required: false },
-          { id: 'car_truck', label: 'Car and truck expenses', officialLabel: 'Line 9', type: 'currency', editable: true, required: false, helpText: 'Standard mileage rate: 70¢/mile (2025)' },
+          { id: 'car_truck', label: 'Car and truck expenses', officialLabel: 'Line 9', type: 'currency', editable: true, required: false, helpText: 'Standard mileage rate: 72.5¢/mile (2026); 70¢ (2025)' },
           { id: 'contract_labor', label: 'Contract labor', officialLabel: 'Line 11', type: 'currency', editable: true, required: false },
           { id: 'insurance', label: 'Insurance (other than health)', officialLabel: 'Line 15', type: 'currency', editable: true, required: false },
           { id: 'interest_mortgage', label: 'Interest — mortgage', officialLabel: 'Line 16a', type: 'currency', editable: true, required: false },

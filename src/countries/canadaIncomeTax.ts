@@ -3,8 +3,11 @@
  * Canada Revenue Agency (CRA)
  * Reference: https://www.canada.ca/en/revenue-agency/services/tax/individuals/topics/about-your-tax-return.html
  * ARCHITECTURE: Compound-key plugin 'CA-IT' alongside 'CA' (GST/HST Return).
- *   2025 federal brackets: 15/20.5/26/29/33%. Basic personal amount: $16,129.
- *   Provincial tax varies by province. CPP: 5.95% on $3,500-$71,300.
+ *   Federal brackets year-selected: 2026 = 14/20.5/26/29/33% (lowest rate cut
+ *   from 15% -> 14.5% blended 2025 -> 14% from 2026; thresholds indexed 2.0%).
+ *   BPA: $16,129 (2025) / $16,452 (2026), credited at the lowest rate.
+ *   CPP: 5.95% on $3,500 up to YMPE $71,300 (2025) / $74,600 (2026).
+ *   (CPP2 second-ceiling contributions not modelled yet.)
  *   FY: Jan-Dec. Filing deadline: Apr 30 (Jun 15 for self-employed, but payment Apr 30).
  *   Quarterly instalment payments if tax >$3,000 net.
  */
@@ -15,28 +18,51 @@ import type {
   SubJurisdiction,
 } from '../types';
 
-const BPA_2025 = 16129;
 const CPP_RATE = 0.0595;
 const CPP_EXEMPTION = 3500;
-const CPP_MAX_EARNINGS = 71300;
 
-const FEDERAL_BRACKETS_2025 = [
-  [0, 57375, 0.15], [57375, 114750, 0.205], [114750, 158468, 0.26],
-  [158468, 221708, 0.29], [221708, Infinity, 0.33],
-] as const;
+function currentTaxYear(now = new Date()): number {
+  return now.getFullYear();
+}
 
-function calcFederalTax(taxable: number): number {
+// 2025: lowest rate is the CRA blended 14.5% (15% Jan-Jun, 14% Jul-Dec);
+// thresholds per CRA 2025 indexation. 2026: 14% full-year, thresholds
+// indexed 2.0%, YMPE $74,600, BPA $16,452.
+const YEAR_PARAMS = {
+  2025: {
+    brackets: [
+      [0, 57375, 0.145], [57375, 114750, 0.205], [114750, 177882, 0.26],
+      [177882, 253414, 0.29], [253414, Infinity, 0.33],
+    ] as const,
+    bpa: 16129, lowestRate: 0.145, cppMaxEarnings: 71300,
+  },
+  2026: {
+    brackets: [
+      [0, 58523, 0.14], [58523, 117045, 0.205], [117045, 181440, 0.26],
+      [181440, 258482, 0.29], [258482, Infinity, 0.33],
+    ] as const,
+    bpa: 16452, lowestRate: 0.14, cppMaxEarnings: 74600,
+  },
+};
+
+function paramsForYear(year: number) {
+  return year >= 2026 ? YEAR_PARAMS[2026] : YEAR_PARAMS[2025];
+}
+
+function calcFederalTax(taxable: number, year = currentTaxYear()): number {
+  const p = paramsForYear(year);
   let tax = 0;
-  for (const [lower, upper, rate] of FEDERAL_BRACKETS_2025) {
+  for (const [lower, upper, rate] of p.brackets) {
     if (taxable > lower) tax += Math.min(taxable - lower, upper - lower) * rate;
   }
-  // Basic personal amount credit
-  tax -= BPA_2025 * 0.15;
+  // Basic personal amount credit (non-refundable, at the lowest rate)
+  tax -= p.bpa * p.lowestRate;
   return Math.max(0, Math.round(tax * 100) / 100);
 }
 
-function calcCPP(selfEmploymentIncome: number): number {
-  const pensionableEarnings = Math.min(Math.max(0, selfEmploymentIncome - CPP_EXEMPTION), CPP_MAX_EARNINGS - CPP_EXEMPTION);
+function calcCPP(selfEmploymentIncome: number, year = currentTaxYear()): number {
+  const p = paramsForYear(year);
+  const pensionableEarnings = Math.min(Math.max(0, selfEmploymentIncome - CPP_EXEMPTION), p.cppMaxEarnings - CPP_EXEMPTION);
   // Self-employed pay both employee + employer portions
   return Math.round(pensionableEarnings * CPP_RATE * 2 * 100) / 100;
 }
