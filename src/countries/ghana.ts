@@ -349,9 +349,16 @@ const ghanaPlugin: TaxFilingPlugin = {
   async generateExport(values: FieldValues, format: string): Promise<ExportOutput> {
     const date = new Date().toISOString().slice(0, 10);
     if (format === 'csv') {
-      // Quote fields containing CSV-special chars (comma, quote, newline) per RFC 4180.
-      const esc = (s: string) => (/[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s);
-      const rows = Object.entries(values).map(([k, v]) => `${esc(k)},${esc(String(v ?? ''))}`);
+      const esc = (val: unknown) => {
+        let s = String(val ?? '');
+        // Neutralize spreadsheet formula injection: a cell whose first char is
+        // = + - @ (or tab/CR) is executed as a formula by Excel/Sheets even when
+        // quoted, so prefix it with a single quote first.
+        if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
+        // Then RFC 4180-quote fields containing comma / quote / newline.
+        return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+      };
+      const rows = Object.entries(values).map(([k, v]) => `${esc(k)},${esc(v)}`);
       return {
         data: ['field,value', ...rows].join('\r\n'),
         filename: `VAT-GH-${date}.csv`,
