@@ -1,0 +1,69 @@
+name: CodeRabbit Approval Gate
+
+# Closes the gap that let PR #153 merge: the native "CodeRabbit" status check
+# goes green on "review completed", NOT on "approved". This gate fails unless
+# CodeRabbit's effective-latest review is APPROVED and none of its review
+# threads are left unresolved. Add it as a required status check.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  pull_request_review:
+    types: [submitted, dismissed, edited]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  coderabbit-approval-gate:
+    name: CodeRabbit Approval Gate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require a genuine CodeRabbit approval
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const number = context.payload.pull_request.number;
+            const isCR = (login) => (login || '').toLowerCase().startsWith('coderabbit');
+
+            // 1) Effective-latest CodeRabbit review must be APPROVED.
+            const reviews = await github.paginate(github.rest.pulls.listReviews, {
+              owner, repo, pull_number: number, per_page: 100,
+            });
+            const cr = reviews
+              .filter((r) => isCR(r.user && r.user.login))
+              .sort((a, b) => new Date(a.submitted_at) - new Date(b.submitted_at));
+            const latest = cr[cr.length - 1];
+            if (!latest) {
+              core.setFailed('CodeRabbit has not reviewed this PR yet — no review found.');
+              return;
+            }
+            if (latest.state !== 'APPROVED') {
+              core.setFailed(`CodeRabbit's latest review is ${latest.state}, not APPROVED.`);
+              return;
+            }
+
+            // 2) No unresolved CodeRabbit review threads.
+            const data = await github.graphql(
+              `query ($owner: String!, $repo: String!, $number: Int!) {
+                 repository(owner: $owner, name: $repo) {
+                   pullRequest(number: $number) {
+                     reviewThreads(first: 100) {
+                       nodes { isResolved comments(first: 1) { nodes { author { login } } } }
+                     }
+                   }
+                 }
+               }`,
+              { owner, repo, number }
+            );
+            const unresolved = data.repository.pullRequest.reviewThreads.nodes.filter(
+              (t) => !t.isResolved && isCR(t.comments.nodes[0] && t.comments.nodes[0].author && t.comments.nodes[0].author.login)
+            );
+            if (unresolved.length) {
+              core.setFailed(`${unresolved.length} unresolved CodeRabbit thread(s) remain.`);
+              return;
+            }
+
+            core.info('CodeRabbit approved and all its threads are resolved.');
