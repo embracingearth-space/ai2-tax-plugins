@@ -357,11 +357,14 @@ const ghanaPlugin: TaxFilingPlugin = {
         mimeType: 'text/csv',
       };
     }
-    return {
-      data: JSON.stringify(values, null, 2),
-      filename: `VAT-GH-${date}.json`,
-      mimeType: 'application/json',
-    };
+    if (format === 'json') {
+      return {
+        data: JSON.stringify(values, null, 2),
+        filename: `VAT-GH-${date}.json`,
+        mimeType: 'application/json',
+      };
+    }
+    throw new RangeError(`Unsupported export format "${format}" — supported: json, csv`);
   },
 
   getPortalSubmissionInfo(): PortalInfo {

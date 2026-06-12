@@ -204,5 +204,5 @@ jobs:
           fail-on-severity: high
           # Comment on the PR with findings
           comment-summary-in-pr: always
-          # Block known malicious packages
-          deny-licenses: 'AGPL-3.0, GPL-3.0'
+          # Block copyleft licenses (canonical SPDX ids — shorthand "GPL-3.0" doesn't match)
+          deny-licenses: 'AGPL-3.0-only, AGPL-3.0-or-later, GPL-3.0-only, GPL-3.0-or-later'
