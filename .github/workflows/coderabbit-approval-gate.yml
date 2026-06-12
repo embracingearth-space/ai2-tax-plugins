@@ -1,0 +1,92 @@
+name: CodeRabbit Approval Gate
+
+# Closes the gap that let PR #153 merge: the native "CodeRabbit" status check
+# goes green on "review completed", NOT on "approved". This gate fails unless
+# CodeRabbit's effective-latest review is APPROVED and none of its review
+# threads are left unresolved. Wire it in as a required status check.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  pull_request_review:
+    types: [submitted, dismissed, edited]
+  # Re-run when a thread is resolved/unresolved so the gate reflects thread state
+  # without needing a new push or review.
+  pull_request_review_thread:
+    types: [resolved, unresolved]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  coderabbit-approval-gate:
+    name: CodeRabbit Approval Gate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require a genuine CodeRabbit approval
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const number = context.payload.pull_request.number;
+
+            // CodeRabbit's immutable identity (GitHub App bot). The "[bot]" suffix
+            // is reserved by GitHub for Apps, so a human cannot register it. We
+            // match the numeric user id (most immutable) OR the exact bot login —
+            // never a prefix, which an account like "coderabbit-evil" could spoof.
+            // REST exposes "coderabbitai[bot]" + id; GraphQL author.login is "coderabbitai".
+            const CR_USER_ID = 136622811;
+            const CR_LOGINS = new Set(['coderabbitai[bot]', 'coderabbitai']);
+            const isCRReviewer = (u) => !!u && (u.id === CR_USER_ID || CR_LOGINS.has(u.login));
+            const isCRThreadAuthor = (login) => CR_LOGINS.has(login);
+
+            // 1) Effective-latest CodeRabbit review must be APPROVED.
+            const reviews = await github.paginate(github.rest.pulls.listReviews, {
+              owner, repo, pull_number: number, per_page: 100,
+            });
+            const cr = reviews
+              .filter((r) => isCRReviewer(r.user))
+              .sort((a, b) => new Date(a.submitted_at) - new Date(b.submitted_at));
+            const latest = cr[cr.length - 1];
+            if (!latest) {
+              core.setFailed('CodeRabbit has not reviewed this PR yet — no review found.');
+              return;
+            }
+            if (latest.state !== 'APPROVED') {
+              core.setFailed(`CodeRabbit's latest review is ${latest.state}, not APPROVED.`);
+              return;
+            }
+
+            // 2) No unresolved CodeRabbit review threads — FULLY paginated so a PR
+            //    with >100 threads can't hide an unresolved one on a later page.
+            let after = null;
+            let unresolved = 0;
+            let guard = 0;
+            do {
+              const data = await github.graphql(
+                `query ($owner: String!, $repo: String!, $number: Int!, $after: String) {
+                   repository(owner: $owner, name: $repo) {
+                     pullRequest(number: $number) {
+                       reviewThreads(first: 100, after: $after) {
+                         pageInfo { hasNextPage endCursor }
+                         nodes { isResolved comments(first: 1) { nodes { author { login } } } }
+                       }
+                     }
+                   }
+                 }`,
+                { owner, repo, number, after }
+              );
+              const threads = data.repository.pullRequest.reviewThreads;
+              unresolved += threads.nodes.filter(
+                (n) => !n.isResolved && isCRThreadAuthor(n.comments.nodes[0] && n.comments.nodes[0].author && n.comments.nodes[0].author.login)
+              ).length;
+              after = threads.pageInfo.hasNextPage ? threads.pageInfo.endCursor : null;
+            } while (after && ++guard < 50);
+
+            if (unresolved) {
+              core.setFailed(`${unresolved} unresolved CodeRabbit thread(s) remain.`);
+              return;
+            }
+
+            core.info('CodeRabbit approved and all its threads are resolved.');
