@@ -3,10 +3,13 @@
  * Income Tax Department / Central Board of Direct Taxes (CBDT)
  * Reference: https://www.incometax.gov.in
  * ARCHITECTURE: Compound-key plugin 'IN-IT' alongside 'IN' (GSTR-3B).
- *   Two regimes from AY 2024-25:
- *   OLD: 5% (₹3-6L), 20% (₹6-9L), 30% (₹9L+) with deductions (80C, 80D, HRA, etc.)
- *   NEW (default from AY 2024-25): 0% (₹0-3L), 5% (₹3-7L), 10% (₹7-10L),
- *     15% (₹10-12L), 20% (₹12-15L), 30% (₹15L+). Standard deduction ₹75,000.
+ *   Two regimes — slabs current for FY2025-26 AND FY2026-27 (Budget 2026
+ *   made no changes):
+ *   OLD: 0% (₹0-2.5L), 5% (₹2.5-5L), 20% (₹5-10L), 30% (₹10L+) with
+ *     deductions (80C, 80D, HRA, etc.); §87A rebate ₹12,500 if ≤₹5L.
+ *   NEW (default): 0% (₹0-4L), 5% (₹4-8L), 10% (₹8-12L), 15% (₹12-16L),
+ *     20% (₹16-20L), 25% (₹20-24L), 30% (₹24L+). Standard deduction ₹75,000.
+ *     §87A rebate ₹60,000 => zero tax up to ₹12L taxable (+ marginal relief).
  *   FY: Apr 1 - Mar 31. Filing deadline: Jul 31 (non-audit), Oct 31 (audit).
  *   Advance tax: quarterly (Jun 15, Sep 15, Dec 15, Mar 15).
  */
@@ -18,29 +21,35 @@ import type {
 } from '../types';
 
 function calcOldRegime(taxable: number): number {
-  if (taxable <= 300000) return 0;
+  if (taxable <= 250000) return 0;
   let tax = 0;
-  let r = taxable;
-  if (r > 300000) { tax += Math.min(r - 300000, 300000) * 0.05; }
-  if (r > 600000) { tax += Math.min(r - 600000, 300000) * 0.20; }
-  if (r > 900000) { tax += (r - 900000) * 0.30; }
+  if (taxable > 250000) { tax += Math.min(taxable - 250000, 250000) * 0.05; }
+  if (taxable > 500000) { tax += Math.min(taxable - 500000, 500000) * 0.20; }
+  if (taxable > 1000000) { tax += (taxable - 1000000) * 0.30; }
+  // Section 87A (old regime): rebate up to ₹12,500 if taxable ≤ ₹5L
+  if (taxable <= 500000) { tax = Math.max(0, tax - 12500); }
   return Math.round(tax);
 }
 
 function calcNewRegime(taxable: number): number {
-  if (taxable <= 300000) return 0;
+  if (taxable <= 400000) return 0;
   let tax = 0;
   const slabs = [
-    [300000, 700000, 0.05], [700000, 1000000, 0.10], [1000000, 1200000, 0.15],
-    [1200000, 1500000, 0.20], [1500000, Infinity, 0.30],
+    [400000, 800000, 0.05], [800000, 1200000, 0.10], [1200000, 1600000, 0.15],
+    [1600000, 2000000, 0.20], [2000000, 2400000, 0.25], [2400000, Infinity, 0.30],
   ] as const;
   for (const [lower, upper, rate] of slabs) {
     if (taxable > lower) {
       tax += Math.min(taxable - lower, upper - lower) * rate;
     }
   }
-  // Marginal relief for income ≤ ₹7L under section 87A (rebate ₹25,000)
-  if (taxable <= 700000) { tax = Math.max(0, tax - 25000); }
+  if (taxable <= 1200000) {
+    // Section 87A: rebate up to ₹60,000 => zero tax for taxable ≤ ₹12L
+    tax = Math.max(0, tax - 60000);
+  } else {
+    // Marginal relief just above ₹12L: tax capped at the excess over ₹12L
+    tax = Math.min(tax, taxable - 1200000);
+  }
   return Math.round(tax);
 }
 

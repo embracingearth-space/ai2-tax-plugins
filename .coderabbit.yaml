@@ -18,6 +18,7 @@ reviews:
     base_branches:
       - release
       - main
+      - master
       - develop
   path_filters:
     - "!**/dist/**"

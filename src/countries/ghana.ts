@@ -264,11 +264,12 @@ const ghanaPlugin: TaxFilingPlugin = {
     // Input tax: extract from purchases + direct import/capital VAT
     const inputTaxCalc = roundGH((taxablePurchases * VAT_RATE) / (1 + VAT_RATE)) + importVat + capitalGoodsVat;
     // Allow manual override if user has edited the field — but never let a
-    // non-numeric override inject NaN into net_vat / credit_carried_forward.
+    // non-numeric OR negative override through (negative input tax would inflate
+    // the refund / credit_carried_forward, and is never valid on a VAT return).
     const overrideRaw = (v.input_tax !== undefined && v.input_tax !== '' && v.input_tax !== null)
       ? Number(v.input_tax)
       : NaN;
-    const inputTax = Number.isFinite(overrideRaw) ? overrideRaw : inputTaxCalc;
+    const inputTax = (Number.isFinite(overrideRaw) && overrideRaw >= 0) ? overrideRaw : inputTaxCalc;
 
     const netVat = roundGH(outputTax - inputTax - priorCredit + otherAdj);
     const creditCarried = netVat < 0 ? Math.abs(netVat) : 0;
@@ -348,20 +349,30 @@ const ghanaPlugin: TaxFilingPlugin = {
   async generateExport(values: FieldValues, format: string): Promise<ExportOutput> {
     const date = new Date().toISOString().slice(0, 10);
     if (format === 'csv') {
-      // Quote fields containing CSV-special chars (comma, quote, newline) per RFC 4180.
-      const esc = (s: string) => (/[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s);
-      const rows = Object.entries(values).map(([k, v]) => `${esc(k)},${esc(String(v ?? ''))}`);
+      const esc = (val: unknown) => {
+        let s = String(val ?? '');
+        // Neutralize spreadsheet formula injection: a cell whose first char is
+        // = + - @ (or tab/CR) is executed as a formula by Excel/Sheets even when
+        // quoted, so prefix it with a single quote first.
+        if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
+        // Then RFC 4180-quote fields containing comma / quote / newline.
+        return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+      };
+      const rows = Object.entries(values).map(([k, v]) => `${esc(k)},${esc(v)}`);
       return {
         data: ['field,value', ...rows].join('\r\n'),
         filename: `VAT-GH-${date}.csv`,
         mimeType: 'text/csv',
       };
     }
-    return {
-      data: JSON.stringify(values, null, 2),
-      filename: `VAT-GH-${date}.json`,
-      mimeType: 'application/json',
-    };
+    if (format === 'json') {
+      return {
+        data: JSON.stringify(values, null, 2),
+        filename: `VAT-GH-${date}.json`,
+        mimeType: 'application/json',
+      };
+    }
+    throw new RangeError(`Unsupported export format "${format}" — supported: json, csv`);
   },
 
   getPortalSubmissionInfo(): PortalInfo {
