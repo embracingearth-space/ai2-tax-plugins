@@ -230,15 +230,17 @@ describe('India Income Tax (IN-IT)', () => {
   const p = indiaIncomeTaxPlugin;
   it('passes interface check', () => validatePluginInterface(p, 'IN-IT'));
   it('calculates new regime tax with ₹75K standard deduction', () => {
-    const r = p.calculateFields({ tax_regime: 'new', salary_income: 1000000 });
+    // Income above the ₹12L §87A threshold so the slab math is actually exercised.
+    const r = p.calculateFields({ tax_regime: 'new', salary_income: 1575000 });
     expect(Number(r.standard_deduction)).toBe(75000);
-    expect(Number(r.taxable_income)).toBe(925000);
-    // New regime: 0-3L=0, 3-7L×5%=20000, 7-9.25L×10%=22500 → 42500
-    expect(Number(r.tax_on_income)).toBe(42500);
+    expect(Number(r.taxable_income)).toBe(1500000);
+    // FY2025-26 new regime: 0-4L=0, 4-8L×5%=20000, 8-12L×10%=40000,
+    // 12-15L×15%=45000 → 105000 (>₹12L, so no §87A rebate).
+    expect(Number(r.tax_on_income)).toBe(105000);
   });
-  it('applies 87A rebate under ₹7L new regime', () => {
+  it('applies 87A rebate (zero tax up to ₹12L taxable, new regime)', () => {
     const r = p.calculateFields({ tax_regime: 'new', salary_income: 700000 });
-    // Taxable: 700000-75000=625000. Tax: (625000-300000)*5%=16250. Rebate: 25000. Net: 0
+    // Taxable 625000 ≤ ₹12L → fully rebated under §87A (FY2025-26): net 0.
     expect(Number(r.tax_on_income)).toBe(0);
   });
   it('applies 80C deduction in old regime', () => {
@@ -307,8 +309,8 @@ describe('Canada Income Tax (CA-IT / T1)', () => {
   it('calculates CPP on self-employment income', () => {
     const r = p.calculateFields({ self_employment_net: 80000 });
     const cpp = Number(r.cpp_contributions);
-    // CPP: (min(80000,71300) - 3500) * 0.0595 * 2 = 67800 * 0.119 = 8068.20
-    expect(cpp).toBeCloseTo(8068.20, 0);
+    // CPP 2026: (min(80000, YMPE 74600) - 3500) * 0.0595 * 2 = 71100 * 0.119 = 8460.90
+    expect(cpp).toBeCloseTo(8460.90, 0);
   });
   it('warns on RRSP over limit', () => {
     const warnings = p.validateForm({ rrsp_deduction: 50000 });
