@@ -1,95 +1,230 @@
 name: CodeRabbit Approval Gate
 
 # Closes the gap that let PR #153 merge: the native "CodeRabbit" status check
-# goes green on "review completed", NOT on "approved". This gate fails unless
-# CodeRabbit's effective-latest review is APPROVED and none of its review
-# threads are left unresolved. Wire it in as a required status check.
+# goes green on "review completed", NOT on "approved". This gate publishes a
+# commit status named "CodeRabbit Approval Gate" that is SUCCESS only when
+# CodeRabbit's effective verdict for the CURRENT head commit is APPROVED and
+# none of CodeRabbit's review threads are left unresolved. Wire that context in
+# as the required status check.
+#
+# Design — self-healing, resilient, fail-closed:
+#  * AUTHORITATIVE & SELF-HEALING: the verdict is written as an explicit commit
+#    status on the PR HEAD sha (not the implicit job check-run, whose commit and
+#    name vary by trigger). Commit statuses are last-write-wins per context, so
+#    every re-evaluation deterministically supersedes the previous one on the
+#    same commit — a stale failure cannot outlive the fix that cleared it, with
+#    no duplicate-check-run ambiguity and no manual re-run.
+#  * The job itself is named "Evaluate ..." so its implicit check-run never
+#    collides with the required "CodeRabbit Approval Gate" status context.
+#  * FRESHNESS: the approval is bound to the head sha (review.commit_id ===
+#    head). Approving commit A then pushing commit B does NOT pass — B needs its
+#    own approval. Identity is matched on CodeRabbit's immutable numeric id for
+#    BOTH reviews and threads.
+#  * VERDICT MODEL mirrors GitHub's reviewDecision for the bot: a reviewer's
+#    standing verdict is their latest APPROVED / CHANGES_REQUESTED review (ties
+#    broken by review id); neutral COMMENTED and superseded DISMISSED / PENDING
+#    reviews are ignored, so CodeRabbit's trailing summary comment can't
+#    masquerade as "not approved". It is intentionally STRICTER than
+#    reviewDecision in also requiring all CodeRabbit threads resolved.
+#  * RESILIENT: transient errors (5xx / secondary rate limit / network) retry
+#    with backoff honouring Retry-After; on exhaustion it fails CLOSED. Thread
+#    scanning is fully paginated and fails closed past a hard cap. It never
+#    greens the gate without proof.
+#  * SCOPE: tuned for this PRIVATE org where every PR is a same-repo branch, so
+#    `statuses: write` on GITHUB_TOKEN is honoured and createCommitStatus
+#    succeeds. PRs from FORKS get a read-only token, so the status post 403s and
+#    the gate fails CLOSED (required check stays absent -> PR blocked; it never
+#    falsely passes). If fork-based contribution is ever introduced, publish the
+#    status from a base-repo `workflow_run` companion workflow (trusted token)
+#    instead of inline here.
 
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
   pull_request_review:
-    types: [submitted, dismissed, edited]
+    types: [submitted, dismissed]
+  # NOTE: pull_request_review_thread is a webhook event but NOT a valid Actions
+  # workflow trigger — adding it to `on:` causes a startup failure that prevents
+  # the whole workflow (and thus the required check) from running. Thread-state
+  # changes are instead picked up on the next push / review event.
+
+# Serialize evaluations per PR WITHOUT cancelling the in-flight run (a cancelled
+# run would report a non-success conclusion). The newest queued evaluation runs
+# last and writes the authoritative status; superseded queued runs never execute
+# so they post nothing.
+concurrency:
+  group: coderabbit-approval-gate-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
 
 permissions:
   contents: read
   pull-requests: read
+  statuses: write
 
 jobs:
-  coderabbit-approval-gate:
-    name: CodeRabbit Approval Gate
+  evaluate:
+    name: Evaluate CodeRabbit approval
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Require a genuine CodeRabbit approval
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
             const { owner, repo } = context.repo;
-            // Fail safe if somehow invoked outside a PR context (e.g. a push
-            // event) — never green the gate without a PR to evaluate.
+            const CONTEXT = 'CodeRabbit Approval Gate';
+
+            // Fail safe if somehow invoked outside a PR context — never green the
+            // gate without a PR to evaluate. (All three triggers carry a
+            // pull_request payload; this guards anything unexpected.)
             const pr = context.payload.pull_request;
             if (!pr) {
               core.setFailed('Gate invoked outside a pull_request context.');
               return;
             }
             const number = pr.number;
+            const headSha = pr.head.sha;
+            const runUrl = `${process.env.GITHUB_SERVER_URL}/${owner}/${repo}/actions/runs/${process.env.GITHUB_RUN_ID}`;
 
-            // CodeRabbit's immutable identity (GitHub App bot). The "[bot]" suffix
-            // is reserved by GitHub for Apps, so a human cannot register it. We
-            // match the numeric user id (most immutable) OR the exact bot login —
-            // never a prefix, which an account like "coderabbit-evil" could spoof.
-            // REST exposes "coderabbitai[bot]" + id; GraphQL author.login is "coderabbitai".
+            // Publish the authoritative verdict as a commit status on the HEAD sha.
+            // Last-write-wins per context => deterministic + self-healing.
+            async function publish(state, description) {
+              const desc = description.length > 140 ? description.slice(0, 137) + '...' : description;
+              await withRetry('createCommitStatus', () =>
+                github.rest.repos.createCommitStatus({
+                  owner, repo, sha: headSha, context: CONTEXT, state, description: desc, target_url: runUrl,
+                })
+              );
+              try {
+                await core.summary
+                  .addHeading('CodeRabbit Approval Gate', 3)
+                  .addRaw(`${state === 'success' ? '✅ **Passed** — ' : '❌ **Blocked** — '}${desc}`)
+                  .write();
+              } catch (e) {
+                core.warning(`summary write failed: ${e && e.message}`);
+              }
+              if (state === 'success') core.info(description);
+              else core.setFailed(description);
+            }
+
+            // Resilient API helper: transient failures must not false-fail the
+            // gate. Retry with exponential backoff, honouring Retry-After /
+            // secondary-rate-limit (403/429) hints. Do NOT retry deterministic
+            // client errors (e.g. a 404 from a genuinely bad request).
+            const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+            async function withRetry(label, fn, attempts = 5) {
+              let lastErr;
+              for (let i = 1; i <= attempts; i++) {
+                try {
+                  return await fn();
+                } catch (err) {
+                  lastErr = err;
+                  const status = err && err.status;
+                  const headers = (err && err.response && err.response.headers) || {};
+                  const retryAfter = Number(headers['retry-after']);
+                  const rateLimited = status === 429 || (status === 403 && (retryAfter > 0 || headers['x-ratelimit-remaining'] === '0'));
+                  const retryable = !status || status >= 500 || rateLimited;
+                  if (!retryable) break;
+                  if (i < attempts) {
+                    const backoff = Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : 1000 * 2 ** (i - 1);
+                    core.warning(`${label} failed (attempt ${i}/${attempts}, status ${status || 'n/a'}); retrying in ${backoff}ms`);
+                    await sleep(backoff);
+                  }
+                }
+              }
+              throw new Error(`${label} failed after ${attempts} attempts: ${lastErr && lastErr.message}`);
+            }
+
+            // CodeRabbit's immutable identity (GitHub App bot). The numeric id is
+            // the primary, immutable key; the login set is a fallback. REST exposes
+            // "coderabbitai[bot]" + id; GraphQL author.login is "coderabbitai" and
+            // Bot/User nodes expose databaseId — we match the id on BOTH paths.
             const CR_USER_ID = 136622811;
             const CR_LOGINS = new Set(['coderabbitai[bot]', 'coderabbitai']);
-            const isCRReviewer = (u) => !!u && (u.id === CR_USER_ID || CR_LOGINS.has(u.login));
-            const isCRThreadAuthor = (login) => CR_LOGINS.has(login);
+            const isCRId = (id) => id === CR_USER_ID;
+            const isCRReviewer = (u) => !!u && (isCRId(u.id) || CR_LOGINS.has(u.login));
 
-            // 1) Effective-latest CodeRabbit review must be APPROVED.
-            const reviews = await github.paginate(github.rest.pulls.listReviews, {
-              owner, repo, pull_number: number, per_page: 100,
-            });
-            const cr = reviews
-              .filter((r) => isCRReviewer(r.user))
-              .sort((a, b) => new Date(a.submitted_at) - new Date(b.submitted_at));
-            const latest = cr[cr.length - 1];
-            if (!latest) {
-              core.setFailed('CodeRabbit has not reviewed this PR yet — no review found.');
-              return;
-            }
-            if (latest.state !== 'APPROVED') {
-              core.setFailed(`CodeRabbit's latest review is ${latest.state}, not APPROVED.`);
-              return;
-            }
+            try {
+              // 1) CodeRabbit's EFFECTIVE verdict must be APPROVED, and bound to the
+              //    current head commit. Consider only verdict-bearing reviews
+              //    (APPROVED / CHANGES_REQUESTED); ignore neutral COMMENTED and
+              //    superseded DISMISSED / PENDING. Latest wins, ties broken by id.
+              const reviews = await withRetry('listReviews', () =>
+                github.paginate(github.rest.pulls.listReviews, { owner, repo, pull_number: number, per_page: 100 })
+              );
+              const VERDICT_STATES = new Set(['APPROVED', 'CHANGES_REQUESTED']);
+              const crVerdicts = reviews
+                .filter((r) => isCRReviewer(r.user) && VERDICT_STATES.has(r.state))
+                .sort((a, b) => {
+                  const ta = Date.parse(a.submitted_at) || 0;
+                  const tb = Date.parse(b.submitted_at) || 0;
+                  return ta !== tb ? ta - tb : a.id - b.id;
+                });
+              const latest = crVerdicts[crVerdicts.length - 1];
 
-            // 2) No unresolved CodeRabbit review threads — FULLY paginated so a PR
-            //    with >100 threads can't hide an unresolved one on a later page.
-            let after = null;
-            let unresolved = 0;
-            let guard = 0;
-            do {
-              const data = await github.graphql(
-                `query ($owner: String!, $repo: String!, $number: Int!, $after: String) {
-                   repository(owner: $owner, name: $repo) {
-                     pullRequest(number: $number) {
-                       reviewThreads(first: 100, after: $after) {
-                         pageInfo { hasNextPage endCursor }
-                         nodes { isResolved comments(first: 1) { nodes { author { login } } } }
+              if (!latest) {
+                await publish('failure', 'CodeRabbit has not posted an APPROVED / CHANGES_REQUESTED review yet.');
+                return;
+              }
+              if (latest.state !== 'APPROVED') {
+                await publish('failure', `CodeRabbit's standing review is ${latest.state}, not APPROVED.`);
+                return;
+              }
+              if (latest.commit_id !== headSha) {
+                await publish('failure', `CodeRabbit approved ${String(latest.commit_id).slice(0, 7)}, but head is ${String(headSha).slice(0, 7)} — re-review of the latest push needed.`);
+                return;
+              }
+
+              // 2) No unresolved CodeRabbit review threads. A thread counts as
+              //    CodeRabbit's if ANY of its comments is authored by CodeRabbit
+              //    (matched by immutable id), not merely the first comment. Fully
+              //    paginated; fail CLOSED past a hard cap.
+              const MAX_PAGES = 60; // 60 * 100 = 6000 threads
+              let after = null;
+              let unresolved = 0;
+              let pages = 0;
+              do {
+                const data = await withRetry('reviewThreads', () => github.graphql(
+                  `query ($owner: String!, $repo: String!, $number: Int!, $after: String) {
+                     repository(owner: $owner, name: $repo) {
+                       pullRequest(number: $number) {
+                         reviewThreads(first: 100, after: $after) {
+                           pageInfo { hasNextPage endCursor }
+                           nodes {
+                             isResolved
+                             comments(first: 100) {
+                               nodes { author { login ... on Bot { databaseId } ... on User { databaseId } } }
+                             }
+                           }
+                         }
                        }
                      }
-                   }
-                 }`,
-                { owner, repo, number, after }
-              );
-              const threads = data.repository.pullRequest.reviewThreads;
-              unresolved += threads.nodes.filter(
-                (n) => !n.isResolved && isCRThreadAuthor(n.comments.nodes[0] && n.comments.nodes[0].author && n.comments.nodes[0].author.login)
-              ).length;
-              after = threads.pageInfo.hasNextPage ? threads.pageInfo.endCursor : null;
-            } while (after && ++guard < 50);
+                   }`,
+                  { owner, repo, number, after }
+                ));
+                const threads = data.repository.pullRequest.reviewThreads;
+                for (const t of threads.nodes) {
+                  if (t.isResolved) continue;
+                  const byCR = (t.comments.nodes || []).some((c) => {
+                    const a = c && c.author;
+                    return !!a && (isCRId(a.databaseId) || CR_LOGINS.has(a.login));
+                  });
+                  if (byCR) unresolved += 1;
+                }
+                after = threads.pageInfo.hasNextPage ? threads.pageInfo.endCursor : null;
+              } while (after && ++pages < MAX_PAGES);
 
-            if (unresolved) {
-              core.setFailed(`${unresolved} unresolved CodeRabbit thread(s) remain.`);
-              return;
+              if (after) {
+                await publish('failure', `Too many review threads to scan exhaustively (> ${MAX_PAGES * 100}) — failing closed.`);
+                return;
+              }
+              if (unresolved) {
+                await publish('failure', `${unresolved} unresolved CodeRabbit thread(s) remain.`);
+                return;
+              }
+
+              await publish('success', 'CodeRabbit approved the current head and all of its review threads are resolved.');
+            } catch (err) {
+              // Any unexpected error fails CLOSED with a visible status.
+              await publish('failure', `Gate evaluation error (failing closed): ${err && err.message}`);
             }
-
-            core.info('CodeRabbit approved and all its threads are resolved.');
