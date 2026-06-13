@@ -10,10 +10,6 @@ on:
     types: [opened, synchronize, reopened, ready_for_review]
   pull_request_review:
     types: [submitted, dismissed, edited]
-  # Re-run when a thread is resolved/unresolved so the gate reflects thread state
-  # without needing a new push or review.
-  pull_request_review_thread:
-    types: [resolved, unresolved]
 
 permissions:
   contents: read
@@ -25,11 +21,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Require a genuine CodeRabbit approval
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
             const { owner, repo } = context.repo;
-            const number = context.payload.pull_request.number;
+            // Fail safe if somehow invoked outside a PR context (e.g. a push
+            // event) — never green the gate without a PR to evaluate.
+            const pr = context.payload.pull_request;
+            if (!pr) {
+              core.setFailed('Gate invoked outside a pull_request context.');
+              return;
+            }
+            const number = pr.number;
 
             // CodeRabbit's immutable identity (GitHub App bot). The "[bot]" suffix
             // is reserved by GitHub for Apps, so a human cannot register it. We
