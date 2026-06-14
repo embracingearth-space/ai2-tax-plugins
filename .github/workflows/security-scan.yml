@@ -10,7 +10,7 @@
 # RUNS: On every push/PR to main branches + a daily cron.
 # COST: All tools are free / open-source.
 # RESULTS → GitHub Security tab + PR comments. Gate behaviour per tool:
-#   • npm audit  → FAILS the job on any CRITICAL (or >5 HIGH) — a hard gate.
+#   • npm audit  → FAILS the job on ANY production high/critical (devDep advisories advisory-only) — a hard gate.
 #   • TruffleHog → FAILS on a VERIFIED secret.
 #   • Trivy      → findings are ADVISORY (logged, never fake-green); only a real
 #                  scan ERROR fails the step → visible RED.
@@ -73,25 +73,36 @@ jobs:
           # package-lock.json from package.json ranges and the gate would then
           # audit a tree that isn't what's in the repo. embracingearth.space
           test -f package-lock.json || { echo "::error::package-lock.json is required for the audit gate"; exit 1; }
-          echo "🔍 Running npm audit (committed lockfile)..."
-          # Single audit pass → JSON; derive both the summary and the gate from it.
-          npm audit --package-lock-only --json > audit-results.json 2>/dev/null || true
+          echo "🔍 Running npm audit (committed lockfile, production gate + advisory)..."
+          # Two passes over the committed lockfile: a PRODUCTION (runtime) audit
+          # that GATES the build, and a full-tree audit (incl devDependencies)
+          # that is advisory only — devDependency transitive vulns don't ship, so
+          # they never block. embracingearth.space
+          npm audit --package-lock-only --omit=dev --json > audit-prod.json || true
+          npm audit --package-lock-only --json            > audit-full.json || true
 
-          HIGH_COUNT=$(jq '.metadata.vulnerabilities.high // 0' audit-results.json)
-          CRITICAL_COUNT=$(jq '.metadata.vulnerabilities.critical // 0' audit-results.json)
-          MODERATE_COUNT=$(jq '.metadata.vulnerabilities.moderate // 0' audit-results.json)
-          echo "Moderate: $MODERATE_COUNT, High: $HIGH_COUNT, Critical: $CRITICAL_COUNT"
+          # FAIL-CLOSED: require a valid report before trusting the counts.
+          for F in audit-prod.json audit-full.json; do
+            if ! jq -e '.metadata.vulnerabilities | type == "object"' "$F" >/dev/null 2>&1; then
+              echo "🚨 npm audit did not produce a valid report ($F) — failing instead of false-passing"
+              exit 1
+            fi
+          done
 
-          # Fail on high/critical only; moderate is logged but non-blocking.
-          if [ "$CRITICAL_COUNT" -gt 0 ]; then
-            echo "🚨 CRITICAL vulnerabilities found — failing build"
+          PROD_HIGH=$(jq '.metadata.vulnerabilities.high // 0' audit-prod.json)
+          PROD_CRIT=$(jq '.metadata.vulnerabilities.critical // 0' audit-prod.json)
+          FULL_HIGH=$(jq '.metadata.vulnerabilities.high // 0' audit-full.json)
+          FULL_CRIT=$(jq '.metadata.vulnerabilities.critical // 0' audit-full.json)
+          echo "Production (GATE):            High=$PROD_HIGH Critical=$PROD_CRIT"
+          echo "Full tree incl devDeps (advisory): High=$FULL_HIGH Critical=$FULL_CRIT"
+
+          # Enterprise gate: block on ANY production high/critical.
+          if [ "$PROD_CRIT" -gt 0 ] || [ "$PROD_HIGH" -gt 0 ]; then
+            echo "🚨 Production high/critical vulnerabilities — failing build"
+            npm audit --package-lock-only --omit=dev || true
             exit 1
           fi
-          if [ "$HIGH_COUNT" -gt 5 ]; then
-            echo "⚠️ Too many HIGH vulnerabilities ($HIGH_COUNT) — failing build"
-            exit 1
-          fi
-          echo "✅ npm audit passed (High: $HIGH_COUNT, Critical: $CRITICAL_COUNT)"
+          echo "✅ No production-runtime high/critical vulnerabilities (devDep advisories are non-blocking)"
 
   # ════════════════════════════════════════════════════════════════════
   # 2. TRUFFLEHOG — Secret detection in code + git history
