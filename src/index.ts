@@ -70,6 +70,13 @@ export {
   getTaxRateInfo,
   getStandardTaxRate,
   detectTaxFamily,
+  // Effective-dated rate ledger (single source of truth) + date-aware resolver
+  RATE_LEDGER,
+  RATE_FLOOR,
+  resolveRateRow,
+  getStandardRateAsOf,
+  activeNationalRows,
+  toYmd,
 } from './data';
 
 export type {
@@ -77,6 +84,8 @@ export type {
   FinancialYearConfig,
   TaxFamily,
   CountryTaxRateInfo,
+  RateLedgerRow,
+  RateSource,
 } from './data';
 
 // ─── Direct country plugin access (for testing / advanced use) ───────────────
