@@ -75,10 +75,12 @@ export function analyzeLedger(asOf?: string | Date, opts: RateWatchOptions = {})
       if (ageDays > staleAfterDays) {
         findings.staleCitations.push({ countryCode: r.countryCode, citationDate: r.source.citationDate, ageDays });
       }
-      const age = daysBetween(r.effectiveFrom, today);
-      if (age >= 0 && age <= activatedWithinDays && r.effectiveFrom !== '2000-01-01') {
-        findings.recentlyActivated.push({ countryCode: r.countryCode, standardRate: r.standardRate, effectiveFrom: r.effectiveFrom });
-      }
+    }
+    // Recently-activated detection runs for ALL current rows, verified or not — a
+    // scheduled change that just took effect matters regardless of citation status.
+    const age = daysBetween(r.effectiveFrom, today);
+    if (age >= 0 && age <= activatedWithinDays && r.effectiveFrom !== '2000-01-01') {
+      findings.recentlyActivated.push({ countryCode: r.countryCode, standardRate: r.standardRate, effectiveFrom: r.effectiveFrom });
     }
     findings.reviewChecklist.push({
       countryCode: r.countryCode,
