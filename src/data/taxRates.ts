@@ -89,12 +89,14 @@ export function getTaxRateInfo(countryCode: string, asOf?: string | Date): Count
  * live, so it always reflects the date given (default: today).
  */
 export function getStandardTaxRate(countryCode: string, asOf?: string | Date): number {
-  return getStandardRateAsOf(countryCode, asOf ?? new Date());
+  if (asOf !== undefined) return getStandardRateAsOf(countryCode, asOf);
+  // Default (today) path: O(1) lookup via the day-memoized view, not a full scan.
+  return currentFlatMap()[countryCode.toUpperCase()]?.standardRate ?? 0;
 }
 
 /**
  * Detect tax family for a country code (as in force today).
  */
 export function detectTaxFamily(countryCode: string): TaxFamily {
-  return resolveRateRow(countryCode, new Date())?.taxFamily ?? 'SALES_TAX';
+  return currentFlatMap()[countryCode.toUpperCase()]?.taxFamily ?? 'SALES_TAX';
 }
