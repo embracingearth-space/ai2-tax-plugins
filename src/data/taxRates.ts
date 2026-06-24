@@ -2,12 +2,20 @@
  * Tax Rate Reference Data — @ai2/tax-plugins
  * embracingearth.space
  *
- * Standard and reduced VAT/GST/sales tax rates by country.
- * Contributors: update your country's rate here when it changes.
- * These are reference rates — actual filing uses the plugin's built-in rates.
+ * COUNTRY_TAX_RATES is a flat, "as of now" view DERIVED from the effective-dated
+ * RATE_LEDGER — the single source of truth (see ./rateLedger). DO NOT hand-edit
+ * rates here: change a rate in the ledger and this view follows automatically.
+ *
+ * The view is LIVE, not frozen at import: it is recomputed when the calendar day
+ * rolls over, so a future-dated rate that becomes effective while a long-running
+ * process is up (e.g. an announced increase activating at year-start) is reflected
+ * without a restart. The back-compat API (getTaxRateInfo / getStandardTaxRate /
+ * detectTaxFamily) and the CountryTaxRateInfo / TaxFamily types are unchanged.
  */
+import { activeNationalRows, resolveRateRow, getStandardRateAsOf, toYmd } from './rateLedger';
+import type { TaxFamily, RateLedgerRow } from './rateLedger';
 
-export type TaxFamily = 'GST' | 'VAT' | 'SALES_TAX' | 'HYBRID' | 'NONE';
+export type { TaxFamily } from './rateLedger';
 
 export interface CountryTaxRateInfo {
   countryCode: string;
@@ -18,87 +26,77 @@ export interface CountryTaxRateInfo {
   localName?: string;
 }
 
-export const COUNTRY_TAX_RATES: Record<string, CountryTaxRateInfo> = {
-  // ─── GST Countries ─────────────────────────────────────────────────────
-  'AU': { countryCode: 'AU', countryName: 'Australia', taxFamily: 'GST', standardRate: 0.10, localName: 'GST' },
-  'NZ': { countryCode: 'NZ', countryName: 'New Zealand', taxFamily: 'GST', standardRate: 0.15, localName: 'GST' },
-  'SG': { countryCode: 'SG', countryName: 'Singapore', taxFamily: 'GST', standardRate: 0.09, localName: 'GST' },
-  'IN': { countryCode: 'IN', countryName: 'India', taxFamily: 'GST', standardRate: 0.18, reducedRate: 0.05, localName: 'GST' },
-  'CA': { countryCode: 'CA', countryName: 'Canada', taxFamily: 'GST', standardRate: 0.05, localName: 'GST/HST' },
-  'MY': { countryCode: 'MY', countryName: 'Malaysia', taxFamily: 'GST', standardRate: 0.08, localName: 'SST' },
-  'MG': { countryCode: 'MG', countryName: 'Madagascar', taxFamily: 'VAT', standardRate: 0.20, localName: 'TVA' },
+function toInfo(r: RateLedgerRow): CountryTaxRateInfo {
+  const info: CountryTaxRateInfo = {
+    countryCode: r.countryCode,
+    countryName: r.countryName,
+    taxFamily: r.taxFamily,
+    standardRate: r.standardRate,
+    localName: r.localName,
+  };
+  if (r.reducedRate != null) info.reducedRate = r.reducedRate;
+  return info;
+}
 
-  // ─── VAT Countries — Europe ─────────────────────────────────────────────
-  'GB': { countryCode: 'GB', countryName: 'United Kingdom', taxFamily: 'VAT', standardRate: 0.20, reducedRate: 0.05, localName: 'VAT' },
-  'DE': { countryCode: 'DE', countryName: 'Germany', taxFamily: 'VAT', standardRate: 0.19, reducedRate: 0.07, localName: 'Umsatzsteuer' },
-  'FR': { countryCode: 'FR', countryName: 'France', taxFamily: 'VAT', standardRate: 0.20, reducedRate: 0.055, localName: 'TVA' },
-  'IT': { countryCode: 'IT', countryName: 'Italy', taxFamily: 'VAT', standardRate: 0.22, reducedRate: 0.10, localName: 'IVA' },
-  'ES': { countryCode: 'ES', countryName: 'Spain', taxFamily: 'VAT', standardRate: 0.21, reducedRate: 0.10, localName: 'IVA' },
-  'NL': { countryCode: 'NL', countryName: 'Netherlands', taxFamily: 'VAT', standardRate: 0.21, reducedRate: 0.09, localName: 'BTW' },
-  'IE': { countryCode: 'IE', countryName: 'Ireland', taxFamily: 'VAT', standardRate: 0.23, reducedRate: 0.135, localName: 'VAT' },
-  'AT': { countryCode: 'AT', countryName: 'Austria', taxFamily: 'VAT', standardRate: 0.20, reducedRate: 0.10, localName: 'USt' },
-  'BE': { countryCode: 'BE', countryName: 'Belgium', taxFamily: 'VAT', standardRate: 0.21, reducedRate: 0.06, localName: 'TVA/BTW' },
-  'PT': { countryCode: 'PT', countryName: 'Portugal', taxFamily: 'VAT', standardRate: 0.23, reducedRate: 0.06, localName: 'IVA' },
-  'PL': { countryCode: 'PL', countryName: 'Poland', taxFamily: 'VAT', standardRate: 0.23, reducedRate: 0.08, localName: 'VAT' },
-  'CH': { countryCode: 'CH', countryName: 'Switzerland', taxFamily: 'VAT', standardRate: 0.081, reducedRate: 0.026, localName: 'MWST/TVA' },
-  'NO': { countryCode: 'NO', countryName: 'Norway', taxFamily: 'VAT', standardRate: 0.25, reducedRate: 0.15, localName: 'MVA' },
-  'DK': { countryCode: 'DK', countryName: 'Denmark', taxFamily: 'VAT', standardRate: 0.25, localName: 'Moms' },
-  'SE': { countryCode: 'SE', countryName: 'Sweden', taxFamily: 'VAT', standardRate: 0.25, reducedRate: 0.12, localName: 'Moms' },
-  'FI': { countryCode: 'FI', countryName: 'Finland', taxFamily: 'VAT', standardRate: 0.255, reducedRate: 0.14, localName: 'ALV' },
-  'GR': { countryCode: 'GR', countryName: 'Greece', taxFamily: 'VAT', standardRate: 0.24, reducedRate: 0.13, localName: 'ΦΠΑ' },
-  'CZ': { countryCode: 'CZ', countryName: 'Czech Republic', taxFamily: 'VAT', standardRate: 0.21, reducedRate: 0.12, localName: 'DPH' },
-  'HU': { countryCode: 'HU', countryName: 'Hungary', taxFamily: 'VAT', standardRate: 0.27, reducedRate: 0.05, localName: 'ÁFA' },
-  'RO': { countryCode: 'RO', countryName: 'Romania', taxFamily: 'VAT', standardRate: 0.21, reducedRate: 0.11, localName: 'TVA' },
-  'BG': { countryCode: 'BG', countryName: 'Bulgaria', taxFamily: 'VAT', standardRate: 0.20, reducedRate: 0.09, localName: 'ДДС' },
-  'HR': { countryCode: 'HR', countryName: 'Croatia', taxFamily: 'VAT', standardRate: 0.25, reducedRate: 0.13, localName: 'PDV' },
-  'TR': { countryCode: 'TR', countryName: 'Turkey', taxFamily: 'VAT', standardRate: 0.20, reducedRate: 0.10, localName: 'KDV' },
-
-  // ─── VAT Countries — Middle East ────────────────────────────────────────
-  'AE': { countryCode: 'AE', countryName: 'UAE', taxFamily: 'VAT', standardRate: 0.05, localName: 'VAT' },
-  'SA': { countryCode: 'SA', countryName: 'Saudi Arabia', taxFamily: 'VAT', standardRate: 0.15, localName: 'VAT' },
-  'BH': { countryCode: 'BH', countryName: 'Bahrain', taxFamily: 'VAT', standardRate: 0.10, localName: 'VAT' },
-  'OM': { countryCode: 'OM', countryName: 'Oman', taxFamily: 'VAT', standardRate: 0.05, localName: 'VAT' },
-
-  // ─── VAT Countries — Africa ─────────────────────────────────────────────
-  'ZA': { countryCode: 'ZA', countryName: 'South Africa', taxFamily: 'VAT', standardRate: 0.15, localName: 'VAT' },
-  'NG': { countryCode: 'NG', countryName: 'Nigeria', taxFamily: 'VAT', standardRate: 0.075, localName: 'VAT' },
-  'KE': { countryCode: 'KE', countryName: 'Kenya', taxFamily: 'VAT', standardRate: 0.16, localName: 'VAT' },
-  'GH': { countryCode: 'GH', countryName: 'Ghana', taxFamily: 'VAT', standardRate: 0.20, localName: 'VAT' },
-  'EG': { countryCode: 'EG', countryName: 'Egypt', taxFamily: 'VAT', standardRate: 0.14, localName: 'VAT' },
-
-  // ─── Sales Tax / Hybrid ─────────────────────────────────────────────────
-  'US': { countryCode: 'US', countryName: 'United States', taxFamily: 'SALES_TAX', standardRate: 0, localName: 'Sales Tax' },
-  'JP': { countryCode: 'JP', countryName: 'Japan', taxFamily: 'VAT', standardRate: 0.10, reducedRate: 0.08, localName: '消費税' },
-  'KR': { countryCode: 'KR', countryName: 'South Korea', taxFamily: 'VAT', standardRate: 0.10, localName: 'VAT' },
-  'CN': { countryCode: 'CN', countryName: 'China', taxFamily: 'VAT', standardRate: 0.13, reducedRate: 0.09, localName: '增值税' },
-  'TW': { countryCode: 'TW', countryName: 'Taiwan', taxFamily: 'VAT', standardRate: 0.05, localName: '營業稅' },
-  'TH': { countryCode: 'TH', countryName: 'Thailand', taxFamily: 'VAT', standardRate: 0.07, localName: 'VAT' },
-  'ID': { countryCode: 'ID', countryName: 'Indonesia', taxFamily: 'VAT', standardRate: 0.12, localName: 'PPN' },
-  'PH': { countryCode: 'PH', countryName: 'Philippines', taxFamily: 'VAT', standardRate: 0.12, localName: 'VAT' },
-  'VN': { countryCode: 'VN', countryName: 'Vietnam', taxFamily: 'VAT', standardRate: 0.10, reducedRate: 0.05, localName: 'GTGT' },
-  'BR': { countryCode: 'BR', countryName: 'Brazil', taxFamily: 'HYBRID', standardRate: 0.17, localName: 'ICMS/IPI' },
-
-  // ─── No VAT/GST ────────────────────────────────────────────────────────
-  'HK': { countryCode: 'HK', countryName: 'Hong Kong', taxFamily: 'NONE', standardRate: 0, localName: 'None' },
-};
+// Day-memoized live snapshot: recompute at most once per UTC day — i.e. exactly
+// when a future-dated row could activate — so the flat view never goes stale in a
+// long-running process, without rebuilding on every lookup.
+let _cache: { day: string; map: Record<string, CountryTaxRateInfo> } | null = null;
+function currentFlatMap(): Record<string, CountryTaxRateInfo> {
+  const day = toYmd(new Date());
+  if (!_cache || _cache.day !== day) {
+    const map: Record<string, CountryTaxRateInfo> = {};
+    for (const r of activeNationalRows(day)) map[r.countryCode] = toInfo(r);
+    _cache = { day, map };
+  }
+  return _cache.map;
+}
 
 /**
- * Get tax rate info for a country. Returns undefined if not in the list.
+ * Standard and reduced VAT/GST/sales-tax rates by country, as in force today.
+ * A live view over RATE_LEDGER — reads, enumeration, and `in` reflect the current
+ * day. To change a rate, edit the ledger, not this object.
  */
-export function getTaxRateInfo(countryCode: string): CountryTaxRateInfo | undefined {
-  return COUNTRY_TAX_RATES[countryCode.toUpperCase()];
+export const COUNTRY_TAX_RATES: Record<string, CountryTaxRateInfo> = new Proxy(
+  {} as Record<string, CountryTaxRateInfo>,
+  {
+    get: (_t, prop: string | symbol) =>
+      typeof prop === 'string' ? currentFlatMap()[prop] : undefined,
+    has: (_t, prop: string | symbol) =>
+      typeof prop === 'string' ? prop in currentFlatMap() : false,
+    ownKeys: () => Reflect.ownKeys(currentFlatMap()),
+    getOwnPropertyDescriptor: (_t, prop: string | symbol) => {
+      if (typeof prop !== 'string') return undefined;
+      const value = currentFlatMap()[prop];
+      return value ? { value, enumerable: true, configurable: true } : undefined;
+    },
+  },
+);
+
+/**
+ * Get tax rate info for a country, as in force on `asOf` (default: today).
+ * Returns undefined if unknown. Resolved live from the ledger.
+ */
+export function getTaxRateInfo(countryCode: string, asOf?: string | Date): CountryTaxRateInfo | undefined {
+  const row = resolveRateRow(countryCode, asOf ?? new Date());
+  return row ? toInfo(row) : undefined;
 }
 
 /**
  * Get the standard tax rate for a country. Returns 0 if unknown.
+ * Pass `asOf` (YYYY-MM-DD or Date) to resolve the rate in force on a past/future
+ * date — e.g. the rate that applied during a transaction's tax period. Resolved
+ * live, so it always reflects the date given (default: today).
  */
-export function getStandardTaxRate(countryCode: string): number {
-  return COUNTRY_TAX_RATES[countryCode.toUpperCase()]?.standardRate ?? 0;
+export function getStandardTaxRate(countryCode: string, asOf?: string | Date): number {
+  if (asOf !== undefined) return getStandardRateAsOf(countryCode, asOf);
+  // Default (today) path: O(1) lookup via the day-memoized view, not a full scan.
+  return currentFlatMap()[countryCode.toUpperCase()]?.standardRate ?? 0;
 }
 
 /**
- * Detect tax family for a country code.
+ * Detect tax family for a country code (as in force today).
  */
 export function detectTaxFamily(countryCode: string): TaxFamily {
-  return COUNTRY_TAX_RATES[countryCode.toUpperCase()]?.taxFamily ?? 'SALES_TAX';
+  return currentFlatMap()[countryCode.toUpperCase()]?.taxFamily ?? 'SALES_TAX';
 }

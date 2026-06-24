@@ -14,6 +14,17 @@ export { CURRENCY_INFO, COUNTRY_CURRENCY_MAP } from './currencies';
 export type { FinancialYearConfig } from './financialYears';
 export { FINANCIAL_YEAR_CONFIGS, DEFAULT_FINANCIAL_YEAR_CONFIG } from './financialYears';
 
-// Tax Rates
+// Tax Rates — flat as-of-today view (derived from the ledger)
 export type { TaxFamily, CountryTaxRateInfo } from './taxRates';
 export { COUNTRY_TAX_RATES, getTaxRateInfo, getStandardTaxRate, detectTaxFamily } from './taxRates';
+
+// Tax Rate Ledger — effective-dated single source of truth + date-aware resolver
+export type { RateLedgerRow, RateSource } from './rateLedger';
+export {
+  RATE_LEDGER,
+  RATE_FLOOR,
+  resolveRateRow,
+  getStandardRateAsOf,
+  activeNationalRows,
+  toYmd,
+} from './rateLedger';
