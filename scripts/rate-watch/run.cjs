@@ -12,7 +12,13 @@ const { analyzeLedger, hasActionableFindings } = require('../../dist/rateWatch')
 
 // Auto-detect quarterly window (first week of Jan/Apr/Jul/Oct) unless MODE is set.
 function resolveMode() {
-  if (process.env.MODE) return process.env.MODE;
+  const m = (process.env.MODE || '').trim();
+  if (m) {
+    if (m !== 'weekly' && m !== 'quarterly') {
+      throw new Error(`Invalid MODE "${m}" — expected "weekly" or "quarterly".`);
+    }
+    return m;
+  }
   const now = new Date();
   const quarterMonth = [0, 3, 6, 9].includes(now.getUTCMonth());
   return quarterMonth && now.getUTCDate() <= 7 ? 'quarterly' : 'weekly';

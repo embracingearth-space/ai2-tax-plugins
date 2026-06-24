@@ -19,7 +19,6 @@ on:
 
 permissions:
   contents: read
-  issues: write
 
 concurrency:
   group: rate-watch
@@ -30,6 +29,10 @@ jobs:
     name: Rate Watch
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # Least privilege: only this job needs to open/update the review issue.
+    permissions:
+      contents: read
+      issues: write
     steps:
       - name: 📥 Checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -55,7 +58,10 @@ jobs:
         run: node scripts/rate-watch/run.cjs
 
       - name: 📨 Open or update review issue
-        if: steps.watch.outputs.should_open == 'true'
+        # always(): the analyze step exits non-zero on a runner failure but still sets
+        # should_open=true (to open a "runner failed" issue) — without always() this
+        # step would be skipped and the failure would pass silently.
+        if: ${{ always() && steps.watch.outputs.should_open == 'true' }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TITLE: ${{ steps.watch.outputs.issue_title }}
