@@ -8,7 +8,6 @@
  */
 const fs = require('fs');
 const path = require('path');
-const { analyzeLedger, hasActionableFindings } = require('../../dist/rateWatch');
 
 // Auto-detect quarterly window (first week of Jan/Apr/Jul/Oct) unless MODE is set.
 function resolveMode() {
@@ -95,6 +94,10 @@ function render(f, mode, external) {
 }
 
 async function main() {
+  // Required INSIDE main() so a load failure (e.g. dist not built) is caught by the
+  // failure handler below and opens a "runner failed" issue, instead of throwing at
+  // module load and bypassing the report path entirely. embracingearth.space
+  const { analyzeLedger, hasActionableFindings } = require('../../dist/rateWatch');
   const mode = resolveMode();
   const findings = analyzeLedger(new Date());
   const external = await fetchExternalRates();
