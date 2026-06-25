@@ -15,7 +15,8 @@
  *
  * EFFECTIVE-DATING: each country holds an array of rate sets ordered most-
  * recent-first, each with an `effectiveFrom`. `getCompanyTaxRate(cc, asOf)`
- * picks the set whose window contains `asOf` (falls back to the newest).
+ * picks the most recent set effective on or before `asOf`; if `asOf` predates
+ * every set, it falls back to the oldest defined set.
  * This mirrors the effective-dated pattern used by the income-tax brackets so
  * a future budget-year change is a data edit, not a code change.
  */
@@ -131,7 +132,7 @@ export function listCompanyTaxCountries(): string[] {
  */
 export function getCompanyTaxInfo(countryCode?: string | null): CompanyTaxInfo | null {
   if (!countryCode) return null;
-  const base = countryCode.toUpperCase().split('-')[0];
+  const base = countryCode.trim().toUpperCase().split('-')[0];
   return COMPANY_TAX_RATES[base] ?? null;
 }
 
@@ -172,6 +173,9 @@ export function getCompanyTaxRate(
   const set =
     info.rates.find((r) => new Date(r.effectiveFrom).getTime() <= asOfTime) ??
     info.rates[info.rates.length - 1];
+  // Defensive: a country defined with an empty `rates` array would leave `set`
+  // undefined — treat that as "no data" rather than crashing on dereference.
+  if (!set) return null;
 
   const usedSmallRate = Boolean(opts.preferSmallRate && set.smallCompanyRate != null);
   const rate = usedSmallRate ? (set.smallCompanyRate as number) : set.standardRate;
