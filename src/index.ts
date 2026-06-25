@@ -77,6 +77,11 @@ export {
   getStandardRateAsOf,
   activeNationalRows,
   toYmd,
+  // Company / corporate income tax (headline rates for the forecast engine)
+  COMPANY_TAX_RATES,
+  listCompanyTaxCountries,
+  getCompanyTaxInfo,
+  getCompanyTaxRate,
 } from './data';
 
 export type {
@@ -86,6 +91,9 @@ export type {
   CountryTaxRateInfo,
   RateLedgerRow,
   RateSource,
+  CompanyTaxRateSet,
+  CompanyTaxInfo,
+  ResolvedCompanyRate,
 } from './data';
 
 // ─── Direct country plugin access (for testing / advanced use) ───────────────

@@ -28,3 +28,12 @@ export {
   activeNationalRows,
   toYmd,
 } from './rateLedger';
+
+// Company / Corporate Income Tax (headline rates for the CompanyFlatRate forecast strategy)
+export type { CompanyTaxRateSet, CompanyTaxInfo, ResolvedCompanyRate } from './companyTax';
+export {
+  COMPANY_TAX_RATES,
+  listCompanyTaxCountries,
+  getCompanyTaxInfo,
+  getCompanyTaxRate,
+} from './companyTax';
