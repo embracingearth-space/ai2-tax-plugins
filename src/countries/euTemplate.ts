@@ -159,7 +159,7 @@ const EU_CONFIG: Record<
   },
   RO: {
     taxName: 'TVA',
-    rate: 0.19,
+    rate: 0.21, // 21% from 1 Aug 2025 (Law 141/2025); was 19%
     authority: 'ANAF',
     authorityFull: 'Agenția Națională de Administrare Fiscală',
     portalUrl: 'https://www.anaf.ro',
@@ -201,7 +201,7 @@ const EU_CONFIG: Record<
   },
   EE: {
     taxName: 'KM (Käibemaks)',
-    rate: 0.22,
+    rate: 0.24, // 24% from 1 Jul 2025 (permanent); was 22%
     authority: 'EMTA',
     authorityFull: 'Maksu- ja Tolliamet',
     portalUrl: 'https://www.emta.ee',
