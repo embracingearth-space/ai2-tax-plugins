@@ -19,8 +19,12 @@ import type {
   ExportFormat,
   ExportOutput,
 } from '../types';
+import { getStandardRateAsOf } from '../data/rateLedger';
 
-// Local tax names and standard VAT rates per country
+// Local tax names + a FALLBACK standard rate per country. The authoritative,
+// effective-dated standard rate is resolved from the single-source rate ledger
+// (getStandardRateAsOf); these rates are only used when a country has no ledger
+// row yet.
 const EU_CONFIG: Record<
   string,
   {
@@ -159,7 +163,7 @@ const EU_CONFIG: Record<
   },
   RO: {
     taxName: 'TVA',
-    rate: 0.19,
+    rate: 0.21, // 21% from 1 Aug 2025 (Law 141/2025); was 19%
     authority: 'ANAF',
     authorityFull: 'Agenția Națională de Administrare Fiscală',
     portalUrl: 'https://www.anaf.ro',
@@ -201,7 +205,7 @@ const EU_CONFIG: Record<
   },
   EE: {
     taxName: 'KM (Käibemaks)',
-    rate: 0.22,
+    rate: 0.24, // 24% from 1 Jul 2025 (permanent); was 22%
     authority: 'EMTA',
     authorityFull: 'Maksu- ja Tolliamet',
     portalUrl: 'https://www.emta.ee',
@@ -236,6 +240,10 @@ const EU_CONFIG: Record<
   },
 };
 
+// Effective-dated VAT rates (incl. RO 19→21%, EE 20→22→24%) live in the shared
+// single-source ledger (src/data/rateLedger.data.ts), resolved by date via
+// getStandardRateAsOf — so this template never keeps a duplicate history table.
+
 function createEUPlugin(code: string): TaxFilingPlugin {
   const config = EU_CONFIG[code] || {
     taxName: 'VAT',
@@ -246,7 +254,10 @@ function createEUPlugin(code: string): TaxFilingPlugin {
   };
 
   const { taxName, rate, authority, authorityFull, portalUrl } = config;
-  const ratePercent = (rate * 100).toFixed(0);
+  // Single source of truth: resolve the current standard rate from the dated
+  // ledger, falling back to the EU_CONFIG value if a country has no ledger row.
+  const currentRate = getStandardRateAsOf(code) || rate;
+  const ratePercent = (currentRate * 100).toFixed(0);
 
   return {
     countryCode: code,
@@ -387,8 +398,12 @@ function createEUPlugin(code: string): TaxFilingPlugin {
       const reducedSales = Number(v.reduced_sales) || 0;
       const inputVat = Number(v.input_vat) || 0;
 
-      // Calculate output VAT (standard rate only — reduced rate varies by country, user enters manually)
-      const output_vat_calc = Math.round(standardSales * rate * 100) / 100;
+      // Output VAT at the standard rate (reduced rate varies by country, entered
+      // manually). The rate is resolved from the single-source effective-dated
+      // ledger as of today, so a mid-life change (e.g. RO 19→21%, EE 22→24%)
+      // applies from its effective date rather than retroactively.
+      const effectiveRate = getStandardRateAsOf(code) || rate;
+      const output_vat_calc = Math.round(standardSales * effectiveRate * 100) / 100;
 
       // Allow override
       const output_vat =
