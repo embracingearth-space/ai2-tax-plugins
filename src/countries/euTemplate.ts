@@ -19,8 +19,12 @@ import type {
   ExportFormat,
   ExportOutput,
 } from '../types';
+import { getStandardRateAsOf } from '../data/rateLedger';
 
-// Local tax names and standard VAT rates per country
+// Local tax names + a FALLBACK standard rate per country. The authoritative,
+// effective-dated standard rate is resolved from the single-source rate ledger
+// (getStandardRateAsOf); these rates are only used when a country has no ledger
+// row yet.
 const EU_CONFIG: Record<
   string,
   {
@@ -236,48 +240,9 @@ const EU_CONFIG: Record<
   },
 };
 
-/**
- * Effective-dated VAT standard-rate history for countries whose standard rate
- * changed mid-life (newest-first). Mirrors the effective-dated pattern in
- * data/companyTax.ts (getCompanyTaxRate) and the income-tax FY brackets:
- * resolveEURate() returns the rate in force as of a date (default: today), so a
- * return for a past period uses that period's rate rather than the latest one.
- * Countries not listed here use their single EU_CONFIG[code].rate unchanged.
- */
-interface VatRatePeriod {
-  rate: number;
-  /** ISO date (yyyy-mm-dd) the rate took effect. */
-  effectiveFrom: string;
-}
-
-const EU_RATE_HISTORY: Record<string, VatRatePeriod[]> = {
-  // Romania: 19% → 21% (Law 141/2025, effective 1 Aug 2025).
-  RO: [
-    { rate: 0.21, effectiveFrom: '2025-08-01' },
-    { rate: 0.19, effectiveFrom: '2017-01-01' },
-  ],
-  // Estonia: 20% → 22% (1 Jan 2024) → 24% (1 Jul 2025, permanent — 2029 reversion repealed).
-  EE: [
-    { rate: 0.24, effectiveFrom: '2025-07-01' },
-    { rate: 0.22, effectiveFrom: '2024-01-01' },
-    { rate: 0.20, effectiveFrom: '2009-07-01' },
-  ],
-};
-
-/**
- * Resolve a country's standard VAT rate as of a date (default: today).
- * Falls back to `currentRate` (the EU_CONFIG value) when no dated history exists.
- */
-function resolveEURate(code: string, currentRate: number, asOf: Date = new Date()): number {
-  const history = EU_RATE_HISTORY[code];
-  if (!history || history.length === 0) return currentRate;
-  const asOfTime = asOf.getTime();
-  // Newest-first: first period whose effectiveFrom <= asOf, else the oldest set.
-  const period =
-    history.find((p) => new Date(p.effectiveFrom).getTime() <= asOfTime) ??
-    history[history.length - 1];
-  return period.rate;
-}
+// Effective-dated VAT rates (incl. RO 19→21%, EE 20→22→24%) live in the shared
+// single-source ledger (src/data/rateLedger.data.ts), resolved by date via
+// getStandardRateAsOf — so this template never keeps a duplicate history table.
 
 function createEUPlugin(code: string): TaxFilingPlugin {
   const config = EU_CONFIG[code] || {
@@ -289,7 +254,10 @@ function createEUPlugin(code: string): TaxFilingPlugin {
   };
 
   const { taxName, rate, authority, authorityFull, portalUrl } = config;
-  const ratePercent = (rate * 100).toFixed(0);
+  // Single source of truth: resolve the current standard rate from the dated
+  // ledger, falling back to the EU_CONFIG value if a country has no ledger row.
+  const currentRate = getStandardRateAsOf(code) || rate;
+  const ratePercent = (currentRate * 100).toFixed(0);
 
   return {
     countryCode: code,
@@ -430,11 +398,11 @@ function createEUPlugin(code: string): TaxFilingPlugin {
       const reducedSales = Number(v.reduced_sales) || 0;
       const inputVat = Number(v.input_vat) || 0;
 
-      // Calculate output VAT (standard rate only — reduced rate varies by country, user enters manually).
-      // Resolve the standard rate as of today so a mid-life change (e.g. RO 19→21%, EE 22→24%)
-      // applies from its effective date rather than retroactively (see EU_RATE_HISTORY). Pass an
-      // explicit supply/filing date here once the calc interface threads one through.
-      const effectiveRate = resolveEURate(code, rate);
+      // Output VAT at the standard rate (reduced rate varies by country, entered
+      // manually). The rate is resolved from the single-source effective-dated
+      // ledger as of today, so a mid-life change (e.g. RO 19→21%, EE 22→24%)
+      // applies from its effective date rather than retroactively.
+      const effectiveRate = getStandardRateAsOf(code) || rate;
       const output_vat_calc = Math.round(standardSales * effectiveRate * 100) / 100;
 
       // Allow override
