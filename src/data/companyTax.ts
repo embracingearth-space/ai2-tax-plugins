@@ -21,6 +21,8 @@
  * a future budget-year change is a data edit, not a code change.
  */
 
+import { resolveEffectiveDated } from './effectiveDating';
+
 export interface CompanyTaxRateSet {
   /** ISO date this rate set takes effect (inclusive). */
   effectiveFrom: string;
@@ -167,12 +169,9 @@ export function getCompanyTaxRate(
   const info = getCompanyTaxInfo(countryCode);
   if (!info) return null;
 
-  const asOfTime = asOf.getTime();
-  // Rate sets are newest-first; pick the first whose effectiveFrom <= asOf,
-  // else fall back to the oldest defined set.
-  const set =
-    info.rates.find((r) => new Date(r.effectiveFrom).getTime() <= asOfTime) ??
-    info.rates[info.rates.length - 1];
+  // No taxYear lookup for company rates (asOf-only) — resolveEffectiveDated's
+  // taxYear branch is simply never reached here.
+  const set = resolveEffectiveDated(info.rates, { asOf });
   // Defensive: a country defined with an empty `rates` array would leave `set`
   // undefined — treat that as "no data" rather than crashing on dereference.
   if (!set) return null;

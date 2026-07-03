@@ -82,6 +82,16 @@ export {
   listCompanyTaxCountries,
   getCompanyTaxInfo,
   getCompanyTaxRate,
+  // Student / training loan compulsory repayments (AU HELP/HECS; generic)
+  STUDENT_LOAN_SCHEMES,
+  listStudentLoanCountries,
+  getStudentLoanInfo,
+  getStudentLoanRepayment,
+  // Retirement / pension contributions (AU Superannuation Guarantee; generic)
+  RETIREMENT_SCHEMES,
+  listRetirementCountries,
+  getRetirementInfo,
+  getSuperannuationEstimate,
 } from './data';
 
 export type {
@@ -94,6 +104,13 @@ export type {
   CompanyTaxRateSet,
   CompanyTaxInfo,
   ResolvedCompanyRate,
+  StudentLoanBand,
+  StudentLoanScheme,
+  StudentLoanInfo,
+  ResolvedStudentLoanRepayment,
+  RetirementScheme,
+  RetirementInfo,
+  ResolvedSuperannuationEstimate,
 } from './data';
 
 // ─── Direct country plugin access (for testing / advanced use) ───────────────
@@ -127,4 +144,7 @@ export { default as ukSelfAssessmentPlugin } from './countries/ukSelfAssessment'
 export { default as indiaIncomeTaxPlugin } from './countries/indiaIncomeTax';
 export { default as usIncomeTaxPlugin } from './countries/usIncomeTax';
 export { default as australiaIncomeTaxPlugin } from './countries/australiaIncomeTax';
+// Ground truth for the AU-IT legislated first-bracket-rate cuts — exported so
+// tests assert against real logic instead of re-deriving it inline.
+export { calcAuTax, currentFyStartYear, firstBracketRate } from './countries/australiaIncomeTax';
 export { default as canadaIncomeTaxPlugin } from './countries/canadaIncomeTax';
