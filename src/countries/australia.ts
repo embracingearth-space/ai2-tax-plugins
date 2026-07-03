@@ -123,7 +123,7 @@ const australiaPlugin: TaxFilingPlugin = {
             editable: true,
             required: true,
             helpText:
-              'GST collected on taxable sales. Calculated as (G1 − G2 − G3) ÷ 11. Override if using calculation worksheet.',
+              'GST collected on taxable sales. Calculated as (G1 − G2 − G3 − G4) ÷ 11 (input-taxed sales G4 are excluded from taxable sales). Override if using calculation worksheet.',
           },
           {
             id: '1B',
@@ -411,8 +411,13 @@ const australiaPlugin: TaxFilingPlugin = {
     const netAmount = roundATO(oneA - oneB + W5 + eightA + eightB);
 
     return {
-      '1A': oneA_calc,
-      '1B': oneB_calc,
+      // Return the OVERRIDE-AWARE 1A/1B (oneA/oneB), not the pre-override
+      // oneA_calc/oneB_calc. Label 9 is computed from oneA/oneB, and the client
+      // merges calculatedFields OVER user values on save — so returning the
+      // pre-override figures silently discarded a user's 1A/1B override on save
+      // and made the summary disagree with label 9. embracingearth.space
+      '1A': oneA,
+      '1B': oneB,
       W5,
       T3,
       '8A': eightA,
@@ -487,7 +492,7 @@ const australiaPlugin: TaxFilingPlugin = {
       G3: 'Other GST-free supplies — input-taxed sales, food, health, education, etc.',
       G10: 'Capital items (assets) you purchased for business use. Include GST component.',
       G11: 'All other business purchases (supplies, services, rent). Include GST component.',
-      '1A': 'GST collected on your taxable sales. Normally (G1 − G2 − G3) ÷ 11. Use calculation worksheet for precise figure.',
+      '1A': 'GST collected on your taxable sales. Normally (G1 − G2 − G3 − G4) ÷ 11. Use calculation worksheet for precise figure.',
       '1B': 'GST credits on your purchases. Normally (G10 + G11) ÷ 11.',
       W1: 'Gross salary and wages paid including allowances, bonuses, directors fees.',
       W2: 'Tax withheld from W1 payments. From your payroll system.',
@@ -497,20 +502,40 @@ const australiaPlugin: TaxFilingPlugin = {
   },
 
   getSupportedExportFormats(): ExportFormat[] {
+    // Only advertise formats generateExport actually produces. PDF/SBR-XML need
+    // server-side rendering (TODO) — advertising them here made the button
+    // silently download JSON, so it is omitted rather than misleading the user.
+    // embracingearth.space
     return [
-      { id: 'pdf', label: 'PDF Summary', mimeType: 'application/pdf', fileExtension: 'pdf' },
       { id: 'csv', label: 'CSV', mimeType: 'text/csv', fileExtension: 'csv' },
       { id: 'json', label: 'JSON (data)', mimeType: 'application/json', fileExtension: 'json' },
     ];
   },
 
   async generateExport(values: FieldValues, format: string): Promise<ExportOutput> {
-    // ai2fin.com — MVP: JSON export with all values
-    // TODO: PDF generation via server-side endpoint, SBR XML for ATO portal
-    const content = JSON.stringify(values, null, 2);
+    const stamp = new Date().toISOString().slice(0, 10);
+    // CSV: labelled rows (official label + description + value) so the file is
+    // human-readable, not raw field ids. Honors the requested format instead of
+    // always returning JSON. embracingearth.space
+    if (format === 'csv') {
+      const esc = (s: unknown): string => {
+        const str = String(s ?? '');
+        return /[",\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
+      };
+      const rows: string[] = ['Code,Label,Value'];
+      australiaPlugin.getFormSchema().forEach((section) => {
+        section.fields.forEach((f) => {
+          rows.push(
+            [esc(f.officialLabel || f.id), esc(f.label), esc(values[f.id] ?? '')].join(','),
+          );
+        });
+      });
+      return { data: rows.join('\n'), filename: `BAS-AU-${stamp}.csv`, mimeType: 'text/csv' };
+    }
+    // Default: JSON data export (all field values)
     return {
-      data: content,
-      filename: `BAS-AU-${new Date().toISOString().slice(0, 10)}.json`,
+      data: JSON.stringify(values, null, 2),
+      filename: `BAS-AU-${stamp}.json`,
       mimeType: 'application/json',
     };
   },

@@ -95,9 +95,11 @@ const mxPlugin: TaxFilingPlugin = {
       ? Math.round(Number(v.iva_acreditable) * 100) / 100 : iva_acreditable_calc;
 
     const net_iva = Math.round((iva_causado - iva_acreditable - retReceived) * 100) / 100;
-    const balance_due = Math.round(Math.max(0, net_iva - prior) * 100) / 100;
+    // TAX REVIEW: net IVA may be negative (saldo a favor / in favor) — do not clamp to zero. embracingearth.space
+    const balance_due = Math.round((net_iva - prior) * 100) / 100;
 
-    return { iva_causado: iva_causado_calc, iva_acreditable: iva_acreditable_calc, net_iva, balance_due };
+    // embracingearth.space: return override-aware values so manual edits survive save (client merges calculatedFields over user input)
+    return { iva_causado, iva_acreditable, net_iva, balance_due };
   },
 
   getAutoPopulateMapping: (): AggregationMapping[] => [

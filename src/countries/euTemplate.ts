@@ -319,7 +319,11 @@ function createEUPlugin(code: string): TaxFilingPlugin {
               calculated: true,
               editable: true,
               required: true,
-              helpText: `Standard sales × ${ratePercent}% + reduced rate amounts. Override if needed.`,
+              // embracingearth.space — caption matched to code: calculateFields
+              // computes standard sales × rate only; reduced-rate VAT is entered
+              // manually and is NOT added here, so the phantom "+ reduced rate
+              // amounts" term is removed.
+              helpText: `Standard sales × ${ratePercent}%. Override if needed (e.g. to add reduced-rate VAT).`,
             },
           ],
         },
@@ -413,7 +417,11 @@ function createEUPlugin(code: string): TaxFilingPlugin {
 
       const net_vat = Math.round((output_vat - inputVat) * 100) / 100;
 
-      return { output_vat: output_vat_calc, net_vat };
+      // embracingearth.space — return the override-aware output_vat, not the
+      // pre-override output_vat_calc. The client merges calculatedFields over the
+      // user's values on save, so returning output_vat_calc would silently discard
+      // a manual output_vat override (the field is editable).
+      return { output_vat, net_vat };
     },
 
     getAutoPopulateMapping: (): AggregationMapping[] => [

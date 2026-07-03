@@ -118,16 +118,25 @@ const jpPlugin: TaxFilingPlugin = {
         ? Math.floor(Number(v.input_national_total))
         : input_national_calc;
 
-    const net_national = Math.max(0, output_national_total - input_national_total);
-    // Local tax = national tax × 22/78
+    // embracingearth.space — do NOT clamp to zero: when input tax credit exceeds
+    // output tax, Japan refunds the excess (消費税の還付). Clamping killed the
+    // refund because local_tax/total_payable/balance_due all derive from this.
+    // FLAG FOR TAX REVIEW: confirm refund (negative) handling is desired downstream.
+    const net_national = output_national_total - input_national_total;
+    // Local tax = national tax × 22/78 (negative when net_national is a refund)
     const local_tax = Math.floor(net_national * 22 / 78);
     const total_payable = net_national + local_tax;
     const interim = Number(v.interim_paid) || 0;
     const balance_due = total_payable - interim;
 
+    // embracingearth.space — return the override-aware input_national_total, not
+    // the pre-override input_national_calc. The field is editable (proportional
+    // allocation method), and the client merges calculatedFields over the user's
+    // values on save, so returning input_national_calc would silently discard the
+    // user's manual input-tax-credit override.
     return {
       output_national_standard, output_national_reduced, output_national_total,
-      input_national_total: input_national_calc, net_national, local_tax,
+      input_national_total, net_national, local_tax,
       total_payable, balance_due,
     };
   },

@@ -90,7 +90,8 @@ const idPlugin: TaxFilingPlugin = {
     const net_vat = output_vat - creditable_input;
     const balance_due = net_vat - prior;
 
-    return { output_vat: output_vat_calc, input_vat: input_vat_calc, net_vat, balance_due };
+    // embracingearth.space: return override-aware values so manual edits survive save (client merges calculatedFields over user input)
+    return { output_vat, input_vat, net_vat, balance_due };
   },
 
   getAutoPopulateMapping: (): AggregationMapping[] => [

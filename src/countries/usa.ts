@@ -296,7 +296,7 @@ const usPlugin: TaxFilingPlugin = {
             calculated: true,
             editable: false,
             required: true,
-            helpText: 'Line 10 + adjustments (7+8+9) − credits (11b)',
+            helpText: 'Line 10 − nonrefundable credits (11b). Adjustments (7+8+9) are already in Line 10. embracingearth.space',
           },
           {
             id: 'line13',

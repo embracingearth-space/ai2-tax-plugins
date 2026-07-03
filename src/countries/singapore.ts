@@ -259,7 +259,10 @@ const sgPlugin: TaxFilingPlugin = {
 
     const box8 = Math.round((box6 - b7) * 100) / 100;
 
-    return { box4, box6: box6_calc, box8 };
+    // Return the override-aware box6 (not box6_calc): box8 is computed from the
+    // override, so returning the pre-override figure discarded the user's manual
+    // output-tax adjustment (bad-debt relief, etc.) on save. embracingearth.space
+    return { box4, box6, box8 };
   },
 
   getAutoPopulateMapping: (): AggregationMapping[] => [

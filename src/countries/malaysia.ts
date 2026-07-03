@@ -88,7 +88,10 @@ const myPlugin: TaxFilingPlugin = {
     const total_sst = Math.round((sales_tax_payable + service_tax_payable) * 100) / 100;
     const total_due = Math.round((total_sst + penalty) * 100) / 100;
 
-    return { sales_tax_payable: sales_tax_calc, service_tax_payable: service_tax_calc, total_sst, total_due };
+    // Return the override-aware payables (not *_calc): total_sst is built from the
+    // overrides, so returning the pre-override figures discarded the user's manual
+    // tax adjustments on save. embracingearth.space
+    return { sales_tax_payable, service_tax_payable, total_sst, total_due };
   },
 
   getAutoPopulateMapping: (): AggregationMapping[] => [

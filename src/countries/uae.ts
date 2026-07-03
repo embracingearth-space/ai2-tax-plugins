@@ -98,7 +98,10 @@ const aePlugin: TaxFilingPlugin = {
     const penalties = Number(v.penalties) || 0;
     const total_payable = Math.round((net_vat + penalties) * 100) / 100;
 
-    return { total_standard_supplies, output_vat: output_vat_calc, input_vat: input_vat_calc, net_vat, total_payable };
+    // Return the override-aware output_vat/input_vat (not *_calc): net_vat is computed
+    // from the overrides, so returning the pre-override figures discarded the user's
+    // manual VAT adjustments on save. embracingearth.space
+    return { total_standard_supplies, output_vat, input_vat, net_vat, total_payable };
   },
 
   getAutoPopulateMapping: (): AggregationMapping[] => [
