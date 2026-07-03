@@ -13,7 +13,13 @@
  *      taxpayer's credit/refund balance.
  */
 
-import { australiaPlugin, singaporePlugin, brazilPlugin } from '../src';
+import {
+  australiaPlugin,
+  singaporePlugin,
+  brazilPlugin,
+  mexicoPlugin,
+  japanPlugin,
+} from '../src';
 
 describe('Regression — user overrides are preserved in calculateFields output', () => {
   it('AU: an overridden 1A/1B is returned (not the pre-override calc)', () => {
@@ -54,5 +60,21 @@ describe('Regression — credit/refund balances surface instead of being clamped
     });
     expect(r.net_pis).toBe(-200); // was clamped to 0 before the fix
     expect(r.total_payable).toBeLessThan(0);
+  });
+
+  it('Mexico: IVA acreditable exceeding causado gives a saldo a favor (negative), not 0', () => {
+    const r = mexicoPlugin.calculateFields({ iva_causado: 100, iva_acreditable: 300 });
+    expect(r.net_iva).toBe(-200); // was clamped to 0 before the fix
+    expect(r.balance_due).toBeLessThan(0);
+  });
+
+  it('Japan: input tax exceeding output surfaces a refund, with whole-yen truncation', () => {
+    const r = japanPlugin.calculateFields({ sales_standard: 10000, purchases_standard: 500000 });
+    const net = Number(r.net_national);
+    expect(net).toBeLessThan(0); // refund surfaces (was Math.max(0,…))
+    expect(Number(r.total_payable)).toBeLessThan(0);
+    // local_tax truncates toward zero (切り捨て), not floor — so total_payable is
+    // net_national + trunc(net_national × 22/78), not the 1-yen-lower floored value.
+    expect(Number(r.total_payable)).toBe(net + Math.trunc((net * 22) / 78));
   });
 });

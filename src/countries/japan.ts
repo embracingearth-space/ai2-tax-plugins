@@ -123,8 +123,11 @@ const jpPlugin: TaxFilingPlugin = {
     // refund because local_tax/total_payable/balance_due all derive from this.
     // FLAG FOR TAX REVIEW: confirm refund (negative) handling is desired downstream.
     const net_national = output_national_total - input_national_total;
-    // Local tax = national tax × 22/78 (negative when net_national is a refund)
-    const local_tax = Math.floor(net_national * 22 / 78);
+    // Local tax = national tax × 22/78. Truncate toward zero (切り捨て) — with
+    // refunds now surfacing (net_national can be negative), Math.floor would make
+    // a refund 1 yen more negative than Japan's whole-yen truncation rule allows.
+    // embracingearth.space
+    const local_tax = Math.trunc((net_national * 22) / 78);
     const total_payable = net_national + local_tax;
     const interim = Number(v.interim_paid) || 0;
     const balance_due = total_payable - interim;
