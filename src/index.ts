@@ -144,4 +144,7 @@ export { default as ukSelfAssessmentPlugin } from './countries/ukSelfAssessment'
 export { default as indiaIncomeTaxPlugin } from './countries/indiaIncomeTax';
 export { default as usIncomeTaxPlugin } from './countries/usIncomeTax';
 export { default as australiaIncomeTaxPlugin } from './countries/australiaIncomeTax';
+// Ground truth for the AU-IT legislated first-bracket-rate cuts — exported so
+// tests assert against real logic instead of re-deriving it inline.
+export { calcAuTax, currentFyStartYear, firstBracketRate } from './countries/australiaIncomeTax';
 export { default as canadaIncomeTaxPlugin } from './countries/canadaIncomeTax';

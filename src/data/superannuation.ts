@@ -22,13 +22,16 @@
  *   SG rate 12% from 1 Jul 2025 (11.5% in 2024-25); concessional cap $30,000
  *   through 2025-26, rising to $32,500 from 1 Jul 2026; Division 293 threshold
  *   $250,000 (extra 15%). Maximum contribution base: QUARTERLY through 2025-26
- *   ($62,500/qtr), then ANNUAL from 2026-27 ($270,830 = $32,500 × 100 ÷ 12)
- *   because Payday Super replaces the quarterly SG calculation from 1 Jul 2026.
+ *   ($62,500/qtr), then ANNUAL from 2026-27 ($270,830, the ATO-published
+ *   rounded-down annual base; $32,500 ÷ 12% ≈ $270,833.33) because Payday
+ *   Super replaces the quarterly SG calculation from 1 Jul 2026.
  *   Sources:
  *   https://www.ato.gov.au/tax-rates-and-codes/key-superannuation-rates-and-thresholds
  *   https://www.ato.gov.au/tax-rates-and-codes/key-superannuation-rates-and-thresholds/super-guarantee
  *   https://www.ato.gov.au/businesses-and-organisations/super-for-employers/payday-super/paying-super-on-payday/what-payments-are-qualifying-earnings/maximum-contributions-base
  */
+
+import { resolveEffectiveDated } from './effectiveDating';
 
 export interface RetirementScheme {
   /** ISO date this year's parameters take effect (inclusive). */
@@ -88,8 +91,8 @@ export const RETIREMENT_SCHEMES: Record<string, RetirementInfo> = {
         highEarnerThreshold: 250000,
         highEarnerSurchargeRate: 0.15,
         // Payday Super (from 1 Jul 2026) uses an ANNUAL maximum contribution
-        // base: $270,830 = $32,500 concessional cap × 100 ÷ 12 (ATO-published),
-        // so SG at the base lands exactly on the concessional cap.
+        // base: $270,830 (ATO-published rounded-down annual base;
+        // $32,500 concessional cap ÷ 12% ≈ $270,833.33).
         maxContributionBaseAnnual: 270830,
         source: 'https://www.ato.gov.au/tax-rates-and-codes/key-superannuation-rates-and-thresholds',
       },
@@ -137,15 +140,8 @@ export function getRetirementInfo(countryCode?: string | null): RetirementInfo |
 function resolveScheme(
   info: RetirementInfo,
   opts: { asOf?: Date; taxYear?: string },
-): RetirementScheme | null {
-  if (opts.taxYear) {
-    return info.schemes.find((s) => s.taxYearLabel === opts.taxYear) ?? null;
-  }
-  const asOfTime = (opts.asOf ?? new Date()).getTime();
-  return (
-    info.schemes.find((s) => new Date(s.effectiveFrom).getTime() <= asOfTime) ??
-    info.schemes[info.schemes.length - 1]
-  );
+): RetirementScheme | undefined {
+  return resolveEffectiveDated(info.schemes, opts, (s) => s.taxYearLabel);
 }
 
 export interface ResolvedSuperannuationEstimate {

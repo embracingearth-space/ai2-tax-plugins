@@ -26,6 +26,8 @@
  * https://www.ato.gov.au/tax-rates-and-codes/study-and-training-support-loans-rates-and-repayment-thresholds
  */
 
+import { resolveEffectiveDated } from './effectiveDating';
+
 export interface StudentLoanBand {
   /** Repayment-income floor for this band (inclusive lower bound). */
   floor: number;
@@ -139,15 +141,8 @@ export function getStudentLoanInfo(countryCode?: string | null): StudentLoanInfo
 function resolveScheme(
   info: StudentLoanInfo,
   opts: { asOf?: Date; taxYear?: string },
-): StudentLoanScheme | null {
-  if (opts.taxYear) {
-    return info.schemes.find((s) => s.taxYearLabel === opts.taxYear) ?? null;
-  }
-  const asOfTime = (opts.asOf ?? new Date()).getTime();
-  return (
-    info.schemes.find((s) => new Date(s.effectiveFrom).getTime() <= asOfTime) ??
-    info.schemes[info.schemes.length - 1]
-  );
+): StudentLoanScheme | undefined {
+  return resolveEffectiveDated(info.schemes, opts, (s) => s.taxYearLabel);
 }
 
 export interface ResolvedStudentLoanRepayment {

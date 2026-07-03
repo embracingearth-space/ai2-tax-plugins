@@ -19,18 +19,21 @@ import { getStudentLoanRepayment } from '../data/studentLoan';
 const TAX_FREE = 18200;
 
 // FY starts 1 July: months Jul-Dec belong to the FY starting that year.
-function currentFyStartYear(now = new Date()): number {
+// Exported so tests assert against this ground truth rather than re-deriving
+// the same FY/rate-selection logic inline (which would make an assertion
+// tautological — always passing because it mirrors the code under test).
+export function currentFyStartYear(now = new Date()): number {
   return now.getMonth() >= 6 ? now.getFullYear() : now.getFullYear() - 1;
 }
 
 // Legislated first-bracket cuts: 16% to FY2025-26, 15% FY2026-27, 14% FY2027-28+.
-function firstBracketRate(fyStartYear: number): number {
+export function firstBracketRate(fyStartYear: number): number {
   if (fyStartYear >= 2027) return 0.14;
   if (fyStartYear === 2026) return 0.15;
   return 0.16;
 }
 
-function calcAuTax(taxable: number, fyStartYear = currentFyStartYear()): number {
+export function calcAuTax(taxable: number, fyStartYear = currentFyStartYear()): number {
   if (taxable <= TAX_FREE) return 0;
   let tax = 0;
   if (taxable > TAX_FREE) tax += Math.min(taxable - TAX_FREE, 45000 - TAX_FREE) * firstBracketRate(fyStartYear);
@@ -69,6 +72,8 @@ const auItPlugin: TaxFilingPlugin = {
           { id: 'capital_gains', label: 'Net capital gains', type: 'currency', editable: true, required: false, helpText: 'After applying 50% CGT discount if held >12 months' },
           { id: 'other_income', label: 'Other income', type: 'currency', editable: true, required: false },
           { id: 'reportable_super', label: 'Reportable super contributions', type: 'currency', editable: true, required: false, helpText: 'Salary-sacrifice + personal deductible super. Not assessable income, but counts toward study/training loan repayment income.' },
+          { id: 'reportable_fringe_benefits', label: 'Reportable fringe benefits', type: 'currency', editable: true, required: false, helpText: 'From your payment summary/income statement. Not assessable income, but counts toward study/training loan repayment income.' },
+          { id: 'exempt_foreign_income', label: 'Exempt foreign employment income', type: 'currency', editable: true, required: false, helpText: 'Foreign income exempt from Australian tax. Not assessable income, but counts toward study/training loan repayment income.' },
           { id: 'total_income', label: 'Total assessable income', type: 'currency', calculated: true, editable: false, required: true },
         ],
       },
@@ -99,7 +104,7 @@ const auItPlugin: TaxFilingPlugin = {
           { id: 'lito', label: 'Low Income Tax Offset (LITO)', type: 'currency', calculated: true, editable: false, required: false, helpText: 'Up to $700 for income ≤$45,000' },
           { id: 'franking_credit_offset', label: 'Franking credit tax offset', type: 'currency', calculated: true, editable: false, required: false },
           { id: 'has_study_loan', label: 'Has HELP / study or training loan', type: 'boolean', editable: true, required: false, helpText: 'Tick to include the compulsory annual repayment (HELP, VSL, SFSS, SSL, AASL).' },
-          { id: 'study_loan_repayment', label: 'Compulsory study/training loan repayment', type: 'currency', calculated: true, editable: false, required: false, helpText: 'Marginal rates on repayment income above $67,000 (2025-26). Added to the amount payable, separate from income tax.' },
+          { id: 'study_loan_repayment', label: 'Compulsory study/training loan repayment', type: 'currency', calculated: true, editable: false, required: false, helpText: 'Marginal rates on repayment income above the ATO minimum threshold for the current year. Added to the amount payable, separate from income tax.' },
           { id: 'total_tax', label: 'Total tax liability', type: 'currency', calculated: true, editable: false, required: true },
         ],
       },
@@ -155,14 +160,23 @@ const auItPlugin: TaxFilingPlugin = {
     const total_tax = Math.max(0, income_tax + medicare_levy + medicareSurcharge - lito - franking_credit_offset);
 
     // Compulsory study/training loan (HELP) repayment. Repayment income is a
-    // broader base than taxable income — it adds back reportable super
-    // contributions. Levied ALONGSIDE income tax on the notice of assessment,
-    // so it's tracked separately and added into the bottom-line balance due,
-    // not folded into total_tax. Rates come from the effective-dated ledger in
+    // BROADER base than taxable income — per the ATO it adds back: reportable
+    // super contributions, reportable fringe benefits, total net investment
+    // loss (incl. net rental losses), and exempt foreign income. Negative
+    // gearing (a rental LOSS) already reduced taxable_income above, so the
+    // loss amount is added back here — otherwise negative gearing would
+    // silently reduce a HELP obligation the ATO rule exists to prevent.
+    // Levied ALONGSIDE income tax on the notice of assessment, so it's
+    // tracked separately and added into the bottom-line balance due, not
+    // folded into total_tax. Rates come from the effective-dated ledger in
     // data/studentLoan.ts (marginal system from 2025-26). embracingearth.space
     const reportableSuper = Number(v.reportable_super) || 0;
+    const reportableFringeBenefits = Number(v.reportable_fringe_benefits) || 0;
+    const exemptForeignIncome = Number(v.exempt_foreign_income) || 0;
+    const netInvestmentLoss = Math.max(0, -rental); // rental < 0 → a loss to add back
     const hasStudyLoan = v.has_study_loan === true || v.has_study_loan === 'true';
-    const repaymentIncome = taxable_income + reportableSuper;
+    const repaymentIncome =
+      taxable_income + reportableSuper + reportableFringeBenefits + netInvestmentLoss + exemptForeignIncome;
     const study_loan_repayment = hasStudyLoan
       ? Math.round(getStudentLoanRepayment('AU', { repaymentIncome })?.repayment ?? 0)
       : 0;

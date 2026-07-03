@@ -140,7 +140,8 @@ describe('@ai2/tax-plugins — Superannuation', () => {
     });
 
     it('caps SG at the ANNUAL maximum contribution base for 2026-27 (Payday Super)', () => {
-      // MCB $270,830/yr (ATO-published: $32,500 concessional cap × 100 ÷ 12).
+      // MCB $270,830/yr (ATO-published rounded-down annual base;
+      // $32,500 ÷ 12% ≈ $270,833.33).
       // OTE $300,000 → SG on $270,830 only, not the full $300,000.
       const s = getSuperannuationEstimate('AU', { ordinaryEarnings: 300000, taxYear: '2026-27' });
       expect(s?.guaranteeableEarnings).toBe(270830);

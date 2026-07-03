@@ -14,6 +14,7 @@ import {
   australiaIncomeTaxPlugin, canadaIncomeTaxPlugin,
   createEUPlugin, getPluginForCountry, listOfficialCountries,
   getPluginsForBaseCountry, getCountryTaxFilingLabel,
+  calcAuTax, currentFyStartYear,
 } from '../src';
 import type { TaxFilingPlugin } from '../src';
 
@@ -282,18 +283,25 @@ describe('Australia Income Tax (AU-IT)', () => {
     const r = p.calculateFields({ salary_wages: 15000 });
     expect(Number(r.income_tax)).toBe(0);
   });
-  it('calculates tax on $100K salary', () => {
+  it('calculates tax on $100K salary for the current FY (integration check)', () => {
+    // Ground truth comes from the exported calcAuTax — this only proves
+    // calculateFields delegates to it correctly, NOT that the bracket math
+    // itself is right (the fixed-FY cases below cover that independently).
     const r = p.calculateFields({ salary_wages: 100000 });
-    // $18,200 tax-free, then $18,201-$45,000 at the FY-dependent first-bracket
-    // rate, then $45,001-$100,000 at 30%. The first-bracket rate steps down by
-    // legislation (16% to FY2025-26, 15% FY2026-27, 14% FY2027-28+), so derive
-    // it from the current financial year rather than pinning a rate that goes
-    // stale at the 1 July rollover.
-    const now = new Date();
-    const fyStart = now.getMonth() >= 6 ? now.getFullYear() : now.getFullYear() - 1;
-    const firstRate = fyStart >= 2027 ? 0.14 : fyStart === 2026 ? 0.15 : 0.16;
-    const expected = (45000 - 18200) * firstRate + (100000 - 45000) * 0.30;
-    expect(Number(r.income_tax)).toBe(Math.round(expected));
+    expect(Number(r.income_tax)).toBe(calcAuTax(100000, currentFyStartYear()));
+  });
+
+  // $18,200 tax-free, then $18,201-$45,000 at the FY-dependent first-bracket
+  // rate, then $45,001-$100,000 at 30%. Expected values are hand-computed
+  // against the legislated rate for each FY (16% to FY2025-26, 15% FY2026-27,
+  // 14% FY2027-28+) — independent of calcAuTax's own rate-selection logic, so
+  // a regression in the bracket table or the FY cutover actually fails this.
+  it.each([
+    [2025, 20788], // FY2025-26: (45000-18200)×16% + 55000×30% = 4,288 + 16,500
+    [2026, 20520], // FY2026-27: (45000-18200)×15% + 55000×30% = 4,020 + 16,500
+    [2027, 20252], // FY2027-28+: (45000-18200)×14% + 55000×30% = 3,752 + 16,500
+  ])('calculates $100K tax for FY starting %i as $%i (legislated bracket cuts)', (fyStartYear, expected) => {
+    expect(calcAuTax(100000, fyStartYear)).toBe(expected);
   });
   it('calculates LITO for low income', () => {
     const r = p.calculateFields({ salary_wages: 40000 });
