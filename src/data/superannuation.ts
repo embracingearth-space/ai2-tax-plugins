@@ -21,10 +21,13 @@
  * AUSTRALIA — figures verified against the ATO on 2026-07-03:
  *   SG rate 12% from 1 Jul 2025 (11.5% in 2024-25); concessional cap $30,000
  *   through 2025-26, rising to $32,500 from 1 Jul 2026; Division 293 threshold
- *   $250,000 (extra 15%); maximum quarterly contribution base $62,500 (2025-26).
+ *   $250,000 (extra 15%). Maximum contribution base: QUARTERLY through 2025-26
+ *   ($62,500/qtr), then ANNUAL from 2026-27 ($270,830 = $32,500 × 100 ÷ 12)
+ *   because Payday Super replaces the quarterly SG calculation from 1 Jul 2026.
  *   Sources:
  *   https://www.ato.gov.au/tax-rates-and-codes/key-superannuation-rates-and-thresholds
  *   https://www.ato.gov.au/tax-rates-and-codes/key-superannuation-rates-and-thresholds/super-guarantee
+ *   https://www.ato.gov.au/businesses-and-organisations/super-for-employers/payday-super/paying-super-on-payday/what-payments-are-qualifying-earnings/maximum-contributions-base
  */
 
 export interface RetirementScheme {
@@ -44,10 +47,16 @@ export interface RetirementScheme {
   highEarnerSurchargeRate: number;
   /**
    * Maximum earnings per quarter that attract the guarantee (AU maximum
-   * contribution base). Optional — omitted where the year's figure is not
-   * yet confirmed rather than guessed.
+   * contribution base, quarterly years through 2025-26). Mutually exclusive
+   * with maxContributionBaseAnnual.
    */
   maxContributionBaseQuarter?: number;
+  /**
+   * Maximum earnings per financial year that attract the guarantee. AU uses an
+   * ANNUAL base from 2026-27 (Payday Super replaced the quarterly calculation
+   * on 1 Jul 2026; the ATO derives it as concessional cap ÷ SG rate).
+   */
+  maxContributionBaseAnnual?: number;
   /** Authoritative source URL. */
   source: string;
 }
@@ -78,8 +87,10 @@ export const RETIREMENT_SCHEMES: Record<string, RetirementInfo> = {
         contributionsTaxRate: 0.15,
         highEarnerThreshold: 250000,
         highEarnerSurchargeRate: 0.15,
-        // Maximum contribution base indexes annually; 2026-27 figure not yet
-        // confirmed at time of writing, so left unset rather than guessed.
+        // Payday Super (from 1 Jul 2026) uses an ANNUAL maximum contribution
+        // base: $270,830 = $32,500 concessional cap × 100 ÷ 12 (ATO-published),
+        // so SG at the base lands exactly on the concessional cap.
+        maxContributionBaseAnnual: 270830,
         source: 'https://www.ato.gov.au/tax-rates-and-codes/key-superannuation-rates-and-thresholds',
       },
       {
@@ -196,10 +207,13 @@ export function getSuperannuationEstimate(
   const personalDeductible = Math.max(0, num(opts.personalDeductible));
   const otherIncome = Math.max(0, num(opts.otherTaxableIncome));
 
-  // SG is capped by the maximum contribution base (per quarter → ×4 annually)
-  // where the year defines one; otherwise the full OTE is guaranteeable.
+  // SG is capped by the maximum contribution base — quarterly (×4 annually)
+  // through 2025-26, annual from 2026-27 (Payday Super) — where the year
+  // defines one; otherwise the full OTE is guaranteeable. The two fields are
+  // mutually exclusive per scheme (see RetirementScheme docs).
   const annualBaseCap =
-    scheme.maxContributionBaseQuarter != null ? scheme.maxContributionBaseQuarter * 4 : Infinity;
+    scheme.maxContributionBaseAnnual ??
+    (scheme.maxContributionBaseQuarter != null ? scheme.maxContributionBaseQuarter * 4 : Infinity);
   const guaranteeableEarnings = Math.min(ote, annualBaseCap);
   const guaranteeAmount = Math.round(guaranteeableEarnings * scheme.guaranteeRate);
 

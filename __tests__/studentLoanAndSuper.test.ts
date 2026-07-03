@@ -86,6 +86,13 @@ describe('@ai2/tax-plugins — Student loan (HELP/HECS)', () => {
       expect(getStudentLoanRepayment('FR', { repaymentIncome: 100000 })).toBeNull();
     });
 
+    it('returns null for an unmatched explicit taxYear rather than silently using the latest', () => {
+      // CodeRabbit PR#93 finding: an explicit taxYear that doesn't exist must
+      // fail loudly (null), never silently substitute the newest scheme.
+      const r = getStudentLoanRepayment('AU', { repaymentIncome: 100000, taxYear: '2022-23' });
+      expect(r).toBeNull();
+    });
+
     it('accepts the compound key AU-IT', () => {
       const r = getStudentLoanRepayment('AU-IT', { repaymentIncome: 100000, taxYear: '2025-26' });
       expect(r?.repayment).toBeCloseTo(4950, 2);
@@ -132,6 +139,14 @@ describe('@ai2/tax-plugins — Superannuation', () => {
       expect(s?.concessionalCap).toBe(32500);
     });
 
+    it('caps SG at the ANNUAL maximum contribution base for 2026-27 (Payday Super)', () => {
+      // MCB $270,830/yr (ATO-published: $32,500 concessional cap × 100 ÷ 12).
+      // OTE $300,000 → SG on $270,830 only, not the full $300,000.
+      const s = getSuperannuationEstimate('AU', { ordinaryEarnings: 300000, taxYear: '2026-27' });
+      expect(s?.guaranteeableEarnings).toBe(270830);
+      expect(s?.guaranteeAmount).toBe(Math.round(270830 * 0.12)); // not 12% × $300,000
+    });
+
     it('caps SG at the maximum quarterly contribution base (2025-26)', () => {
       // MCB $62,500/qtr → $250,000/yr. OTE $300,000 → SG on $250,000 only.
       const s = getSuperannuationEstimate('AU', { ordinaryEarnings: 300000, taxYear: '2025-26' });
@@ -154,6 +169,13 @@ describe('@ai2/tax-plugins — Superannuation', () => {
     it('returns null for an unsupported country and lists AU', () => {
       expect(getSuperannuationEstimate('FR', { ordinaryEarnings: 100000 })).toBeNull();
       expect(listRetirementCountries()).toContain('AU');
+    });
+
+    it('returns null for an unmatched explicit taxYear rather than silently using the latest', () => {
+      // CodeRabbit PR#93 finding: same guard as student loans — an explicit
+      // taxYear that doesn't exist must fail loudly, never silently fall back.
+      const s = getSuperannuationEstimate('AU', { ordinaryEarnings: 100000, taxYear: '2019-20' });
+      expect(s).toBeNull();
     });
   });
 });
