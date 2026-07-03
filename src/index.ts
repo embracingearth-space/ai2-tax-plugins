@@ -82,6 +82,16 @@ export {
   listCompanyTaxCountries,
   getCompanyTaxInfo,
   getCompanyTaxRate,
+  // Student / training loan compulsory repayments (AU HELP/HECS; generic)
+  STUDENT_LOAN_SCHEMES,
+  listStudentLoanCountries,
+  getStudentLoanInfo,
+  getStudentLoanRepayment,
+  // Retirement / pension contributions (AU Superannuation Guarantee; generic)
+  RETIREMENT_SCHEMES,
+  listRetirementCountries,
+  getRetirementInfo,
+  getSuperannuationEstimate,
 } from './data';
 
 export type {
@@ -94,6 +104,13 @@ export type {
   CompanyTaxRateSet,
   CompanyTaxInfo,
   ResolvedCompanyRate,
+  StudentLoanBand,
+  StudentLoanScheme,
+  StudentLoanInfo,
+  ResolvedStudentLoanRepayment,
+  RetirementScheme,
+  RetirementInfo,
+  ResolvedSuperannuationEstimate,
 } from './data';
 
 // ─── Direct country plugin access (for testing / advanced use) ───────────────

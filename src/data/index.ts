@@ -37,3 +37,30 @@ export {
   getCompanyTaxInfo,
   getCompanyTaxRate,
 } from './companyTax';
+
+// Student / Training Loan compulsory repayments (AU HELP/HECS; generic per-country)
+export type {
+  StudentLoanBand,
+  StudentLoanScheme,
+  StudentLoanInfo,
+  ResolvedStudentLoanRepayment,
+} from './studentLoan';
+export {
+  STUDENT_LOAN_SCHEMES,
+  listStudentLoanCountries,
+  getStudentLoanInfo,
+  getStudentLoanRepayment,
+} from './studentLoan';
+
+// Retirement / Pension contributions (AU Superannuation Guarantee; generic per-country)
+export type {
+  RetirementScheme,
+  RetirementInfo,
+  ResolvedSuperannuationEstimate,
+} from './superannuation';
+export {
+  RETIREMENT_SCHEMES,
+  listRetirementCountries,
+  getRetirementInfo,
+  getSuperannuationEstimate,
+} from './superannuation';

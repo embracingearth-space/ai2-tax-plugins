@@ -14,6 +14,7 @@ import type {
   TaxFilingPlugin, FormSection, FieldValues, CalculatedFields,
   AggregationMapping, ValidationResult, RoundingConfig, ExportFormat, ExportOutput,
 } from '../types';
+import { getStudentLoanRepayment } from '../data/studentLoan';
 
 const TAX_FREE = 18200;
 
@@ -67,6 +68,7 @@ const auItPlugin: TaxFilingPlugin = {
           { id: 'rental_income', label: 'Net rental income', type: 'currency', editable: true, required: false },
           { id: 'capital_gains', label: 'Net capital gains', type: 'currency', editable: true, required: false, helpText: 'After applying 50% CGT discount if held >12 months' },
           { id: 'other_income', label: 'Other income', type: 'currency', editable: true, required: false },
+          { id: 'reportable_super', label: 'Reportable super contributions', type: 'currency', editable: true, required: false, helpText: 'Salary-sacrifice + personal deductible super. Not assessable income, but counts toward study/training loan repayment income.' },
           { id: 'total_income', label: 'Total assessable income', type: 'currency', calculated: true, editable: false, required: true },
         ],
       },
@@ -96,6 +98,8 @@ const auItPlugin: TaxFilingPlugin = {
           { id: 'medicare_surcharge', label: 'Medicare levy surcharge', type: 'currency', editable: true, required: false, helpText: '1-1.5% if no private health insurance and income >$101,000 single (2025-26)' },
           { id: 'lito', label: 'Low Income Tax Offset (LITO)', type: 'currency', calculated: true, editable: false, required: false, helpText: 'Up to $700 for income ≤$45,000' },
           { id: 'franking_credit_offset', label: 'Franking credit tax offset', type: 'currency', calculated: true, editable: false, required: false },
+          { id: 'has_study_loan', label: 'Has HELP / study or training loan', type: 'boolean', editable: true, required: false, helpText: 'Tick to include the compulsory annual repayment (HELP, VSL, SFSS, SSL, AASL).' },
+          { id: 'study_loan_repayment', label: 'Compulsory study/training loan repayment', type: 'currency', calculated: true, editable: false, required: false, helpText: 'Marginal rates on repayment income above $67,000 (2025-26). Added to the amount payable, separate from income tax.' },
           { id: 'total_tax', label: 'Total tax liability', type: 'currency', calculated: true, editable: false, required: true },
         ],
       },
@@ -150,11 +154,24 @@ const auItPlugin: TaxFilingPlugin = {
     const franking_credit_offset = frankingCredits;
     const total_tax = Math.max(0, income_tax + medicare_levy + medicareSurcharge - lito - franking_credit_offset);
 
+    // Compulsory study/training loan (HELP) repayment. Repayment income is a
+    // broader base than taxable income — it adds back reportable super
+    // contributions. Levied ALONGSIDE income tax on the notice of assessment,
+    // so it's tracked separately and added into the bottom-line balance due,
+    // not folded into total_tax. Rates come from the effective-dated ledger in
+    // data/studentLoan.ts (marginal system from 2025-26). embracingearth.space
+    const reportableSuper = Number(v.reportable_super) || 0;
+    const hasStudyLoan = v.has_study_loan === true || v.has_study_loan === 'true';
+    const repaymentIncome = taxable_income + reportableSuper;
+    const study_loan_repayment = hasStudyLoan
+      ? Math.round(getStudentLoanRepayment('AU', { repaymentIncome })?.repayment ?? 0)
+      : 0;
+
     const withheld = Number(v.tax_withheld) || 0;
     const instalments = Number(v.payg_instalments) || 0;
-    const balance_due = total_tax - withheld - instalments;
+    const balance_due = total_tax + study_loan_repayment - withheld - instalments;
 
-    return { total_income, total_deductions, taxable_income, income_tax, medicare_levy, lito, franking_credit_offset, total_tax, balance_due };
+    return { total_income, total_deductions, taxable_income, income_tax, medicare_levy, lito, franking_credit_offset, study_loan_repayment, total_tax, balance_due };
   },
 
   getAutoPopulateMapping: (): AggregationMapping[] => [
