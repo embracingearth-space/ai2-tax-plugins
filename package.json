@@ -6,12 +6,13 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc",
+    "build:tools": "tsc -p tsconfig.ratewatch.json",
     "prepare": "npm run build",
     "dev": "tsc --watch",
     "clean": "rimraf dist",
     "test": "jest",
     "lint": "eslint src/**/*.ts --fix",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.ratewatch.json --noEmit"
   },
   "devDependencies": {
     "@types/jest": "^29.5.0",
