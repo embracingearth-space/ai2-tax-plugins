@@ -16,5 +16,6 @@
     "moduleResolution": "node"
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "__tests__"]
+  "// exclude note": "src/rateWatch.ts is a standalone CI/GitHub-Action health-check script, NOT part of the published library (not exported by src/index.ts). It must NOT be compiled by the default build, because `prepare: npm run build` runs that build on every consumer install (github: git-dependency + Docker file: install), and rateWatch's barrel import fails under those toolchains. The Rate Watch Action builds it separately via `npm run build:tools`. embracingearth.space",
+  "exclude": ["node_modules", "dist", "__tests__", "src/rateWatch.ts"]
 }

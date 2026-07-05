@@ -1,0 +1,6 @@
+{
+  "// purpose": "Compiles the standalone CI script src/rateWatch.ts (excluded from the default library build). Used by the Rate Watch GitHub Action via `npm run build:tools`; emits dist/rateWatch.js for scripts/rate-watch/run.cjs. embracingearth.space",
+  "extends": "./tsconfig.json",
+  "include": ["src/rateWatch.ts"],
+  "exclude": ["node_modules", "dist", "__tests__"]
+}
