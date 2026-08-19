@@ -244,7 +244,7 @@ const inItPlugin: TaxFilingPlugin = {
   },
 
   getSupportedExportFormats: (): ExportFormat[] => [
-    { id: 'json', label: 'JSON (ITD format)', mimeType: 'application/json', fileExtension: 'json' },
+    { id: 'json', label: 'JSON', mimeType: 'application/json', fileExtension: 'json' },
     { id: 'csv', label: 'CSV', mimeType: 'text/csv', fileExtension: 'csv' },
   ],
   async generateExport(v: FieldValues, format: string): Promise<ExportOutput> {

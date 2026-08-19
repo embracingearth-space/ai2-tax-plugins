@@ -158,7 +158,7 @@ const jpPlugin: TaxFilingPlugin = {
 
   getSupportedExportFormats: (): ExportFormat[] => [
     { id: 'json', label: 'JSON', mimeType: 'application/json', fileExtension: 'json' },
-    { id: 'csv', label: 'CSV (e-Tax format)', mimeType: 'text/csv', fileExtension: 'csv' },
+    { id: 'csv', label: 'CSV', mimeType: 'text/csv', fileExtension: 'csv' },
   ],
 
   async generateExport(v: FieldValues, format: string): Promise<ExportOutput> {

@@ -111,7 +111,7 @@ const idPlugin: TaxFilingPlugin = {
 
   getSupportedExportFormats: (): ExportFormat[] => [
     { id: 'json', label: 'JSON', mimeType: 'application/json', fileExtension: 'json' },
-    { id: 'csv', label: 'CSV (e-Faktur format)', mimeType: 'text/csv', fileExtension: 'csv' },
+    { id: 'csv', label: 'CSV', mimeType: 'text/csv', fileExtension: 'csv' },
   ],
   async generateExport(v: FieldValues, format: string): Promise<ExportOutput> {
     if (format === 'csv') return toCsv(v, `SPT-PPN-ID-${new Date().toISOString().slice(0, 10)}`);

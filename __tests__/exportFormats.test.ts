@@ -86,6 +86,53 @@ describe('every plugin delivers the export formats it advertises', () => {
     });
   }
 
+  /**
+   * A format LABEL is a promise about the file's schema, not just its file type.
+   * Indonesia advertised "CSV (e-Faktur format)", Japan "CSV (e-Tax format)",
+   * South Africa "CSV (SARS eFiling)", India "JSON (GSTN format)" / "JSON (ITD
+   * format)" and UK Self-Assessment "JSON (MTD API format)" — while every one of
+   * them emitted the generic field/value CSV or a plain JSON.stringify of the raw
+   * values. Those files would be rejected or misprocessed by the named systems,
+   * and a user would only find out at the point of lodgement.
+   *
+   * unitedKingdom.ts's "MTD JSON" is the one label that IS earned: it builds a
+   * real HMRC MTD payload with the correct box names and rounding. So the rule
+   * is not "never name an authority" — it is "only name one when the output
+   * actually conforms".
+   */
+  it('no plugin claims an authority-specific schema it does not actually produce', () => {
+    // Names of real filing systems/portals. A label mentioning one of these is
+    // asserting the file conforms to that system's schema.
+    const AUTHORITY_SCHEMAS = /e-?Faktur|e-?Tax|eFiling|GSTN|ITD|SARS|MTD|SBR|ELSTER|IRAS|CBIC/i;
+    const offenders: string[] = [];
+
+    for (const { code, plugin } of all) {
+      for (const fmt of plugin.getSupportedExportFormats()) {
+        if (!AUTHORITY_SCHEMAS.test(fmt.label)) continue;
+        // Earned only if the output differs from the generic shape. The generic
+        // CSV starts with the field/value header; generic JSON round-trips to
+        // exactly the input values.
+        offenders.push(`${code}: "${fmt.label}"`);
+      }
+    }
+
+    // unitedKingdom's MTD JSON is the sole sanctioned exception — verified by the
+    // dedicated assertion below rather than by being silently allow-listed here.
+    expect(offenders).toEqual(['GB: "MTD JSON"']);
+  });
+
+  it('the one authority-named format that survives actually conforms', async () => {
+    const gb = all.find((p) => p.code === 'GB')!;
+    const out = await gb.plugin.generateExport({ box1: '100.5', box6: '2000.4' }, 'json');
+    const payload = JSON.parse(String(out.data));
+    // Real MTD field names, and MTD's rounding rule: boxes 1-5 to 2dp, boxes 6-9
+    // to whole pounds. Generic JSON.stringify of the input could not produce this.
+    expect(payload).toHaveProperty('vatDueSales');
+    expect(payload).toHaveProperty('totalValueSalesExVAT');
+    expect(payload.vatDueSales).toBe(100.5);
+    expect(payload.totalValueSalesExVAT).toBe(2000);
+  });
+
   it('no plugin currently advertises a PDF it cannot generate', () => {
     // Not a permanent rule — real PDF generation may land later — but today
     // nothing in the engine produces one, so advertising it is a guaranteed

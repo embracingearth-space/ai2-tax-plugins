@@ -372,7 +372,7 @@ const inPlugin: TaxFilingPlugin = {
   getSupportedExportFormats: (): ExportFormat[] => [
     {
       id: 'json',
-      label: 'JSON (GSTN format)',
+      label: 'JSON',
       mimeType: 'application/json',
       fileExtension: 'json',
     },

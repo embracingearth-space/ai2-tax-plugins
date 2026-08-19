@@ -124,7 +124,7 @@ const zaPlugin: TaxFilingPlugin = {
 
   getSupportedExportFormats: (): ExportFormat[] => [
     { id: 'json', label: 'JSON', mimeType: 'application/json', fileExtension: 'json' },
-    { id: 'csv', label: 'CSV (SARS eFiling)', mimeType: 'text/csv', fileExtension: 'csv' },
+    { id: 'csv', label: 'CSV', mimeType: 'text/csv', fileExtension: 'csv' },
   ],
   async generateExport(v: FieldValues, format: string): Promise<ExportOutput> {
     if (format === 'csv') return toCsv(v, `VAT201-ZA-${new Date().toISOString().slice(0, 10)}`);
