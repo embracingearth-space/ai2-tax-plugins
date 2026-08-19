@@ -29,6 +29,26 @@ export {
   toYmd,
 } from './rateLedger';
 
+// Personal Income Tax (take-home estimator — AU, NZ, GB, IN, US)
+export type {
+  IncomeTaxBand,
+  IncomeLineItem,
+  IncomeBracketSet,
+  IncomeTaxResult,
+  IncomeOffsetContext,
+  IncomeLevyContext,
+  IncomeTaxScheme,
+} from './incomeTax';
+export {
+  INCOME_TAX_SCHEMES,
+  listIncomeTaxCountries,
+  getIncomeTaxScheme,
+  getIncomeTaxYears,
+  calcIncomeTax,
+  getIncomeTaxBands,
+  localToday,
+} from './incomeTax';
+
 // Company / Corporate Income Tax (headline rates for the CompanyFlatRate forecast strategy)
 export type { CompanyTaxRateSet, CompanyTaxInfo, ResolvedCompanyRate } from './companyTax';
 export {
