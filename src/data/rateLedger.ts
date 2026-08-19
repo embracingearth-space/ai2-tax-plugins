@@ -12,7 +12,20 @@
  * gets effectiveTo set and a NEW dated row is appended. Announced future changes are
  * added ahead of time (future effectiveFrom) and activate automatically by date.
  * This is what lets the app resolve the rate that applied DURING a transaction's tax
- * period (before/after a change) and keep historical filings correct.
+ * period (before/after a change) and keep historical filings correct — FOR THE
+ * PART OF HISTORY A ROW ACTUALLY DATES.
+ *
+ * THE CAVEAT THAT MATTERS: 72 of 98 rows carry RATE_FLOOR (2000-01-01) as their
+ * effectiveFrom, meaning "known true since at least this anchor," not "became
+ * true on this date." Most are annotated in their own `note` as long-standing or
+ * stable for decades, but the ledger records no actual change history before
+ * that floor for those countries. A transaction dated before a real (undated)
+ * change to one of these rates will resolve to the FLOOR-anchored rate, which
+ * may not be what was actually charged at the time. This is honest for every
+ * country with a real dated row before today (the 9 countries the drift-guard
+ * and rateWatch track transitions for) and an open gap for the other 72 —
+ * backfilling real pre-2000 or pre-verification change dates is a per-country
+ * research task, not something to synthesise here.
  */
 import { RATE_LEDGER } from './rateLedger.data';
 
