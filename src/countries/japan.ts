@@ -9,6 +9,8 @@
  *   Invoice System (インボイス制度) mandatory from Oct 2023.
  */
 
+import { toCsv } from '../exportUtils';
+
 import type {
   TaxFilingPlugin,
   FormSection,
@@ -159,8 +161,13 @@ const jpPlugin: TaxFilingPlugin = {
     { id: 'csv', label: 'CSV (e-Tax format)', mimeType: 'text/csv', fileExtension: 'csv' },
   ],
 
-  async generateExport(v) {
-    return { data: JSON.stringify(v, null, 2), filename: `ConsumptionTax-JP-${new Date().toISOString().slice(0, 10)}.json`, mimeType: 'application/json' };
+  async generateExport(v: FieldValues, format: string): Promise<ExportOutput> {
+    if (format === 'csv') return toCsv(v, `ConsumptionTax-JP-${new Date().toISOString().slice(0, 10)}`);
+    return {
+      data: JSON.stringify(v, null, 2),
+      filename: `ConsumptionTax-JP-${new Date().toISOString().slice(0, 10)}.json`,
+      mimeType: 'application/json',
+    };
   },
 
   getPortalSubmissionInfo: () => ({ portalUrl: 'https://www.e-tax.nta.go.jp', submissionMethod: 'manual_upload' as const, apiReady: false }),

@@ -10,6 +10,8 @@
  *   50 states + DC as sub-jurisdictions with varying sales tax rates.
  */
 
+import { toCsv } from '../exportUtils';
+
 import type {
   TaxFilingPlugin,
   FormSection,
@@ -486,7 +488,8 @@ const usPlugin: TaxFilingPlugin = {
     { id: 'csv', label: 'CSV', mimeType: 'text/csv', fileExtension: 'csv' },
   ],
 
-  async generateExport(v) {
+  async generateExport(v: FieldValues, format: string): Promise<ExportOutput> {
+    if (format === 'csv') return toCsv(v, `Form941-US-${new Date().toISOString().slice(0, 10)}`);
     return {
       data: JSON.stringify(v, null, 2),
       filename: `Form941-US-${new Date().toISOString().slice(0, 10)}.json`,

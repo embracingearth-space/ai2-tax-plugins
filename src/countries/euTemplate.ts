@@ -20,6 +20,7 @@ import type {
   ExportOutput,
 } from '../types';
 import { getStandardRateAsOf } from '../data/rateLedger';
+import { toCsv } from '../exportUtils';
 
 // Local tax names + a FALLBACK standard rate per country. The authoritative,
 // effective-dated standard rate is resolved from the single-source rate ledger
@@ -443,7 +444,8 @@ function createEUPlugin(code: string): TaxFilingPlugin {
       { id: 'csv', label: 'CSV', mimeType: 'text/csv', fileExtension: 'csv' },
     ],
 
-    async generateExport(v) {
+    async generateExport(v: FieldValues, format: string): Promise<ExportOutput> {
+      if (format === 'csv') return toCsv(v, `VAT-${code}-${new Date().toISOString().slice(0, 10)}`);
       return {
         data: JSON.stringify(v, null, 2),
         filename: `VAT-${code}-${new Date().toISOString().slice(0, 10)}.json`,

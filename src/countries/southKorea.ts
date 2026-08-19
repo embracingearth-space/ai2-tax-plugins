@@ -7,6 +7,8 @@
  *   E-tax invoice (전자세금계산서) mandatory for corps + individuals above threshold.
  */
 
+import { toCsv } from '../exportUtils';
+
 import type {
   TaxFilingPlugin, FormSection, FieldValues, CalculatedFields,
   AggregationMapping, ValidationResult, RoundingConfig, ExportFormat, ExportOutput,
@@ -127,8 +129,13 @@ const krPlugin: TaxFilingPlugin = {
     { id: 'json', label: 'JSON', mimeType: 'application/json', fileExtension: 'json' },
     { id: 'csv', label: 'CSV', mimeType: 'text/csv', fileExtension: 'csv' },
   ],
-  async generateExport(v) {
-    return { data: JSON.stringify(v, null, 2), filename: `VAT-KR-${new Date().toISOString().slice(0, 10)}.json`, mimeType: 'application/json' };
+  async generateExport(v: FieldValues, format: string): Promise<ExportOutput> {
+    if (format === 'csv') return toCsv(v, `VAT-KR-${new Date().toISOString().slice(0, 10)}`);
+    return {
+      data: JSON.stringify(v, null, 2),
+      filename: `VAT-KR-${new Date().toISOString().slice(0, 10)}.json`,
+      mimeType: 'application/json',
+    };
   },
   getPortalSubmissionInfo: () => ({ portalUrl: 'https://www.hometax.go.kr', submissionMethod: 'manual_upload' as const, apiReady: false }),
   hasSubJurisdictions: () => false,

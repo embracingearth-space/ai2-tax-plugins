@@ -8,6 +8,8 @@
  *   Financial year: 1 Jul - 30 Jun. Default quarterly filing.
  */
 
+import { toCsv } from '../exportUtils';
+
 import type {
   TaxFilingPlugin,
   FormSection,
@@ -497,16 +499,21 @@ const australiaPlugin: TaxFilingPlugin = {
   },
 
   getSupportedExportFormats(): ExportFormat[] {
+    // 'pdf' removed 2026-08: generateExport never generated one — it returned
+    // JSON regardless of what was clicked, so "PDF Summary" downloaded a
+    // .json file with a .json MIME type. Re-add it once server-side PDF
+    // generation actually exists (see the TODO on generateExport below).
     return [
-      { id: 'pdf', label: 'PDF Summary', mimeType: 'application/pdf', fileExtension: 'pdf' },
       { id: 'csv', label: 'CSV', mimeType: 'text/csv', fileExtension: 'csv' },
       { id: 'json', label: 'JSON (data)', mimeType: 'application/json', fileExtension: 'json' },
     ];
   },
 
   async generateExport(values: FieldValues, format: string): Promise<ExportOutput> {
-    // ai2fin.com — MVP: JSON export with all values
-    // TODO: PDF generation via server-side endpoint, SBR XML for ATO portal
+    // ai2fin.com — MVP: JSON + CSV. TODO: PDF generation via a server-side
+    // endpoint, SBR XML for the ATO portal — see getSupportedExportFormats,
+    // which no longer advertises 'pdf' until that lands.
+    if (format === 'csv') return toCsv(values, `BAS-AU-${new Date().toISOString().slice(0, 10)}`);
     const content = JSON.stringify(values, null, 2);
     return {
       data: content,

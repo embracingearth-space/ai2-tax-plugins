@@ -8,6 +8,8 @@
  *   eFiling mandatory for most. PRN auto-generated.
  */
 
+import { toCsv } from '../exportUtils';
+
 import type {
   TaxFilingPlugin, FormSection, FieldValues, CalculatedFields,
   AggregationMapping, ValidationResult, RoundingConfig, ExportFormat, ExportOutput,
@@ -124,8 +126,13 @@ const zaPlugin: TaxFilingPlugin = {
     { id: 'json', label: 'JSON', mimeType: 'application/json', fileExtension: 'json' },
     { id: 'csv', label: 'CSV (SARS eFiling)', mimeType: 'text/csv', fileExtension: 'csv' },
   ],
-  async generateExport(v) {
-    return { data: JSON.stringify(v, null, 2), filename: `VAT201-ZA-${new Date().toISOString().slice(0, 10)}.json`, mimeType: 'application/json' };
+  async generateExport(v: FieldValues, format: string): Promise<ExportOutput> {
+    if (format === 'csv') return toCsv(v, `VAT201-ZA-${new Date().toISOString().slice(0, 10)}`);
+    return {
+      data: JSON.stringify(v, null, 2),
+      filename: `VAT201-ZA-${new Date().toISOString().slice(0, 10)}.json`,
+      mimeType: 'application/json',
+    };
   },
   getPortalSubmissionInfo: () => ({ portalUrl: 'https://www.sarsefiling.co.za', submissionMethod: 'manual_upload' as const, apiReady: false }),
   hasSubJurisdictions: () => false,
