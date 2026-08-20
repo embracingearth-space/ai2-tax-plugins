@@ -210,6 +210,14 @@ describe('the documented row and country counts are exact', () => {
     expect(resolveRateRow('CA', '2010-06-30', { stateProvince: 'ON' })).toBeUndefined();
     expect(resolveRateRow('CA', '2010-07-01', { stateProvince: 'ON' })?.standardRate).toBe(0.13);
 
+    // And there is NO automatic fallback to the national row — resolveRateRow
+    // filters on an exact stateProvince match, and getStandardRateAsOf takes no
+    // stateProvince at all. A caller wanting the pre-2010 federal position has
+    // to ask for it separately. Pinned because the row note used to claim a
+    // fallback the resolver does not implement.
+    expect(resolveRateRow('CA', '2005-01-01', { stateProvince: 'ON' })).toBeUndefined();
+    expect(getStandardRateAsOf('CA', '2005-01-01')).toBe(0.07);
+
     // Federal GST across its three eras. Before this, every pre-2008 date
     // answered 5%.
     expect(getStandardRateAsOf('CA', '2005-01-01')).toBe(0.07);
