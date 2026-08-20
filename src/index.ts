@@ -115,6 +115,7 @@ export type {
   IncomeYearContext,
   IncomeTaxYearOption,
   IncomeTaxScheme,
+  MoneyRounding,
   TaxFamily,
   CountryTaxRateInfo,
   RateLedgerRow,

@@ -286,16 +286,17 @@ describe('the documented row and country counts are exact', () => {
     // `verified` is stricter than `has a citation`: it means the cited page was
     // actually read and agreed, not merely that a URL is present.
     //
-    // Israel's pre-2013 floor row is the one row that cannot honestly clear
-    // that bar. Sourcing Israel's 2013 and 2015 rate changes (both now their
-    // own verified rows, below) turned up a DIFFERENT already-cited row —
-    // Estonia's, elsewhere in this file — recording a still-earlier Israeli
-    // change: 17% cut to 16.5% in 2005. This floor row asserts 17% back to the
-    // 2000 anchor, but the ITA's own page for the 2013 rise only confirms 17%
-    // held IMMEDIATELY BEFORE 2 June 2013 — it says nothing about 2000-2005.
-    // Marking this floor verified would repeat, one layer in, the exact mistake
-    // already made once on this same row: reading a citation as covering more
-    // history than it actually attests to.
+    // Israel's pre-2012 floor row is the one row that cannot honestly clear
+    // that bar. Sourcing Israel's 2012, 2013 and 2015 rate changes (all now
+    // their own verified rows, below) turned up ANOTHER already-cited Israel
+    // Tax Authority page, vat-history1-9-2005 — recording a still-earlier
+    // change: 17% cut to 16.5% in 2005, with a further cut to 16% planned for
+    // 2007. This floor row originally asserted 17% back to the 2000 anchor,
+    // but the ITA's own page for the 2013 rise only confirms 17% held
+    // IMMEDIATELY BEFORE 2 June 2013 — it says nothing about 2000-2012.
+    // Marking this floor verified would repeat, one layer in, the exact
+    // mistake already made once on this same row: reading a citation as
+    // covering more history than it actually attests to.
     //
     // Asserted by NAME rather than left as a bare non-empty list, so a second,
     // different unverified row is still a visible failure and not something

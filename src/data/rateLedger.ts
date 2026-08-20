@@ -19,9 +19,12 @@
  * their effectiveFrom, meaning "known true since at least this anchor," not
  * "became true on this date." Most are annotated in their own `note` as
  * long-standing or stable for decades, but the ledger records no actual change
- * history before that floor for those rows. A transaction dated before a real
- * (undated) change to one of those rates will resolve to the FLOOR-anchored
- * rate, which may not be what was actually charged at the time.
+ * history before that floor for those rows. This is a risk only from the floor
+ * ONWARD, not before it: resolveRateRow rejects any date earlier than a row's
+ * effectiveFrom, so a query dated before 2000-01-01 resolves to nothing, not
+ * to the floor row. A transaction dated on or after the floor but before a
+ * real (undated, unrecorded) later change will resolve to the FLOOR-anchored
+ * rate, which may not be what was actually charged at that later time.
  *
  * Rows and countries are different counts and are easy to conflate, so each is
  * stated plainly. Of 88 countries, 26 carry at least one genuinely dated row and

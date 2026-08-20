@@ -43,6 +43,45 @@ describe('Currency data', () => {
   it('KWD has 3 decimal places', () => {
     expect(CURRENCY_INFO['KWD'].decimalPlaces).toBe(3);
   });
+
+  /**
+   * The 2026-08 currency-map completion, and the two eurozone changeovers,
+   * asserted exactly. 'resolves to SOME currency' cannot catch a wrong-but-
+   * valid code — Bulgaria mapping to BGN instead of EUR would have passed
+   * that check for the eight months it was live and wrong.
+   */
+  it('the 2026-08 currency-map completion resolves every added country exactly', () => {
+    const added: Record<string, string> = {
+      MX: 'MXN', BY: 'BYN', BO: 'BOB', KH: 'KHR', EC: 'USD', KZ: 'KZT',
+      LA: 'LAK', MN: 'MNT', PY: 'PYG', LK: 'LKR', UZ: 'UZS',
+    };
+    for (const [country, currency] of Object.entries(added)) {
+      expect(COUNTRY_CURRENCY_MAP[country]).toBe(currency);
+    }
+  });
+
+  it('EC resolves to USD — dollarized since 2000, not its own currency', () => {
+    expect(COUNTRY_CURRENCY_MAP['EC']).toBe('USD');
+  });
+
+  it('PYG has 0 decimal places', () => {
+    expect(CURRENCY_INFO['PYG'].decimalPlaces).toBe(0);
+    expect(CURRENCY_INFO['PYG'].symbol).toBe('₲');
+  });
+
+  it('the other 2026-08 currencies keep the ordinary 2 decimal places', () => {
+    for (const code of ['MXN', 'BYN', 'BOB', 'KHR', 'KZT', 'LAK', 'MNT', 'LKR', 'UZS']) {
+      expect(CURRENCY_INFO[code].decimalPlaces).toBe(2);
+    }
+  });
+
+  it('Croatia (2023) and Bulgaria (2026) resolve to EUR live, with the historical currency kept', () => {
+    expect(COUNTRY_CURRENCY_MAP['HR']).toBe('EUR');
+    expect(COUNTRY_CURRENCY_MAP['BG']).toBe('EUR');
+    // The pre-changeover currencies stay in CURRENCY_INFO for historical amounts.
+    expect(CURRENCY_INFO).toHaveProperty('HRK');
+    expect(CURRENCY_INFO).toHaveProperty('BGN');
+  });
 });
 
 describe('Financial year data', () => {

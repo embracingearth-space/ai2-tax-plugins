@@ -41,6 +41,7 @@ export type {
   IncomeYearContext,
   IncomeTaxYearOption,
   IncomeTaxScheme,
+  MoneyRounding,
 } from './incomeTax';
 export {
   INCOME_TAX_SCHEMES,

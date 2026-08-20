@@ -76,21 +76,22 @@ export interface IncomeTaxResult {
 /**
  * THE YEAR REACHES EVERY HOOK, NOT JUST THE BANDS.
  *
- * `sets` is effective-dated, but deduction/offsets/levies/marginalRate are one
- * function per country — and the constants they hold are indexed annually just
- * as the bands are: the UK personal allowance and NI thresholds, India's
- * standard deduction and s.87A limits, the US standard deduction and FICA wage
- * base, Australia's Medicare low-income thresholds. Resolving 2024-25 bands and
- * then applying this year's constants to them would silently mix two tax years,
- * and every set added to `sets` widens that gap.
+ * `sets` is effective-dated, but deduction/offsets/levies are one function per
+ * country — and the constants they hold are indexed annually just as the bands
+ * are: the UK personal allowance and NI thresholds, India's standard deduction
+ * and s.87A limits, the US standard deduction and FICA wage base, Australia's
+ * Medicare low-income thresholds. Resolving 2024-25 bands and then applying
+ * this year's constants to them would silently mix two tax years, and every
+ * set added to `sets` widens that gap.
  *
- * So the resolved year travels with the context. Today every defined year's
- * constants happen to be identical — the UK thresholds are frozen to 2031,
- * India's schedule was carried forward unchanged, the US has a single year
- * defined, and Australia's LITO and 2% Medicare rate are unchanged across all
- * four — so no hook needs to branch yet and no figure changes. The plumbing is
- * here so that the first genuinely year-scoped constant is a data edit inside
- * one hook, rather than a signature change that has to be discovered first.
+ * So the resolved year travels with the context. AU's levies() already uses
+ * it: the Medicare low-income thresholds are keyed by year in
+ * AU_MEDICARE_LOW_INCOME, and a year missing from that table falls back to the
+ * flat 2% — a fallback, not a verified schedule for that year (see the note on
+ * AU_MEDICARE_LOW_INCOME itself). Adding a set therefore also means adding
+ * that year's indexed constants where they exist. The UK thresholds are frozen
+ * to 2031, India's schedule was carried forward unchanged, and the US has a
+ * single year defined, so those hooks do not branch on year yet.
  */
 export interface IncomeYearContext {
   /** How to quantise money to whole currency units. Normally real rounding;

@@ -195,7 +195,10 @@ export const COUNTRY_CURRENCY_MAP: Record<string, string> = {
   'CZ': 'CZK',
   'HU': 'HUF',
   'RO': 'RON',
-  'BG': 'BGN',
+  // Bulgaria adopted the euro on 1 January 2026, fixed at EUR 1 = BGN 1.95583;
+  // the lev stopped being legal tender on 1 February 2026. The BGN record is
+  // kept above for historical amounts; live formatting must be EUR.
+  'BG': 'EUR',
   // Croatia adopted the euro on 1 January 2023, replacing the kuna. The HRK
   // record is kept above for historical amounts; live formatting must be EUR.
   'HR': 'EUR',
