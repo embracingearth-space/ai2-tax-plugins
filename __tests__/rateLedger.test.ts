@@ -322,5 +322,16 @@ describe('the documented row and country counts are exact', () => {
     const rows = RATE_LEDGER.filter((r) => r.countryCode === 'IL');
     expect(rows).toHaveLength(4);
     expect(rows.filter((r) => r.source.verified)).toHaveLength(3); // all but the pre-2013 floor
+
+    // Assert the citation ITSELF, not just that some source counts as verified —
+    // a row verified against the WRONG authority would still pass the counts
+    // above. Both dated rows must point at the actual ITA pages read, not at
+    // each other or at a generic fallback.
+    const row2013 = rows.find((r) => r.effectiveFrom === '2013-06-02')!;
+    const row2015 = rows.find((r) => r.effectiveFrom === '2015-10-01')!;
+    expect(row2013.source.authority).toBe('Israel Tax Authority (ITA)');
+    expect(row2013.source.url).toBe('https://www.gov.il/he/Departments/General/vathistory1-6-13');
+    expect(row2015.source.authority).toBe('Israel Tax Authority (ITA)');
+    expect(row2015.source.url).toBe('https://www.gov.il/en/Departments/General/vat-history11015');
   });
 });
