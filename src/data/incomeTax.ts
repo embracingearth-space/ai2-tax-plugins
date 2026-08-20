@@ -244,8 +244,8 @@ function liabilityAt(
  *   - Below a deduction, taxable is 0 and no band applies, but gross-based
  *     levies (US FICA) still bite on the next dollar.
  *   - Inside an offset phase-out, the withdrawal adds to the rate (AU's LITO
- *     sheds 1.5c per dollar from $37,500, so what the table calls a 16% band
- *     is really 17.5% before the levy).
+ *     sheds 5c per dollar from $37,500, so what the table calls a 16% band is
+ *     really 21% before the levy).
  *   - Inside a levy shade-in, the levy rate is not its headline rate (AU
  *     Medicare shades in at 10c/$ between $28,011 and $35,013 — five times the
  *     2% headline).

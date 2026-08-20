@@ -311,12 +311,34 @@ describe('marginal rate is differenced from liability, not read off the bands', 
     expect(mr('IN', 1500000, '2025-26 (AY 2026-27)')).toBeCloseTo(0.156, 6);
   });
 
-  it('never reports a rate outside [0, 1] for any country or income', () => {
+  /**
+   * India's Section 87A marginal relief produces a genuine ABOVE-100% marginal
+   * band, and the rate is deliberately not clamped: relief caps total tax at
+   * the taxable income over ₹12L, so every extra rupee inside the relief window
+   * is taken in full, and the 4% cess is charged on top of it. Take-home
+   * actually FALLS across this window. Clamping to 100% would report a cliff
+   * the Income Tax Act does not have.
+   */
+  it('reports India s.87A marginal relief as the 104% band it actually is', () => {
+    const inYear = '2025-26 (AY 2026-27)';
+    expect(mr('IN', 1270000, inYear)).toBeCloseTo(0, 9);     // relief still fully absorbing
+    expect(mr('IN', 1275000, inYear)).toBeCloseTo(1.04, 9);  // 100% + 4% cess
+    expect(mr('IN', 1300000, inYear)).toBeCloseTo(1.04, 9);
+    expect(mr('IN', 1350000, inYear)).toBeCloseTo(0.156, 9); // relief exhausted, ordinary slab
+
+    // The cliff is real, not a display artefact: take-home goes DOWN.
+    const before = calcIncomeTax('IN', 1275000, inYear)!.takeHome;
+    const after = calcIncomeTax('IN', 1280000, inYear)!.takeHome;
+    expect(after).toBeLessThan(before);
+  });
+
+  it('is never negative for any country or income', () => {
+    // Deliberately NOT an upper bound — see the India relief test above. A
+    // negative rate would mean an extra unit of income cut the tax bill, which
+    // no schedule here does.
     for (const code of listIncomeTaxCountries()) {
-      for (let g = 0; g <= 400000; g += 2500) {
-        const rate = calcIncomeTax(code, g)!.marginalRate;
-        expect(rate).toBeGreaterThanOrEqual(0);
-        expect(rate).toBeLessThanOrEqual(1);
+      for (let g = 0; g <= 2000000; g += 2500) {
+        expect(calcIncomeTax(code, g)!.marginalRate).toBeGreaterThanOrEqual(0);
       }
     }
   });
