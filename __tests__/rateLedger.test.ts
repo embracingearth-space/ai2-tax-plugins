@@ -163,10 +163,10 @@ describe('the documented row and country counts are exact', () => {
   const countries = new Set(RATE_LEDGER.map((r) => r.countryCode));
   const datedCountries = new Set(dated.map((r) => r.countryCode));
 
-  it('has 104 rows, 71 of them floor-anchored', () => {
-    expect(RATE_LEDGER.length).toBe(104);
+  it('has 105 rows, 71 of them floor-anchored', () => {
+    expect(RATE_LEDGER.length).toBe(105);
     expect(RATE_LEDGER.length - dated.length).toBe(71);
-    expect(dated.length).toBe(33);
+    expect(dated.length).toBe(34);
   });
 
   it('covers 88 countries: 26 with a real date, 62 floor-only', () => {
@@ -303,32 +303,38 @@ describe('the documented row and country counts are exact', () => {
     const unverifiedClosed = RATE_LEDGER.filter((r) => r.effectiveTo && !r.source.verified);
     expect(unverifiedClosed).toHaveLength(1);
     expect(unverifiedClosed[0].countryCode).toBe('IL');
-    expect(unverifiedClosed[0].effectiveTo).toBe('2013-06-02');
+    expect(unverifiedClosed[0].effectiveTo).toBe('2012-09-01');
   });
 
-  it("Israel's 2013 and 2015 rate changes are dated and verified against the ITA directly", () => {
+  it("Israel's 2012, 2013 and 2015 rate changes are dated and verified against the ITA directly", () => {
     // The ITA's own pages, read via a real browser after automated fetches
-    // returned empty for one and 403'd for the other:
+    // returned empty for two and 403'd for the third:
+    //   vat-history1-9-12  (Hebrew) — "01.09.12 עלה המע"מ ל-17%"
     //   vathistory1-6-13   (Hebrew) — "מ- 17% ל- 18%, החל ב- 2.6.13"
     //   vat-history11015   (English) — "lowered by 1%, from 18% to 17% ... October 1, 2015"
     const asOf = (date: string) => resolveRateRow('IL', date)?.standardRate;
-    expect(asOf('2013-06-01')).toBe(0.17); // day before the rise
-    expect(asOf('2013-06-02')).toBe(0.18); // the rise itself
+    expect(asOf('2012-08-31')).toBe(0.16); // day before the 2012 rise
+    expect(asOf('2012-09-01')).toBe(0.17); // the 2012 rise itself
+    expect(asOf('2013-06-01')).toBe(0.17); // day before the 2013 rise
+    expect(asOf('2013-06-02')).toBe(0.18); // the 2013 rise itself
     expect(asOf('2015-09-30')).toBe(0.18); // day before the cut
     expect(asOf('2015-10-01')).toBe(0.17); // the cut itself
     expect(asOf('2024-12-31')).toBe(0.17); // day before the 2025 rise
     expect(asOf('2025-01-01')).toBe(0.18); // already covered above, reconfirmed in sequence
 
     const rows = RATE_LEDGER.filter((r) => r.countryCode === 'IL');
-    expect(rows).toHaveLength(4);
-    expect(rows.filter((r) => r.source.verified)).toHaveLength(3); // all but the pre-2013 floor
+    expect(rows).toHaveLength(5);
+    expect(rows.filter((r) => r.source.verified)).toHaveLength(4); // all but the pre-2012 floor
 
     // Assert the citation ITSELF, not just that some source counts as verified —
     // a row verified against the WRONG authority would still pass the counts
-    // above. Both dated rows must point at the actual ITA pages read, not at
-    // each other or at a generic fallback.
+    // above. Every dated row must point at the actual ITA page read, not at
+    // another row's page or at a generic fallback.
+    const row2012 = rows.find((r) => r.effectiveFrom === '2012-09-01')!;
     const row2013 = rows.find((r) => r.effectiveFrom === '2013-06-02')!;
     const row2015 = rows.find((r) => r.effectiveFrom === '2015-10-01')!;
+    expect(row2012.source.authority).toBe('Israel Tax Authority (ITA)');
+    expect(row2012.source.url).toBe('https://www.gov.il/he/Departments/General/vat-history1-9-12');
     expect(row2013.source.authority).toBe('Israel Tax Authority (ITA)');
     expect(row2013.source.url).toBe('https://www.gov.il/he/Departments/General/vathistory1-6-13');
     expect(row2015.source.authority).toBe('Israel Tax Authority (ITA)');

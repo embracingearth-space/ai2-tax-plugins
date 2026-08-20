@@ -15,7 +15,7 @@
  * period (before/after a change) and keep historical filings correct — FOR THE
  * PART OF HISTORY A ROW ACTUALLY DATES.
  *
- * THE CAVEAT THAT MATTERS: 71 of the 104 rows carry RATE_FLOOR (2000-01-01) as
+ * THE CAVEAT THAT MATTERS: 71 of the 105 rows carry RATE_FLOOR (2000-01-01) as
  * their effectiveFrom, meaning "known true since at least this anchor," not
  * "became true on this date." Most are annotated in their own `note` as
  * long-standing or stable for decades, but the ledger records no actual change
@@ -53,23 +53,28 @@
  * EVERY ROW NAMES AN AUTHORITY AND A URL, asserted. `verified` is a separate and
  * stricter claim - that the cited page was actually read and agreed.
  *
- * ISRAEL IS FOUR ROWS, NOT TWO, and finding the other two is why. The 2000
+ * ISRAEL IS FIVE ROWS, NOT TWO, and finding the other three is why. The 2000
  * floor row originally carried 17% all the way to a 2025-01-01 rise, cited to
  * a Knesset record that only actually speaks to the 2025 change - reading
  * "17%" out of that citation and projecting it back to 2000 was itself an
  * overclaim, the same species of error as Ghana's missing row and Ecuador's
  * truncated window, just one layer further in: not a wrong RATE but a wrong
  * CONFIDENCE about how long the rate held. The ITA's own pages (read via a
- * real browser after automated fetches returned empty for one and 403'd for
- * the other) show a rise to 18% on 2 June 2013 and a cut back to 17% on
- * 1 October 2015 - real, dated, verified rows, now both present.
+ * real browser after automated fetches returned empty for two and 403'd for
+ * the third) show a rise to 17% on 1 September 2012, a rise to 18% on
+ * 2 June 2013, and a cut back to 17% on 1 October 2015 - three real, dated,
+ * verified rows, now all present.
  *
- * That still leaves a genuine gap: the 2000-2013-06-02 floor row is NOT
- * verified, on purpose, because a DIFFERENT already-cited row (Estonia's
- * neighbour on the list, 2005) records a still-earlier 17%->16.5% cut that
- * this floor does not model. Confirming 17% "immediately before" 2013 does not
- * confirm it since 2000. This is the one closed row this ledger cannot
- * currently mark verified honestly, and it is named explicitly in
+ * That still leaves a genuine gap, narrower than before but not closed: the
+ * 2000-2012-09-01 floor row is NOT verified, on purpose. The ITA's OWN 2005
+ * page (already cited elsewhere in this ledger) records a 17%->16.5% cut on
+ * 1 September 2005 with a further cut to 16% PLANNED for 2007; secondary
+ * sources additionally describe a 15.5%<->16% round-trip around the 2009
+ * financial crisis. None of those intervening boundaries are dated precisely
+ * enough here to split out, so the floor row states its best-known rate
+ * (16%, confirmed only as the rate immediately before the 2012 rise) rather
+ * than a rate verified back to 2000. This is the one closed row this ledger
+ * cannot currently mark verified honestly, and it is named explicitly in
  * __tests__/rateLedger rather than silently exempted, so a SECOND such gap
  * cannot appear unnoticed.
  *
