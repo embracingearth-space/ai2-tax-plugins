@@ -332,14 +332,53 @@ describe('marginal rate is differenced from liability, not read off the bands', 
     expect(after).toBeLessThan(before);
   });
 
-  it('is never negative for any country or income', () => {
-    // Deliberately NOT an upper bound — see the India relief test above. A
-    // negative rate would mean an extra unit of income cut the tax bill, which
+  it('is never negative — swept across every band edge and every India surcharge threshold', () => {
+    // Deliberately NOT an upper bound: see the India relief test above. A
+    // negative rate would mean an extra unit of income CUT the tax bill, which
     // no schedule here does.
+    //
+    // The probe set is derived from the schedules rather than picked, so it
+    // cannot quietly stop short of a threshold the way a bare `g <= 400000`
+    // loop did — that loop never reached India's relief window at all.
+    const expectNonNegative = (code: string, gross: number, year?: string) => {
+      const rate = calcIncomeTax(code, gross, year)!.marginalRate;
+      if (rate < 0) throw new Error(`${code} @ ${gross}${year ? ` (${year})` : ''}: ${rate}`);
+    };
+
     for (const code of listIncomeTaxCountries()) {
-      for (let g = 0; g <= 2000000; g += 2500) {
-        expect(calcIncomeTax(code, g)!.marginalRate).toBeGreaterThanOrEqual(0);
+      for (const year of getIncomeTaxYears(code)) {
+        // A coarse sweep for the ordinary range...
+        for (let g = 0; g <= 2000000; g += 2500) expectNonNegative(code, g, year.value);
+
+        // ...and dense probes either side of every band edge, where a
+        // discontinuity would live if one existed.
+        const deduction = 500000 - calcIncomeTax(code, 500000, year.value)!.taxable;
+        for (const b of getIncomeTaxBands(code, year.value)) {
+          if (b.upTo == null) continue;
+          for (const d of [-2, -1, 0, 1, 2]) expectNonNegative(code, b.upTo + deduction + d, year.value);
+        }
       }
+    }
+
+    // India's surcharge steps at ₹50L / ₹1Cr / ₹2Cr of TAXABLE income, each
+    // with its own marginal-relief window — far outside the coarse sweep and
+    // not band edges, so they need naming explicitly.
+    const inYear = '2025-26 (AY 2026-27)';
+    const inDeduction = 75000;
+    for (const threshold of [5000000, 10000000, 20000000]) {
+      for (let g = threshold + inDeduction - 5000; g <= threshold + inDeduction + 300000; g += 1000) {
+        expectNonNegative('IN', g, inYear);
+      }
+    }
+  });
+
+  it('India surcharge thresholds each open their own marginal-relief window', () => {
+    // Same mechanism as the s.87A window: relief caps the surcharge step at the
+    // income that triggered it, so the rate is 104% until the relief is spent.
+    const inYear = '2025-26 (AY 2026-27)';
+    for (const threshold of [5000000, 10000000, 20000000]) {
+      expect(calcIncomeTax('IN', threshold + 75000, inYear)!.taxable).toBe(threshold);
+      expect(mr('IN', threshold + 75000, inYear)).toBeCloseTo(1.04, 9);
     }
   });
 });
