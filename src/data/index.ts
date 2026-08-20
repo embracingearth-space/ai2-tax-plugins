@@ -38,7 +38,6 @@ export type {
   IncomeOffsetContext,
   IncomeLevyContext,
   IncomeDeductionContext,
-  IncomeMarginalContext,
   IncomeYearContext,
   IncomeTaxYearOption,
   IncomeTaxScheme,

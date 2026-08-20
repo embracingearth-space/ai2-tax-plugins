@@ -14,6 +14,7 @@ import {
   getIncomeTaxYears,
   getIncomeTaxScheme,
   listIncomeTaxCountries,
+  getIncomeTaxBands,
   INCOME_TAX_SCHEMES,
 } from '../src';
 
@@ -198,21 +199,125 @@ describe('every scheme carries real provenance', () => {
   });
 });
 
-describe('marginal rate (country-specific)', () => {
-  it('AU folds in the 2% Medicare levy', () => {
-    expect(calcIncomeTax('AU', 90000, '2025-26')!.marginalRate).toBeCloseTo(0.32, 6);
+describe('marginal rate is differenced from liability, not read off the bands', () => {
+  const mr = (code: string, gross: number, year: string) =>
+    calcIncomeTax(code, gross, year)!.marginalRate;
+
+  /**
+   * The regressions that motivated differencing. Each was wrong by more than a
+   * rounding artefact under the hand-written hooks, and each was wrong for a
+   * DIFFERENT reason — which is the argument against hand-writing them.
+   */
+  it('below a deduction, reports the gross-based levy — not the top band', () => {
+    // $10,000 is under the $16,100 standard deduction, so taxable is 0 and no
+    // band applies. The old marginalBand() fell through its loop and returned
+    // the LAST band's rate, reporting 44.65% (37% + FICA) for a taxpayer who
+    // owes no federal income tax at all. The truth is FICA alone: 6.2% + 1.45%.
+    expect(mr('US', 10000, '2026')).toBeCloseTo(0.0765, 6);
+    expect(calcIncomeTax('US', 10000, '2026')!.taxable).toBe(0);
+  });
+
+  it('inside an offset phase-out, adds the withdrawal rate', () => {
+    // AU LITO sheds 5c/$ from $37,500 and 1.5c/$ from $45,000. Reading the band
+    // table alone reported a flat 18% across both zones.
+    expect(mr('AU', 40000, '2025-26')).toBeCloseTo(0.16 + 0.05 + 0.02, 6);
+    expect(mr('AU', 50000, '2025-26')).toBeCloseTo(0.30 + 0.015 + 0.02, 6);
+  });
+
+  it('inside a levy shade-in, uses the shading rate, not the headline rate', () => {
+    // Medicare shades in at 10c/$ between $28,011 and $35,013 — five times its
+    // 2% headline. A flat flatLevyRate could not express this.
+    expect(mr('AU', 30000, '2025-26')).toBeCloseTo(0.16 + 0.10, 6);
+    expect(mr('AU', 34000, '2025-26')).toBeCloseTo(0.16 + 0.10, 6);
+  });
+
+  it('is nil where no tax is payable at all', () => {
+    expect(mr('AU', 15000, '2026-27')).toBe(0); // under the tax-free threshold
+    expect(calcIncomeTax('AU', 0, '2026-27')!.marginalRate).toBe(0);
+  });
+
+  /**
+   * Band endpoints. The rate must be the band the NEXT unit falls in, so at an
+   * exact threshold the taxpayer is still on the lower band and one unit past
+   * it they are on the higher one. Checked either side of every AU/NZ/US
+   * boundary rather than at hand-picked incomes.
+   */
+  it('equals the band rate exactly, at and around every endpoint, where nothing else moves', () => {
+    // NZ is the clean case: no deduction, no offsets, no levies, so the
+    // differenced rate must equal the band rate to the last decimal — not
+    // merely be monotonic. Any drift between the differencing and the table
+    // shows up here with nothing else to hide behind.
+    const bands = getIncomeTaxBands('NZ', '2025-26');
+    for (let i = 0; i < bands.length; i++) {
+      const edge = bands[i].upTo;
+      if (edge == null) continue;
+      // AT the endpoint the taxpayer is still in this band: the next dollar is
+      // the first dollar of the band above.
+      expect(mr('NZ', edge - 1, '2025-26')).toBeCloseTo(bands[i].rate, 9);
+      expect(mr('NZ', edge, '2025-26')).toBeCloseTo(bands[i + 1].rate, 9);
+      expect(mr('NZ', edge + 1, '2025-26')).toBeCloseTo(bands[i + 1].rate, 9);
+    }
+  });
+
+  it('steps by the band delta at each AU endpoint, net of anything else changing there', () => {
+    const bands = getIncomeTaxBands('AU', '2025-26');
+    const step = (edge: number) => mr('AU', edge + 1, '2025-26') - mr('AU', edge - 1, '2025-26');
+
+    // $18,200 — the tax-free threshold. Nothing steps at all: LITO ($700) still
+    // covers the whole liability just above it, and the Medicare levy has not
+    // started, so the taxpayer keeps every extra dollar.
+    expect(step(18200)).toBeCloseTo(0, 9);
+
+    // $45,000 — the band rises 16% → 30% (+14pp), but the LITO withdrawal
+    // simultaneously EASES from 5c/$ to 1.5c/$ (−3.5pp). The net step is 10.5pp,
+    // not the 14pp the band table alone would predict. This interaction is
+    // precisely what a hand-written hook has to remember and differencing
+    // cannot forget.
+    expect(step(45000)).toBeCloseTo(bands[2].rate - bands[1].rate - 0.035, 9);
+    expect(step(45000)).toBeCloseTo(0.105, 9);
+
+    // Above $66,667 LITO is exhausted and Medicare is flat, so the remaining
+    // endpoints step by the band delta exactly.
+    expect(step(135000)).toBeCloseTo(bands[3].rate - bands[2].rate, 9); // 37% − 30%
+    expect(step(190000)).toBeCloseTo(bands[4].rate - bands[3].rate, 9); // 45% − 37%
+  });
+
+  it('matches the band rate plus the flat levy wherever nothing else is moving', () => {
+    // Away from deductions, phase-outs and shade-ins the differenced rate must
+    // agree with the naive reading — otherwise differencing would be changing
+    // answers that were already right.
+    expect(mr('AU', 90000, '2025-26')).toBeCloseTo(0.32, 6);   // 30% + 2%
+    expect(mr('AU', 200000, '2025-26')).toBeCloseTo(0.47, 6);  // 45% + 2%
+    expect(mr('NZ', 80000, '2025-26')).toBeCloseTo(0.33, 6);   // no levies at all
   });
 
   it('UK marginal rate includes National Insurance', () => {
-    expect(calcIncomeTax('GB', 40000, '2025-26')!.marginalRate).toBeCloseTo(0.28, 6);
-    expect(calcIncomeTax('GB', 60000, '2025-26')!.marginalRate).toBeCloseTo(0.42, 6);
+    expect(mr('GB', 40000, '2025-26')).toBeCloseTo(0.28, 6);
+    expect(mr('GB', 60000, '2025-26')).toBeCloseTo(0.42, 6);
   });
 
   it('UK taper zone (£100k–£125,140) shows the 60%+ effective marginal', () => {
-    expect(calcIncomeTax('GB', 110000, '2025-26')!.marginalRate).toBeCloseTo(0.62, 6);
+    // The taper sheds £1 of allowance per WHOLE £2 over £100,000 — a step
+    // function with a £2 period. Differencing over £1 with the statutory floor
+    // still applied lands on a flat tread and reports 42%; lifting the floor
+    // for the marginal pass recovers the real 60% + 2% trap.
+    expect(mr('GB', 110000, '2025-26')).toBeCloseTo(0.62, 6);
+    expect(mr('GB', 110001, '2025-26')).toBeCloseTo(0.62, 6);
   });
 
   it('India marginal rate includes the 4% cess', () => {
-    expect(calcIncomeTax('IN', 1500000, '2025-26 (AY 2026-27)')!.marginalRate).toBeCloseTo(0.156, 6);
+    // ₹100 of extra slab tax carries only ₹0.6 of cess — invisible to a window
+    // narrower than the rounding, which is why the window is not the fix.
+    expect(mr('IN', 1500000, '2025-26 (AY 2026-27)')).toBeCloseTo(0.156, 6);
+  });
+
+  it('never reports a rate outside [0, 1] for any country or income', () => {
+    for (const code of listIncomeTaxCountries()) {
+      for (let g = 0; g <= 400000; g += 2500) {
+        const rate = calcIncomeTax(code, g)!.marginalRate;
+        expect(rate).toBeGreaterThanOrEqual(0);
+        expect(rate).toBeLessThanOrEqual(1);
+      }
+    }
   });
 });
