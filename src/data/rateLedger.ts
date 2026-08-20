@@ -15,7 +15,7 @@
  * period (before/after a change) and keep historical filings correct — FOR THE
  * PART OF HISTORY A ROW ACTUALLY DATES.
  *
- * THE CAVEAT THAT MATTERS: 72 of the 98 rows carry RATE_FLOOR (2000-01-01) as
+ * THE CAVEAT THAT MATTERS: 72 of the 100 rows carry RATE_FLOOR (2000-01-01) as
  * their effectiveFrom, meaning "known true since at least this anchor," not
  * "became true on this date." Most are annotated in their own `note` as
  * long-standing or stable for decades, but the ledger records no actual change
@@ -25,7 +25,7 @@
  *
  * Rows and countries are different counts and are easy to conflate, so each is
  * stated plainly. Of 88 countries, 25 carry at least one genuinely dated row and
- * 63 are floor-only. Separately, 8 countries record an actual TRANSITION — a
+ * 63 are floor-only. Separately, 8 countries record an actual TRANSITION - a
  * SERIES (one country + stateProvince + taxType) holding more than one row, so a
  * change is resolvable across it: EC, EE, FI, GH, IL, KZ, RO, RU. Canada has two
  * rows and is NOT one of them; they are parallel series, national GST and
@@ -33,17 +33,23 @@
  * countries; backfilling real pre-2000 or pre-verification change dates for them
  * is a per-country research task, not something to synthesise here.
  *
- * KNOWN DATA GAP: Ghana's series has a hole. Its 12.5% row ends 2023-01-01 and
- * its 15% row does not begin until 2026-01-01, so any date in between resolves
- * to no row — and getStandardRateAsOf then reports 0, which reads as "Ghana had
- * no VAT in 2024". Closing it means an authority-verified row for the
- * intervening period, not extending either neighbour, which would assert a rate
- * nobody checked. __tests__/rateLedger pins this as the ONLY gap, so a second
- * one cannot appear unnoticed.
+ * NO SERIES HAS A HOLE. Within a series each effectiveTo is the next
+ * effectiveFrom, so every date resolves to exactly one row. This is asserted,
+ * because it did not used to hold and the failure was silent: Ghana's rows ran
+ * 12.5% to 2023-01-01 and then 15% from 2026-01-01, and every date in between
+ * resolved to NO row - which getStandardRateAsOf renders as 0, indistinguishable
+ * from a country that genuinely levies nothing. The missing Act 1087 row (15%
+ * from 1 January 2023) now closes it.
+ *
+ * EVERY ROW NAMES AN AUTHORITY AND A URL, asserted. `verified` is a separate and
+ * stricter claim - that the cited page was actually read and agreed. One closed
+ * row falls short of it today: Israel's 17% era is sourced to the Knesset record
+ * of the order raising it, because every gov.il rate page returns HTTP 403 to
+ * automated fetches. That is recorded in the row rather than rounded up.
  *
  * These figures are asserted in __tests__/rateLedger. The assertions derive
  * their values from RATE_LEDGER and never read this comment, so they catch the
- * ledger changing under the paragraph — not the paragraph being edited to
+ * ledger changing under the paragraph - not the paragraph being edited to
  * disagree with itself. Change one, change both.
  */
 import { RATE_LEDGER } from './rateLedger.data';

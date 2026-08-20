@@ -163,10 +163,10 @@ describe('the documented row and country counts are exact', () => {
   const countries = new Set(RATE_LEDGER.map((r) => r.countryCode));
   const datedCountries = new Set(dated.map((r) => r.countryCode));
 
-  it('has 98 rows, 72 of them floor-anchored', () => {
-    expect(RATE_LEDGER.length).toBe(98);
+  it('has 100 rows, 72 of them floor-anchored', () => {
+    expect(RATE_LEDGER.length).toBe(100);
     expect(RATE_LEDGER.length - dated.length).toBe(72);
-    expect(dated.length).toBe(26);
+    expect(dated.length).toBe(28);
   });
 
   it('covers 88 countries: 25 with a real date, 63 floor-only', () => {
@@ -201,31 +201,67 @@ describe('the documented row and country counts are exact', () => {
     expect(new Set(ca.map(seriesKey)).size).toBe(2); // two series, not two versions
   });
 
-  it('has exactly one coverage gap, and it is Ghana', () => {
+  it('has no coverage gaps at all - every date resolves to exactly one row', () => {
     // Within a series the rows must tile: each effectiveTo is the next
-    // effectiveFrom. Anywhere they do not, some date resolves to NO row, and
-    // getStandardRateAsOf reports 0 — indistinguishable from a country that
-    // genuinely levies nothing. Ghana's 12.5% row ends 2023-01-01 and its 15%
-    // row starts 2026-01-01, leaving three years uncovered. Pinned rather than
-    // papered over: extending either neighbour would assert a rate nobody
-    // verified. This test exists so a SECOND gap cannot appear unnoticed.
+    // effectiveFrom. Anywhere they do not, some date resolves to NO row and
+    // getStandardRateAsOf reports 0, indistinguishable from a country that
+    // genuinely levies nothing.
+    //
+    // This used to fail, silently, for Ghana: its 12.5% row ended 2023-01-01
+    // and its 15% row did not start until 2026-01-01, so three years answered
+    // "no VAT". The missing Act 1087 row closes it. Asserted as EMPTY rather
+    // than as a known-exceptions list, so the next hole is a failure and not an
+    // entry someone appends to.
     const gaps: string[] = [];
     for (const [key, rows] of series) {
       const sorted = [...rows].sort((a, b) => (a.effectiveFrom < b.effectiveFrom ? -1 : 1));
       for (let i = 0; i < sorted.length - 1; i++) {
         if (sorted[i].effectiveTo !== sorted[i + 1].effectiveFrom) {
-          gaps.push(`${key} ${sorted[i].effectiveTo} -> ${sorted[i + 1].effectiveFrom}`);
+          gaps.push(key + ' ' + sorted[i].effectiveTo + ' -> ' + sorted[i + 1].effectiveFrom);
         }
       }
     }
-    expect(gaps).toEqual(['GH||VAT 2023-01-01 -> 2026-01-01']);
+    expect(gaps).toEqual([]);
   });
 
-  it('reports 0 for the uncovered Ghana window — the reason the gap is worth closing', () => {
+  it('answers the two windows that were previously wrong', () => {
+    // Ghana 2023-2025: no row applied, so the answer was 0 - "Ghana had no VAT".
+    // Act 1087 raised it to 15% effective 1 January 2023.
     expect(getStandardRateAsOf('GH', '2022-06-01')).toBe(0.125);
+    expect(getStandardRateAsOf('GH', '2024-06-01')).toBe(0.15);
     expect(getStandardRateAsOf('GH', '2026-06-01')).toBe(0.15);
-    // Not a rate anyone verified — the absence of a row, rendered as a number.
-    expect(getStandardRateAsOf('GH', '2024-06-01')).toBe(0);
-    expect(resolveRateRow('GH', '2024-06-01')).toBeUndefined();
+
+    // Ecuador 12-31 March 2024: a twenty-day 13% band, set by the Ley Organica
+    // para Enfrentar el Conflicto Armado Interno and superseded by Decreto
+    // Ejecutivo 198 at 15% from 1 April. The 12% row used to run straight
+    // through it, answering 12% where the law said 13%. A window this narrow is
+    // exactly what a transaction-dated lookup exists to get right.
+    expect(getStandardRateAsOf('EC', '2024-03-01')).toBe(0.12);
+    expect(getStandardRateAsOf('EC', '2024-03-20')).toBe(0.13);
+    expect(getStandardRateAsOf('EC', '2024-04-15')).toBe(0.15);
+  });
+
+  it('names an authority and a source URL on EVERY row', () => {
+    // The point of an as-of lookup is that someone can check the answer. A row
+    // that resolves without naming where its number came from cannot be checked,
+    // and all nine historical rows were in that state until 2026-08-20.
+    for (const r of RATE_LEDGER) {
+      expect(r.source.authority.trim().length).toBeGreaterThan(0);
+      expect(r.source.url).toMatch(/^https?:[/][/]/);
+      expect((r.source.note ?? '').trim().length).toBeGreaterThan(0);
+    }
+  });
+
+  it('keeps `verified` a stricter claim than `has a citation`', () => {
+    // verified means the cited page was read and agreed - not merely that a URL
+    // is present. Israel is the one closed row that falls short: every gov.il
+    // rate page returns HTTP 403 to automated fetches, so it is sourced to the
+    // Knesset record of the order and left unverified rather than rounded up.
+    const unverifiedClosed = RATE_LEDGER.filter((r) => r.effectiveTo && !r.source.verified);
+    expect(unverifiedClosed.map((r) => r.countryCode)).toEqual(['IL']);
+    for (const r of unverifiedClosed) {
+      expect(r.source.authority.trim().length).toBeGreaterThan(0); // still cited
+      expect(r.source.note ?? '').toMatch(/403|COULD NOT VERIFY|PARTIAL CITATION/i); // and says why
+    }
   });
 });
