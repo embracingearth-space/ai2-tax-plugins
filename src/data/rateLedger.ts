@@ -15,7 +15,7 @@
  * period (before/after a change) and keep historical filings correct — FOR THE
  * PART OF HISTORY A ROW ACTUALLY DATES.
  *
- * THE CAVEAT THAT MATTERS: 71 of the 102 rows carry RATE_FLOOR (2000-01-01) as
+ * THE CAVEAT THAT MATTERS: 71 of the 104 rows carry RATE_FLOOR (2000-01-01) as
  * their effectiveFrom, meaning "known true since at least this anchor," not
  * "became true on this date." Most are annotated in their own `note` as
  * long-standing or stable for decades, but the ledger records no actual change
@@ -51,15 +51,27 @@
  * see, which is why the start dates are pinned separately.
  *
  * EVERY ROW NAMES AN AUTHORITY AND A URL, asserted. `verified` is a separate and
- * stricter claim - that the cited page was actually read and agreed. Every
- * gov.il rate page returns HTTP 403 to automated fetches, which is why Israel's
- * two rows cite the Knesset record of the order instead: read via a real
- * browser render, it states the 17% and 18% rates, the 1 January 2025 effective
- * date and the exact instrument (Value Added Tax Order (Tax Rate for
- * Transaction and Import of Goods) (Amendment), 2024) plainly enough to verify
- * against - the legislature that approved the order, not a secondary
- * aggregator. No row is cited-but-unverified today; if one becomes so again,
- * the reason belongs in its own note, the same way this one did while it was.
+ * stricter claim - that the cited page was actually read and agreed.
+ *
+ * ISRAEL IS FOUR ROWS, NOT TWO, and finding the other two is why. The 2000
+ * floor row originally carried 17% all the way to a 2025-01-01 rise, cited to
+ * a Knesset record that only actually speaks to the 2025 change - reading
+ * "17%" out of that citation and projecting it back to 2000 was itself an
+ * overclaim, the same species of error as Ghana's missing row and Ecuador's
+ * truncated window, just one layer further in: not a wrong RATE but a wrong
+ * CONFIDENCE about how long the rate held. The ITA's own pages (read via a
+ * real browser after automated fetches returned empty for one and 403'd for
+ * the other) show a rise to 18% on 2 June 2013 and a cut back to 17% on
+ * 1 October 2015 - real, dated, verified rows, now both present.
+ *
+ * That still leaves a genuine gap: the 2000-2013-06-02 floor row is NOT
+ * verified, on purpose, because a DIFFERENT already-cited row (Estonia's
+ * neighbour on the list, 2005) records a still-earlier 17%->16.5% cut that
+ * this floor does not model. Confirming 17% "immediately before" 2013 does not
+ * confirm it since 2000. This is the one closed row this ledger cannot
+ * currently mark verified honestly, and it is named explicitly in
+ * __tests__/rateLedger rather than silently exempted, so a SECOND such gap
+ * cannot appear unnoticed.
  *
  * These figures are asserted in __tests__/rateLedger. The assertions derive
  * their values from RATE_LEDGER and never read this comment, so they catch the

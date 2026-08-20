@@ -163,10 +163,10 @@ describe('the documented row and country counts are exact', () => {
   const countries = new Set(RATE_LEDGER.map((r) => r.countryCode));
   const datedCountries = new Set(dated.map((r) => r.countryCode));
 
-  it('has 102 rows, 71 of them floor-anchored', () => {
-    expect(RATE_LEDGER.length).toBe(102);
+  it('has 104 rows, 71 of them floor-anchored', () => {
+    expect(RATE_LEDGER.length).toBe(104);
     expect(RATE_LEDGER.length - dated.length).toBe(71);
-    expect(dated.length).toBe(31);
+    expect(dated.length).toBe(33);
   });
 
   it('covers 88 countries: 26 with a real date, 62 floor-only', () => {
@@ -270,8 +270,11 @@ describe('the documented row and country counts are exact', () => {
 
   it('names an authority and a source URL on EVERY row', () => {
     // The point of an as-of lookup is that someone can check the answer. A row
-    // that resolves without naming where its number came from cannot be checked,
-    // and all nine historical rows were in that state until 2026-08-20.
+    // that resolves without naming where its number came from cannot be checked.
+    // A citation is required on every row regardless of whether it is verified —
+    // Israel's pre-2013 floor row is unverified but still names the ITA page it
+    // is closest to, with an honest note explaining why that page does not
+    // cover it.
     for (const r of RATE_LEDGER) {
       expect(r.source.authority.trim().length).toBeGreaterThan(0);
       expect(r.source.url).toMatch(/^https:[/][/]/); // https only — a plaintext citation can be altered in transit
@@ -279,20 +282,45 @@ describe('the documented row and country counts are exact', () => {
     }
   });
 
-  it('leaves no closed row cited-but-unverified', () => {
+  it('leaves exactly one closed row cited-but-unverified, and it is named here', () => {
     // `verified` is stricter than `has a citation`: it means the cited page was
-    // actually read and agreed, not merely that a URL is present. Israel's two
-    // rows held this line for a while - every gov.il rate page returns HTTP 403
-    // to automated fetches - until a real browser render of the Knesset record
-    // (not a gov.il page) could be read directly, confirming 17%, 18% and the
-    // 1 January 2025 boundary against the legislature's own account.
+    // actually read and agreed, not merely that a URL is present.
     //
-    // Asserted as EMPTY rather than as a permitted-exceptions list, so a future
-    // unverified row is a visible failure. Should one become necessary again -
-    // an authority that blocks automated access and stays unreadable even via a
-    // browser - it belongs with its own reason in its own note, the way
-    // Israel's did while it was in this state.
+    // Israel's pre-2013 floor row is the one row that cannot honestly clear
+    // that bar. Sourcing Israel's 2013 and 2015 rate changes (both now their
+    // own verified rows, below) turned up a DIFFERENT already-cited row —
+    // Estonia's, elsewhere in this file — recording a still-earlier Israeli
+    // change: 17% cut to 16.5% in 2005. This floor row asserts 17% back to the
+    // 2000 anchor, but the ITA's own page for the 2013 rise only confirms 17%
+    // held IMMEDIATELY BEFORE 2 June 2013 — it says nothing about 2000-2005.
+    // Marking this floor verified would repeat, one layer in, the exact mistake
+    // already made once on this same row: reading a citation as covering more
+    // history than it actually attests to.
+    //
+    // Asserted by NAME rather than left as a bare non-empty list, so a second,
+    // different unverified row is still a visible failure and not something
+    // that quietly hides behind this one's exemption.
     const unverifiedClosed = RATE_LEDGER.filter((r) => r.effectiveTo && !r.source.verified);
-    expect(unverifiedClosed).toEqual([]);
+    expect(unverifiedClosed).toHaveLength(1);
+    expect(unverifiedClosed[0].countryCode).toBe('IL');
+    expect(unverifiedClosed[0].effectiveTo).toBe('2013-06-02');
+  });
+
+  it("Israel's 2013 and 2015 rate changes are dated and verified against the ITA directly", () => {
+    // The ITA's own pages, read via a real browser after automated fetches
+    // returned empty for one and 403'd for the other:
+    //   vathistory1-6-13   (Hebrew) — "מ- 17% ל- 18%, החל ב- 2.6.13"
+    //   vat-history11015   (English) — "lowered by 1%, from 18% to 17% ... October 1, 2015"
+    const asOf = (date: string) => resolveRateRow('IL', date)?.standardRate;
+    expect(asOf('2013-06-01')).toBe(0.17); // day before the rise
+    expect(asOf('2013-06-02')).toBe(0.18); // the rise itself
+    expect(asOf('2015-09-30')).toBe(0.18); // day before the cut
+    expect(asOf('2015-10-01')).toBe(0.17); // the cut itself
+    expect(asOf('2024-12-31')).toBe(0.17); // day before the 2025 rise
+    expect(asOf('2025-01-01')).toBe(0.18); // already covered above, reconfirmed in sequence
+
+    const rows = RATE_LEDGER.filter((r) => r.countryCode === 'IL');
+    expect(rows).toHaveLength(4);
+    expect(rows.filter((r) => r.source.verified)).toHaveLength(3); // all but the pre-2013 floor
   });
 });
