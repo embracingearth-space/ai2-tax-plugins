@@ -145,3 +145,43 @@ describe('Flat view derivation', () => {
     expect(COUNTRY_TAX_RATES['CA'].standardRate).toBe(0.05);
   });
 });
+
+/**
+ * The header of src/data/rateLedger.ts states five figures about this ledger,
+ * and rows and countries are easy to conflate there — the paragraph previously
+ * described "the 9 countries ... and the other 72", mixing a country count with
+ * a row count so the two halves did not even refer to the same population.
+ *
+ * Lower bounds cannot catch that: they stay green while a rate change lands as
+ * one more floor-anchored row, which is the direction the ledger actually drifts
+ * in. These are exact ON PURPOSE. When the ledger legitimately grows, this test
+ * fails and the doc comment gets updated in the same commit — which is the whole
+ * point of pinning them.
+ */
+describe('the documented row and country counts are exact', () => {
+  const dated = RATE_LEDGER.filter((r) => r.effectiveFrom !== RATE_FLOOR);
+  const countries = new Set(RATE_LEDGER.map((r) => r.countryCode));
+  const datedCountries = new Set(dated.map((r) => r.countryCode));
+
+  it('has 98 rows, 72 of them floor-anchored', () => {
+    expect(RATE_LEDGER.length).toBe(98);
+    expect(RATE_LEDGER.length - dated.length).toBe(72);
+    expect(dated.length).toBe(26);
+  });
+
+  it('covers 88 countries: 25 with a real date, 63 floor-only', () => {
+    expect(countries.size).toBe(88);
+    expect(datedCountries.size).toBe(25);
+    expect([...countries].filter((c) => !datedCountries.has(c))).toHaveLength(63);
+  });
+
+  it('records an actual transition for exactly 9 countries', () => {
+    // More than one row for a country is what makes a CHANGE resolvable, and is
+    // the population the drift-guard and rateWatch can follow a transition
+    // through. A country with a single dated row has a start, not a history.
+    const rowsPerCountry = new Map<string, number>();
+    for (const r of RATE_LEDGER) rowsPerCountry.set(r.countryCode, (rowsPerCountry.get(r.countryCode) ?? 0) + 1);
+    const withTransition = [...rowsPerCountry.entries()].filter(([, n]) => n > 1).map(([c]) => c);
+    expect(withTransition.sort()).toEqual(['CA', 'EC', 'EE', 'FI', 'GH', 'IL', 'KZ', 'RO', 'RU']);
+  });
+});

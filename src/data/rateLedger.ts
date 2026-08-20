@@ -15,17 +15,24 @@
  * period (before/after a change) and keep historical filings correct — FOR THE
  * PART OF HISTORY A ROW ACTUALLY DATES.
  *
- * THE CAVEAT THAT MATTERS: 72 of 98 rows carry RATE_FLOOR (2000-01-01) as their
- * effectiveFrom, meaning "known true since at least this anchor," not "became
- * true on this date." Most are annotated in their own `note` as long-standing or
- * stable for decades, but the ledger records no actual change history before
- * that floor for those countries. A transaction dated before a real (undated)
- * change to one of these rates will resolve to the FLOOR-anchored rate, which
- * may not be what was actually charged at the time. This is honest for every
- * country with a real dated row before today (the 9 countries the drift-guard
- * and rateWatch track transitions for) and an open gap for the other 72 —
- * backfilling real pre-2000 or pre-verification change dates is a per-country
- * research task, not something to synthesise here.
+ * THE CAVEAT THAT MATTERS: 72 of the 98 rows carry RATE_FLOOR (2000-01-01) as
+ * their effectiveFrom, meaning "known true since at least this anchor," not
+ * "became true on this date." Most are annotated in their own `note` as
+ * long-standing or stable for decades, but the ledger records no actual change
+ * history before that floor for those rows. A transaction dated before a real
+ * (undated) change to one of those rates will resolve to the FLOOR-anchored
+ * rate, which may not be what was actually charged at the time.
+ *
+ * Rows and countries are different counts and are easy to conflate, so all four
+ * are stated plainly. Of 88 countries, 25 carry at least one genuinely dated row
+ * and 63 are floor-only. Separately, 9 countries carry more than one row and so
+ * record an actual TRANSITION — those are the ones the drift-guard and rateWatch
+ * can track a change through. The open gap is the 63 floor-only countries;
+ * backfilling real pre-2000 or pre-verification change dates for them is a
+ * per-country research task, not something to synthesise here.
+ *
+ * Every one of those five figures is asserted exactly in __tests__/rateLedger,
+ * so the ledger and this paragraph cannot drift apart silently.
  */
 import { RATE_LEDGER } from './rateLedger.data';
 
