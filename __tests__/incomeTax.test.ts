@@ -199,6 +199,24 @@ describe('every scheme carries real provenance', () => {
   });
 });
 
+/**
+ * The gross income that first reaches a given TAXABLE income, found by
+ * bisection. Deductions are monotone but not always constant — the UK personal
+ * allowance sheds £1 per whole £2 over £100,000 — so a band edge expressed in
+ * taxable terms cannot be turned into a gross probe by adding any single
+ * deduction figure. Bisection asks the schedule itself instead.
+ */
+function grossReaching(code: string, taxYear: string, taxable: number): number {
+  let lo = 0;
+  let hi = 10_000_000;
+  while (lo < hi) {
+    const mid = Math.floor((lo + hi) / 2);
+    if (calcIncomeTax(code, mid, taxYear)!.taxable >= taxable) hi = mid;
+    else lo = mid + 1;
+  }
+  return lo;
+}
+
 describe('marginal rate is differenced from liability, not read off the bands', () => {
   const mr = (code: string, gross: number, year: string) =>
     calcIncomeTax(code, gross, year)!.marginalRate;
@@ -351,11 +369,16 @@ describe('marginal rate is differenced from liability, not read off the bands', 
         for (let g = 0; g <= 2000000; g += 2500) expectNonNegative(code, g, year.value);
 
         // ...and dense probes either side of every band edge, where a
-        // discontinuity would live if one existed.
-        const deduction = 500000 - calcIncomeTax(code, 500000, year.value)!.taxable;
+        // discontinuity would live if one existed. Band edges are TAXABLE
+        // income, so each has to be mapped back through the deduction to the
+        // gross that reaches it. Taking one deduction reading and adding it to
+        // every edge is wrong wherever the deduction moves with income: the UK
+        // allowance is fully tapered away by £500,000, so that reading is £0
+        // and puts the £37,700 edge at £37,700 gross instead of £50,270.
         for (const b of getIncomeTaxBands(code, year.value)) {
           if (b.upTo == null) continue;
-          for (const d of [-2, -1, 0, 1, 2]) expectNonNegative(code, b.upTo + deduction + d, year.value);
+          const edge = grossReaching(code, year.value, b.upTo);
+          for (const d of [-2, -1, 0, 1, 2]) expectNonNegative(code, edge + d, year.value);
         }
       }
     }
