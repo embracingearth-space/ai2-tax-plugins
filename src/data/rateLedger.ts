@@ -51,10 +51,15 @@
  * see, which is why the start dates are pinned separately.
  *
  * EVERY ROW NAMES AN AUTHORITY AND A URL, asserted. `verified` is a separate and
- * stricter claim - that the cited page was actually read and agreed. One closed
- * row falls short of it today: Israel's 17% era is sourced to the Knesset record
- * of the order raising it, because every gov.il rate page returns HTTP 403 to
- * automated fetches. That is recorded in the row rather than rounded up.
+ * stricter claim - that the cited page was actually read and agreed. Every
+ * gov.il rate page returns HTTP 403 to automated fetches, which is why Israel's
+ * two rows cite the Knesset record of the order instead: read via a real
+ * browser render, it states the 17% and 18% rates, the 1 January 2025 effective
+ * date and the exact instrument (Value Added Tax Order (Tax Rate for
+ * Transaction and Import of Goods) (Amendment), 2024) plainly enough to verify
+ * against - the legislature that approved the order, not a secondary
+ * aggregator. No row is cited-but-unverified today; if one becomes so again,
+ * the reason belongs in its own note, the same way this one did while it was.
  *
  * These figures are asserted in __tests__/rateLedger. The assertions derive
  * their values from RATE_LEDGER and never read this comment, so they catch the

@@ -279,16 +279,20 @@ describe('the documented row and country counts are exact', () => {
     }
   });
 
-  it('keeps `verified` a stricter claim than `has a citation`', () => {
-    // verified means the cited page was read and agreed - not merely that a URL
-    // is present. Israel is the one closed row that falls short: every gov.il
-    // rate page returns HTTP 403 to automated fetches, so it is sourced to the
-    // Knesset record of the order and left unverified rather than rounded up.
+  it('leaves no closed row cited-but-unverified', () => {
+    // `verified` is stricter than `has a citation`: it means the cited page was
+    // actually read and agreed, not merely that a URL is present. Israel's two
+    // rows held this line for a while - every gov.il rate page returns HTTP 403
+    // to automated fetches - until a real browser render of the Knesset record
+    // (not a gov.il page) could be read directly, confirming 17%, 18% and the
+    // 1 January 2025 boundary against the legislature's own account.
+    //
+    // Asserted as EMPTY rather than as a permitted-exceptions list, so a future
+    // unverified row is a visible failure. Should one become necessary again -
+    // an authority that blocks automated access and stays unreadable even via a
+    // browser - it belongs with its own reason in its own note, the way
+    // Israel's did while it was in this state.
     const unverifiedClosed = RATE_LEDGER.filter((r) => r.effectiveTo && !r.source.verified);
-    expect(unverifiedClosed.map((r) => r.countryCode)).toEqual(['IL']);
-    for (const r of unverifiedClosed) {
-      expect(r.source.authority.trim().length).toBeGreaterThan(0); // still cited
-      expect(r.source.note ?? '').toMatch(/403|COULD NOT VERIFY|PARTIAL CITATION/i); // and says why
-    }
+    expect(unverifiedClosed).toEqual([]);
   });
 });
