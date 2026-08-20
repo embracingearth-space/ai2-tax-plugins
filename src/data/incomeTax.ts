@@ -286,6 +286,53 @@ function inSurcharge(taxable: number, baseTax: number): number {
   return surcharge;
 }
 
+/**
+ * AU MEDICARE LEVY LOW-INCOME REDUCTION — Medicare Levy Act 1986 s 7,
+ * "Levy in cases of small incomes".
+ *
+ * Below the lower threshold no levy is payable at all. Between the two it is
+ * "shaded in" at 10% of the excess over the lower threshold, which by
+ * construction meets the full 2% exactly at the upper threshold. Above it, the
+ * ordinary 2% applies. Charging a flat 2% at every income — which this file did
+ * until now, while its own note conceded the levy "may reduce for low incomes" —
+ * overstates the liability of every Australian earning under $35,013.
+ *
+ * HOW THESE FIGURES WERE ESTABLISHED, because they are user-facing tax numbers:
+ * the 10% shading mechanism is confirmed in the Act itself via
+ * legislation.gov.au; the $35,013 upper threshold is confirmed from ATO
+ * content. The $28,011 lower threshold sits at exactly the ratio a 2% levy
+ * requires (1 - 0.02/0.10 = 0.8; 28011/35013 = 0.8000), and that model was
+ * itself validated against the legislated worked example from the 1.5% era
+ * (18488/21750, ratio 0.8500 = 1 - 0.015/0.10) — where the shaded amount lands
+ * on the full levy to the cent. Two independent confirmations plus an exact
+ * structural fit, not a lifted figure.
+ *
+ * KEYED BY YEAR ON PURPOSE. These thresholds are indexed annually. A year with
+ * no entry here keeps the flat 2% rather than borrowing another year's
+ * thresholds — inventing an indexed figure is the failure this whole effort
+ * exists to remove. 2024-25 used different (lower) thresholds that are not
+ * verified here, and 2027-28's are not announced yet; both therefore stay flat
+ * until someone verifies and adds them.
+ */
+const AU_MEDICARE_LOW_INCOME: Record<string, { lower: number; upper: number }> = {
+  // Carried forward per the Act until amended — the same treatment the bands get.
+  '2026-27': { lower: 28011, upper: 35013 },
+  '2025-26': { lower: 28011, upper: 35013 },
+};
+
+/** The Medicare levy actually payable on `taxable` for a given AU tax year. */
+function auMedicareLevy(taxable: number, taxYearLabel: string): number {
+  const full = taxable * 0.02;
+  const band = AU_MEDICARE_LOW_INCOME[taxYearLabel];
+  if (!band) return round(full);
+  if (taxable <= band.lower) return 0;
+  // Shade in at 10% of the excess, never exceeding the ordinary 2%. The cap
+  // matters because the ATO rounds the published thresholds independently, so
+  // the two lines cross a few cents before the upper threshold rather than
+  // exactly on it.
+  return round(Math.min(full, (taxable - band.lower) * 0.10));
+}
+
 export const INCOME_TAX_SCHEMES: Record<string, IncomeTaxScheme> = {
   AU: {
     code: 'AU', country: 'Australia', currency: 'AUD', locale: 'en-AU', timeZone: 'Australia/Sydney',
@@ -296,7 +343,15 @@ export const INCOME_TAX_SCHEMES: Record<string, IncomeTaxScheme> = {
       { effectiveFrom: '2024-07-01', taxYearLabel: '2024-25', bands: auBands(0.16) },
     ],
     flatLevyRate: 0.02,
-    levies: ({ taxable }) => [{ name: 'Medicare levy (2%)', amount: round(taxable * 0.02) }],
+    levies: ({ taxable, taxYearLabel }) => {
+      const levy = auMedicareLevy(taxable, taxYearLabel);
+      // Nil below the lower threshold — emit no line rather than a $0 one, so
+      // the absence of the levy is visible instead of looking like a rounding
+      // artefact.
+      if (levy <= 0) return [];
+      const reduced = Boolean(AU_MEDICARE_LOW_INCOME[taxYearLabel]) && levy < round(taxable * 0.02);
+      return [{ name: reduced ? 'Medicare levy (reduced, low income)' : 'Medicare levy (2%)', amount: levy }];
+    },
     offsets: ({ taxable }) => {
       // LITO (ATO schedule): $700 up to $37,500; less 5c per $1 to $45,000
       // (→ $325); less 1.5c per $1 to $66,667 (→ $0).
@@ -307,7 +362,7 @@ export const INCOME_TAX_SCHEMES: Record<string, IncomeTaxScheme> = {
       lito = Math.max(0, lito);
       return lito > 0 ? [{ name: 'Low Income Tax Offset', amount: lito }] : [];
     },
-    note: 'Excludes HECS/HELP, Medicare levy surcharge and other offsets. Medicare levy may reduce for low incomes.',
+    note: 'Includes the Medicare levy low-income reduction (nil to $28,011, shaded in at 10% of the excess to $35,013). Excludes HECS/HELP, the Medicare levy surcharge, the seniors and pensioners thresholds, family thresholds and other offsets.',
     source: 'https://www.ato.gov.au/tax-rates-and-codes/tax-rates-australian-residents',
     authorityName: 'Australian Taxation Office (ATO)',
     citationDate: '2026-08-20',

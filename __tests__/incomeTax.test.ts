@@ -78,10 +78,16 @@ describe('income-tax take-home anchors', () => {
  * hand-derived (see the website's PR history for the incident this was).
  */
 describe('AU LITO offsets the Medicare levy, not just income tax', () => {
-  it('$9,100 → $0 total tax', () => {
+  it('$9,100 → $0 total tax, and the levy is NOT charged in the first place', () => {
     const r = calcIncomeTax('AU', 9100, '2026-27')!;
     expect(r.incomeTax).toBe(0);
-    expect(sum(r.levies)).toBe(182);
+    // This assertion used to expect a $182 levy here, offset back to zero by
+    // LITO — which matched the live MCP at the time and gave the right TOTAL,
+    // but by the wrong route. $9,100 is far below the $28,011 low-income
+    // threshold, so under Medicare Levy Act s 7 no levy arises at all. Same
+    // answer for the taxpayer, honest arithmetic underneath.
+    expect(sum(r.levies)).toBe(0);
+    expect(r.levies).toHaveLength(0);
     expect(sum(r.offsets)).toBe(700);
     expect(r.totalTax).toBe(0);
     expect(r.takeHome).toBe(9100);
@@ -96,6 +102,49 @@ describe('AU LITO offsets the Medicare levy, not just income tax', () => {
   it('$20,000 → $0 total tax (the exact case that once diverged between the website and the MCP)', () => {
     const r = calcIncomeTax('AU', 20000, '2026-27')!;
     expect(r.totalTax).toBe(0);
+  });
+});
+
+/**
+ * The Medicare levy low-income reduction (Medicare Levy Act 1986 s 7). Nil to
+ * $28,011, shaded in at 10% of the excess, meeting the ordinary 2% at $35,013.
+ * Charging a flat 2% here — as this file did until the reduction landed —
+ * overstates the liability of every Australian earning under $35,013.
+ */
+describe('AU Medicare levy low-income reduction', () => {
+  const levy = (gross: number, year = '2025-26') => sum(calcIncomeTax('AU', gross, year)!.levies);
+
+  it('charges nothing at or below the lower threshold', () => {
+    expect(levy(28011)).toBe(0);
+    expect(levy(25000)).toBe(0);
+    expect(levy(18200)).toBe(0);
+  });
+
+  it('shades in at 10% of the excess above it', () => {
+    // $1 over rounds to nothing; the taper is real but starts from zero.
+    expect(levy(28012)).toBe(0);
+    expect(levy(30000)).toBe(199); // 10% of 1,989
+    expect(levy(32000)).toBe(399); // 10% of 3,989
+  });
+
+  it('converges on the ordinary 2% at the upper threshold and never exceeds it', () => {
+    expect(levy(35013)).toBe(700); // 2% of 35,013 = 700.26, shaded = 700.20
+    expect(levy(35100)).toBe(Math.round(35100 * 0.02));
+    expect(levy(40000)).toBe(800);
+    expect(levy(90000)).toBe(1800);
+  });
+
+  it('is never more than the flat 2% anywhere across the band', () => {
+    for (let g = 27000; g <= 36000; g += 250) {
+      expect(levy(g)).toBeLessThanOrEqual(Math.round(g * 0.02));
+    }
+  });
+
+  it('leaves a year with no verified thresholds on the flat 2%', () => {
+    // 2024-25 used different thresholds and 2027-28's are not announced.
+    // Borrowing another year's indexed figures would be inventing them.
+    expect(levy(30000, '2024-25')).toBe(600);
+    expect(levy(30000, '2027-28')).toBe(600);
   });
 });
 
