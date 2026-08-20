@@ -73,8 +73,35 @@ export interface IncomeTaxResult {
   averageRate: number;
 }
 
+/**
+ * THE YEAR REACHES EVERY HOOK, NOT JUST THE BANDS.
+ *
+ * `sets` is effective-dated, but deduction/offsets/levies/marginalRate are one
+ * function per country — and the constants they hold are indexed annually just
+ * as the bands are: the UK personal allowance and NI thresholds, India's
+ * standard deduction and s.87A limits, the US standard deduction and FICA wage
+ * base, Australia's Medicare low-income thresholds. Resolving 2024-25 bands and
+ * then applying this year's constants to them would silently mix two tax years,
+ * and every set added to `sets` widens that gap.
+ *
+ * So the resolved year travels with the context. Today every defined year's
+ * constants happen to be identical — the UK thresholds are frozen to 2031,
+ * India's schedule was carried forward unchanged, the US has a single year
+ * defined, and Australia's LITO and 2% Medicare rate are unchanged across all
+ * four — so no hook needs to branch yet and no figure changes. The plumbing is
+ * here so that the first genuinely year-scoped constant is a data edit inside
+ * one hook, rather than a signature change that has to be discovered first.
+ */
+export interface IncomeYearContext {
+  /** The resolved set's label, e.g. '2025-26' — the year every constant in a
+   *  hook must be read against. */
+  taxYearLabel: string;
+  /** The resolved set's effective date, for hooks keyed by date rather than label. */
+  effectiveFrom: string;
+}
+
 /** Context passed to a country's offsets() — credits applied to the computed tax. */
-export interface IncomeOffsetContext {
+export interface IncomeOffsetContext extends IncomeYearContext {
   gross: number;
   taxable: number;
   incomeTax: number;
@@ -85,6 +112,26 @@ export interface IncomeOffsetContext {
  *  on the net liability (IN surcharge + cess) use the right base. */
 export interface IncomeLevyContext extends IncomeOffsetContext {
   baseTax: number;
+}
+
+/** Context passed to a country's deduction() — the pre-band reduction. */
+export interface IncomeDeductionContext extends IncomeYearContext {
+  gross: number;
+}
+
+/** Context passed to a country's marginalRate() — the rate on the next unit. */
+export interface IncomeMarginalContext extends IncomeYearContext {
+  gross: number;
+  taxable: number;
+  bandRate: number;
+}
+
+/** One selectable tax year for a country, as returned by getIncomeTaxYears. */
+export interface IncomeTaxYearOption {
+  value: string;
+  label: string;
+  effectiveFrom: string;
+  isCurrent: boolean;
 }
 
 export interface IncomeTaxScheme {
@@ -98,14 +145,14 @@ export interface IncomeTaxScheme {
   sets: IncomeBracketSet[];
   /** Pre-band deduction from gross (UK personal allowance, IN standard
    *  deduction). Omit when the tax-free step is a 0% band (AU/NZ). */
-  deduction?: (gross: number) => number;
+  deduction?: (ctx: IncomeDeductionContext) => number;
   /** Headline flat levy folded into the marginal-rate display (AU Medicare 2%).
    *  Used as the fallback when `marginalRate` is not supplied. */
   flatLevyRate: number;
   /** True marginal rate on the next dollar of income, when a flat levy can't
    *  capture it — UK National Insurance (8%/2%) + the £100k allowance taper;
    *  India's 4% cess. Receives the income-tax band rate; returns band + levies. */
-  marginalRate?: (ctx: { gross: number; taxable: number; bandRate: number }) => number;
+  marginalRate?: (ctx: IncomeMarginalContext) => number;
   levies: (ctx: IncomeLevyContext) => IncomeLineItem[];
   offsets: (ctx: IncomeOffsetContext) => IncomeLineItem[];
   note: string;
@@ -151,10 +198,15 @@ function marginalRateFor(
   c: IncomeTaxScheme,
   gross: number,
   taxable: number,
-  bands: IncomeTaxBand[],
+  set: IncomeBracketSet,
 ): number {
-  const bandRate = marginalBand(taxable, bands);
-  return c.marginalRate ? c.marginalRate({ gross, taxable, bandRate }) : bandRate + c.flatLevyRate;
+  const bandRate = marginalBand(taxable, set.bands);
+  return c.marginalRate
+    ? c.marginalRate({
+        gross, taxable, bandRate,
+        taxYearLabel: set.taxYearLabel, effectiveFrom: set.effectiveFrom,
+      })
+    : bandRate + c.flatLevyRate;
 }
 
 // Australia thresholds are stable across these years; only the first taxed
@@ -284,7 +336,7 @@ export const INCOME_TAX_SCHEMES: Record<string, IncomeTaxScheme> = {
       { effectiveFrom: '2026-04-06', taxYearLabel: '2026-27', bands: gbBands },
       { effectiveFrom: '2025-04-06', taxYearLabel: '2025-26', bands: gbBands },
     ],
-    deduction: (gross) => {
+    deduction: ({ gross }) => {
       // Personal allowance £12,570, tapered £1 for every £2 of income over
       // £100,000 (fully gone at £125,140).
       const taper = Math.max(0, Math.floor((gross - 100000) / 2));
@@ -390,6 +442,23 @@ export const INCOME_TAX_SCHEMES: Record<string, IncomeTaxScheme> = {
   },
 };
 
+// Frozen at module load. This record is re-exported from src/index.ts, so a
+// consumer of the published package could otherwise reassign a country's rate
+// or hook and corrupt every later calculation in the same process — including
+// the drift and parity guards, which would then be comparing against mutated
+// data and cheerfully agreeing. Object.freeze is shallow, so the schemes and
+// their band arrays are frozen individually.
+for (const scheme of Object.values(INCOME_TAX_SCHEMES)) {
+  for (const set of scheme.sets) {
+    set.bands.forEach(Object.freeze);
+    Object.freeze(set.bands);
+    Object.freeze(set);
+  }
+  Object.freeze(scheme.sets);
+  Object.freeze(scheme);
+}
+Object.freeze(INCOME_TAX_SCHEMES);
+
 /** Country codes with an income-tax schedule defined here. */
 export function listIncomeTaxCountries(): string[] {
   return Object.keys(INCOME_TAX_SCHEMES);
@@ -436,9 +505,7 @@ function resolveIncomeSet(scheme: IncomeTaxScheme, taxYear?: string): IncomeBrac
 }
 
 /** Selectable tax years for a country (newest-first), with the current one flagged. */
-export function getIncomeTaxYears(
-  countryCode: string,
-): { value: string; label: string; effectiveFrom: string; isCurrent: boolean }[] {
+export function getIncomeTaxYears(countryCode: string): IncomeTaxYearOption[] {
   const scheme = getIncomeTaxScheme(countryCode);
   if (!scheme) return [];
   const current = resolveIncomeSet(scheme)?.taxYearLabel;
@@ -461,8 +528,12 @@ export function calcIncomeTax(countryCode: string, gross: number, taxYear?: stri
   if (!set) return null;
   const g = Number.isFinite(gross) && gross > 0 ? gross : 0;
 
+  // The resolved year, forwarded to every hook so a year-scoped constant is
+  // read against the SAME year as the bands.
+  const year = { taxYearLabel: set.taxYearLabel, effectiveFrom: set.effectiveFrom };
+
   // 1. Pre-band deduction (capped at gross so taxable can't go negative).
-  const deduction = c.deduction ? Math.min(g, c.deduction(g)) : 0;
+  const deduction = c.deduction ? Math.min(g, c.deduction({ gross: g, ...year })) : 0;
   const taxable = Math.max(0, g - deduction);
 
   // 2. Progressive tax on the taxable amount.
@@ -474,12 +545,12 @@ export function calcIncomeTax(countryCode: string, gross: number, taxYear?: stri
   //    max(0, incomeTax + levy - offset) rather than two separately-floored
   //    steps. India's 87A rebate is self-bounded to incomeTax by its own
   //    offsets() above, so this changes nothing for IN.
-  const offsets = c.offsets({ gross: g, taxable, incomeTax });
+  const offsets = c.offsets({ gross: g, taxable, incomeTax, ...year });
   const offsetsTotal = offsets.reduce((s, o) => s + o.amount, 0);
   const baseTax = incomeTax - offsetsTotal;
 
   // 4. Levies compound on top of the post-offset base (IN surcharge/cess need this).
-  const levies = c.levies({ gross: g, taxable, incomeTax, baseTax });
+  const levies = c.levies({ gross: g, taxable, incomeTax, baseTax, ...year });
   const leviesTotal = levies.reduce((s, l) => s + l.amount, 0);
 
   const totalTax = Math.max(0, baseTax + leviesTotal);
@@ -488,7 +559,7 @@ export function calcIncomeTax(countryCode: string, gross: number, taxYear?: stri
     code: c.code, country: c.country, currency: c.currency, locale: c.locale,
     taxYear: set.taxYearLabel,
     gross: g, taxable, incomeTax, levies, offsets, totalTax, takeHome: g - totalTax,
-    marginalRate: g > 0 ? marginalRateFor(c, g, taxable, set.bands) : 0,
+    marginalRate: g > 0 ? marginalRateFor(c, g, taxable, set) : 0,
     averageRate: g > 0 ? totalTax / g : 0,
   };
 }
@@ -496,5 +567,9 @@ export function calcIncomeTax(countryCode: string, gross: number, taxYear?: stri
 export function getIncomeTaxBands(countryCode: string, taxYear?: string): IncomeTaxBand[] {
   const c = getIncomeTaxScheme(countryCode);
   if (!c) return [];
-  return resolveIncomeSet(c, taxYear)?.bands ?? [];
+  // A COPY, not the live array. nzBands and gbBands are module-level constants
+  // shared by two sets each, so a consumer of the published package sorting or
+  // pushing into what it got back would corrupt every later calculation in the
+  // same process.
+  return (resolveIncomeSet(c, taxYear)?.bands ?? []).map((b) => ({ ...b }));
 }

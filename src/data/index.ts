@@ -37,6 +37,10 @@ export type {
   IncomeTaxResult,
   IncomeOffsetContext,
   IncomeLevyContext,
+  IncomeDeductionContext,
+  IncomeMarginalContext,
+  IncomeYearContext,
+  IncomeTaxYearOption,
   IncomeTaxScheme,
 } from './incomeTax';
 export {
