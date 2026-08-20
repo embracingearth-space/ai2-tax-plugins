@@ -23,16 +23,28 @@
  * (undated) change to one of those rates will resolve to the FLOOR-anchored
  * rate, which may not be what was actually charged at the time.
  *
- * Rows and countries are different counts and are easy to conflate, so all four
- * are stated plainly. Of 88 countries, 25 carry at least one genuinely dated row
- * and 63 are floor-only. Separately, 9 countries carry more than one row and so
- * record an actual TRANSITION — those are the ones the drift-guard and rateWatch
- * can track a change through. The open gap is the 63 floor-only countries;
- * backfilling real pre-2000 or pre-verification change dates for them is a
- * per-country research task, not something to synthesise here.
+ * Rows and countries are different counts and are easy to conflate, so each is
+ * stated plainly. Of 88 countries, 25 carry at least one genuinely dated row and
+ * 63 are floor-only. Separately, 8 countries record an actual TRANSITION — a
+ * SERIES (one country + stateProvince + taxType) holding more than one row, so a
+ * change is resolvable across it: EC, EE, FI, GH, IL, KZ, RO, RU. Canada has two
+ * rows and is NOT one of them; they are parallel series, national GST and
+ * Ontario HST, each with a single row. The open gap is the 63 floor-only
+ * countries; backfilling real pre-2000 or pre-verification change dates for them
+ * is a per-country research task, not something to synthesise here.
  *
- * Every one of those five figures is asserted exactly in __tests__/rateLedger,
- * so the ledger and this paragraph cannot drift apart silently.
+ * KNOWN DATA GAP: Ghana's series has a hole. Its 12.5% row ends 2023-01-01 and
+ * its 15% row does not begin until 2026-01-01, so any date in between resolves
+ * to no row — and getStandardRateAsOf then reports 0, which reads as "Ghana had
+ * no VAT in 2024". Closing it means an authority-verified row for the
+ * intervening period, not extending either neighbour, which would assert a rate
+ * nobody checked. __tests__/rateLedger pins this as the ONLY gap, so a second
+ * one cannot appear unnoticed.
+ *
+ * These figures are asserted in __tests__/rateLedger. The assertions derive
+ * their values from RATE_LEDGER and never read this comment, so they catch the
+ * ledger changing under the paragraph — not the paragraph being edited to
+ * disagree with itself. Change one, change both.
  */
 import { RATE_LEDGER } from './rateLedger.data';
 

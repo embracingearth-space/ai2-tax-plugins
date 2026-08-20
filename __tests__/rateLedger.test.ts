@@ -175,13 +175,57 @@ describe('the documented row and country counts are exact', () => {
     expect([...countries].filter((c) => !datedCountries.has(c))).toHaveLength(63);
   });
 
-  it('records an actual transition for exactly 9 countries', () => {
-    // More than one row for a country is what makes a CHANGE resolvable, and is
-    // the population the drift-guard and rateWatch can follow a transition
-    // through. A country with a single dated row has a start, not a history.
-    const rowsPerCountry = new Map<string, number>();
-    for (const r of RATE_LEDGER) rowsPerCountry.set(r.countryCode, (rowsPerCountry.get(r.countryCode) ?? 0) + 1);
-    const withTransition = [...rowsPerCountry.entries()].filter(([, n]) => n > 1).map(([c]) => c);
-    expect(withTransition.sort()).toEqual(['CA', 'EC', 'EE', 'FI', 'GH', 'IL', 'KZ', 'RO', 'RU']);
+  /** One rate SERIES: a country's rows for one stateProvince and one taxType. */
+  const seriesKey = (r: (typeof RATE_LEDGER)[number]) =>
+    `${r.countryCode}|${r.stateProvince ?? ''}|${r.taxType}`;
+
+  const series = (() => {
+    const m = new Map<string, typeof RATE_LEDGER>();
+    for (const r of RATE_LEDGER) m.set(seriesKey(r), [...(m.get(seriesKey(r)) ?? []), r] as typeof RATE_LEDGER);
+    return m;
+  })();
+
+  it('records an actual transition for exactly 8 countries', () => {
+    // A transition needs two rows in the SAME series. Grouping by country alone
+    // reported 9 and wrongly included Canada, whose two rows are parallel
+    // series — national GST and Ontario HST — each holding a single row. That
+    // is a country with two concurrent taxes, not a country with a history.
+    const withTransition = [...series.entries()]
+      .filter(([, rows]) => rows.length > 1)
+      .map(([k]) => k.split('|')[0]);
+    expect([...new Set(withTransition)].sort()).toEqual(['EC', 'EE', 'FI', 'GH', 'IL', 'KZ', 'RO', 'RU']);
+
+    // Canada is the case that made the distinction necessary — keep it pinned.
+    const ca = RATE_LEDGER.filter((r) => r.countryCode === 'CA');
+    expect(ca).toHaveLength(2);
+    expect(new Set(ca.map(seriesKey)).size).toBe(2); // two series, not two versions
+  });
+
+  it('has exactly one coverage gap, and it is Ghana', () => {
+    // Within a series the rows must tile: each effectiveTo is the next
+    // effectiveFrom. Anywhere they do not, some date resolves to NO row, and
+    // getStandardRateAsOf reports 0 — indistinguishable from a country that
+    // genuinely levies nothing. Ghana's 12.5% row ends 2023-01-01 and its 15%
+    // row starts 2026-01-01, leaving three years uncovered. Pinned rather than
+    // papered over: extending either neighbour would assert a rate nobody
+    // verified. This test exists so a SECOND gap cannot appear unnoticed.
+    const gaps: string[] = [];
+    for (const [key, rows] of series) {
+      const sorted = [...rows].sort((a, b) => (a.effectiveFrom < b.effectiveFrom ? -1 : 1));
+      for (let i = 0; i < sorted.length - 1; i++) {
+        if (sorted[i].effectiveTo !== sorted[i + 1].effectiveFrom) {
+          gaps.push(`${key} ${sorted[i].effectiveTo} -> ${sorted[i + 1].effectiveFrom}`);
+        }
+      }
+    }
+    expect(gaps).toEqual(['GH||VAT 2023-01-01 -> 2026-01-01']);
+  });
+
+  it('reports 0 for the uncovered Ghana window — the reason the gap is worth closing', () => {
+    expect(getStandardRateAsOf('GH', '2022-06-01')).toBe(0.125);
+    expect(getStandardRateAsOf('GH', '2026-06-01')).toBe(0.15);
+    // Not a rate anyone verified — the absence of a row, rendered as a number.
+    expect(getStandardRateAsOf('GH', '2024-06-01')).toBe(0);
+    expect(resolveRateRow('GH', '2024-06-01')).toBeUndefined();
   });
 });
