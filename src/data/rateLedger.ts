@@ -15,7 +15,7 @@
  * period (before/after a change) and keep historical filings correct — FOR THE
  * PART OF HISTORY A ROW ACTUALLY DATES.
  *
- * THE CAVEAT THAT MATTERS: 72 of the 100 rows carry RATE_FLOOR (2000-01-01) as
+ * THE CAVEAT THAT MATTERS: 71 of the 102 rows carry RATE_FLOOR (2000-01-01) as
  * their effectiveFrom, meaning "known true since at least this anchor," not
  * "became true on this date." Most are annotated in their own `note` as
  * long-standing or stable for decades, but the ledger records no actual change
@@ -24,22 +24,31 @@
  * rate, which may not be what was actually charged at the time.
  *
  * Rows and countries are different counts and are easy to conflate, so each is
- * stated plainly. Of 88 countries, 25 carry at least one genuinely dated row and
- * 63 are floor-only. Separately, 8 countries record an actual TRANSITION - a
+ * stated plainly. Of 88 countries, 26 carry at least one genuinely dated row and
+ * 62 are floor-only. Separately, 9 countries record an actual TRANSITION - a
  * SERIES (one country + stateProvince + taxType) holding more than one row, so a
- * change is resolvable across it: EC, EE, FI, GH, IL, KZ, RO, RU. Canada has two
- * rows and is NOT one of them; they are parallel series, national GST and
- * Ontario HST, each with a single row. The open gap is the 63 floor-only
- * countries; backfilling real pre-2000 or pre-verification change dates for them
- * is a per-country research task, not something to synthesise here.
+ * change is resolvable across it: CA, EC, EE, FI, GH, IL, KZ, RO, RU. Canada is
+ * in that list for its federal GST series (7% -> 6% -> 5%), NOT for having two
+ * rows: its GST and Ontario HST rows are parallel series and counting them as a
+ * transition was the bug this distinction was drawn to fix. The open gap is the
+ * 62 floor-only countries; backfilling real pre-2000 or pre-verification change
+ * dates for them is a per-country research task, not something to synthesise.
  *
  * NO SERIES HAS A HOLE. Within a series each effectiveTo is the next
- * effectiveFrom, so every date resolves to exactly one row. This is asserted,
- * because it did not used to hold and the failure was silent: Ghana's rows ran
- * 12.5% to 2023-01-01 and then 15% from 2026-01-01, and every date in between
- * resolved to NO row - which getStandardRateAsOf renders as 0, indistinguishable
- * from a country that genuinely levies nothing. The missing Act 1087 row (15%
- * from 1 January 2023) now closes it.
+ * effectiveFrom, so every date inside a series resolves to exactly one row. This
+ * is asserted, because it did not used to hold and the failure was silent:
+ * Ghana's rows ran 12.5% to 2023-01-01 and then 15% from 2026-01-01, and every
+ * date in between resolved to NO row - which getStandardRateAsOf renders as 0,
+ * indistinguishable from a country that genuinely levies nothing. The missing
+ * Act 1087 row (15% from 1 January 2023) now closes it.
+ *
+ * Note the converse is NOT a hole and must not be "fixed" into one: a series may
+ * legitimately START late, because the tax itself started late. Ontario HST
+ * begins 1 July 2010 and nothing precedes it, since before that Ontario charged
+ * federal GST plus a provincial RST this ledger does not model. That row used to
+ * run from the floor and so claimed 13% HST for a decade in which the tax did
+ * not exist - a worse error than a stale rate, and one a continuity check cannot
+ * see, which is why the start dates are pinned separately.
  *
  * EVERY ROW NAMES AN AUTHORITY AND A URL, asserted. `verified` is a separate and
  * stricter claim - that the cited page was actually read and agreed. One closed

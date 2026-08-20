@@ -163,16 +163,16 @@ describe('the documented row and country counts are exact', () => {
   const countries = new Set(RATE_LEDGER.map((r) => r.countryCode));
   const datedCountries = new Set(dated.map((r) => r.countryCode));
 
-  it('has 100 rows, 72 of them floor-anchored', () => {
-    expect(RATE_LEDGER.length).toBe(100);
-    expect(RATE_LEDGER.length - dated.length).toBe(72);
-    expect(dated.length).toBe(28);
+  it('has 102 rows, 71 of them floor-anchored', () => {
+    expect(RATE_LEDGER.length).toBe(102);
+    expect(RATE_LEDGER.length - dated.length).toBe(71);
+    expect(dated.length).toBe(31);
   });
 
-  it('covers 88 countries: 25 with a real date, 63 floor-only', () => {
+  it('covers 88 countries: 26 with a real date, 62 floor-only', () => {
     expect(countries.size).toBe(88);
-    expect(datedCountries.size).toBe(25);
-    expect([...countries].filter((c) => !datedCountries.has(c))).toHaveLength(63);
+    expect(datedCountries.size).toBe(26);
+    expect([...countries].filter((c) => !datedCountries.has(c))).toHaveLength(62);
   });
 
   /** One rate SERIES: a country's rows for one stateProvince and one taxType. */
@@ -185,20 +185,39 @@ describe('the documented row and country counts are exact', () => {
     return m;
   })();
 
-  it('records an actual transition for exactly 8 countries', () => {
+  it('records an actual transition for exactly 9 countries', () => {
     // A transition needs two rows in the SAME series. Grouping by country alone
-    // reported 9 and wrongly included Canada, whose two rows are parallel
-    // series — national GST and Ontario HST — each holding a single row. That
-    // is a country with two concurrent taxes, not a country with a history.
+    // wrongly counted Canada for having two rows that are actually parallel
+    // series — national GST and Ontario HST. Canada IS in this list now, but on
+    // its own merit: its federal GST series runs 7% -> 6% -> 5%.
     const withTransition = [...series.entries()]
       .filter(([, rows]) => rows.length > 1)
       .map(([k]) => k.split('|')[0]);
-    expect([...new Set(withTransition)].sort()).toEqual(['EC', 'EE', 'FI', 'GH', 'IL', 'KZ', 'RO', 'RU']);
+    expect([...new Set(withTransition)].sort()).toEqual(['CA', 'EC', 'EE', 'FI', 'GH', 'IL', 'KZ', 'RO', 'RU']);
 
-    // Canada is the case that made the distinction necessary — keep it pinned.
-    const ca = RATE_LEDGER.filter((r) => r.countryCode === 'CA');
-    expect(ca).toHaveLength(2);
-    expect(new Set(ca.map(seriesKey)).size).toBe(2); // two series, not two versions
+    // The distinction still holds where it matters: Ontario HST is its own
+    // series with a single row, and does not make Canada a transition country
+    // by itself.
+    const ontario = RATE_LEDGER.filter((r) => r.countryCode === 'CA' && r.stateProvince === 'ON');
+    expect(ontario).toHaveLength(1);
+    expect(new Set(RATE_LEDGER.filter((r) => r.countryCode === 'CA').map(seriesKey)).size).toBe(2);
+  });
+
+  it('starts each series when its tax actually started, not at the floor', () => {
+    // A series may legitimately begin late, and a continuity check cannot see a
+    // series that begins too EARLY — which is how Ontario HST came to claim 13%
+    // back to 2000. HST began 1 July 2010, replacing GST + Ontario RST.
+    expect(resolveRateRow('CA', '2010-06-30', { stateProvince: 'ON' })).toBeUndefined();
+    expect(resolveRateRow('CA', '2010-07-01', { stateProvince: 'ON' })?.standardRate).toBe(0.13);
+
+    // Federal GST across its three eras. Before this, every pre-2008 date
+    // answered 5%.
+    expect(getStandardRateAsOf('CA', '2005-01-01')).toBe(0.07);
+    expect(getStandardRateAsOf('CA', '2006-06-30')).toBe(0.07);
+    expect(getStandardRateAsOf('CA', '2006-07-01')).toBe(0.06);
+    expect(getStandardRateAsOf('CA', '2007-12-31')).toBe(0.06);
+    expect(getStandardRateAsOf('CA', '2008-01-01')).toBe(0.05);
+    expect(getStandardRateAsOf('CA', '2026-01-01')).toBe(0.05);
   });
 
   it('has no coverage gaps at all - every date resolves to exactly one row', () => {
@@ -247,7 +266,7 @@ describe('the documented row and country counts are exact', () => {
     // and all nine historical rows were in that state until 2026-08-20.
     for (const r of RATE_LEDGER) {
       expect(r.source.authority.trim().length).toBeGreaterThan(0);
-      expect(r.source.url).toMatch(/^https?:[/][/]/);
+      expect(r.source.url).toMatch(/^https:[/][/]/); // https only — a plaintext citation can be altered in transit
       expect((r.source.note ?? '').trim().length).toBeGreaterThan(0);
     }
   });
