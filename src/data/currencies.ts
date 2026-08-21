@@ -122,6 +122,23 @@ export const CURRENCY_INFO: Record<string, CurrencyInfo> = {
   'TND': { code: 'TND', symbol: 'د.ت', name: 'Tunisian Dinar', locale: 'ar-TN', decimalPlaces: 3 },
   'DZD': { code: 'DZD', symbol: 'د.ج', name: 'Algerian Dinar', locale: 'ar-DZ', decimalPlaces: 2 },
   'MGA': { code: 'MGA', symbol: 'Ar', name: 'Malagasy Ariary', locale: 'fr-MG', decimalPlaces: 0 },
+
+  // Added 2026-08: these eleven countries all levy a consumption tax the
+  // calculators can compute, but had no currency record — so their amounts fell
+  // back to the caller's default and were shown in the wrong currency. Ecuador
+  // is deliberately absent here: it is dollarized and maps to the existing USD
+  // record. Minor units follow ISO 4217 (JPY-style zero-decimal currencies are
+  // marked as such so amounts are not shown with false precision).
+  'MXN': { code: 'MXN', symbol: '$', name: 'Mexican Peso', locale: 'es-MX', decimalPlaces: 2 },
+  'BYN': { code: 'BYN', symbol: 'Br', name: 'Belarusian Ruble', locale: 'be-BY', decimalPlaces: 2 },
+  'BOB': { code: 'BOB', symbol: 'Bs', name: 'Bolivian Boliviano', locale: 'es-BO', decimalPlaces: 2 },
+  'KHR': { code: 'KHR', symbol: '៛', name: 'Cambodian Riel', locale: 'km-KH', decimalPlaces: 2 },
+  'KZT': { code: 'KZT', symbol: '₸', name: 'Kazakhstani Tenge', locale: 'kk-KZ', decimalPlaces: 2 },
+  'LAK': { code: 'LAK', symbol: '₭', name: 'Lao Kip', locale: 'lo-LA', decimalPlaces: 2 },
+  'MNT': { code: 'MNT', symbol: '₮', name: 'Mongolian Tugrik', locale: 'mn-MN', decimalPlaces: 2 },
+  'PYG': { code: 'PYG', symbol: '₲', name: 'Paraguayan Guarani', locale: 'es-PY', decimalPlaces: 0 },
+  'LKR': { code: 'LKR', symbol: 'Rs', name: 'Sri Lankan Rupee', locale: 'si-LK', decimalPlaces: 2 },
+  'UZS': { code: 'UZS', symbol: "so'm", name: 'Uzbekistani Som', locale: 'uz-UZ', decimalPlaces: 2 },
 };
 
 /**
@@ -178,11 +195,29 @@ export const COUNTRY_CURRENCY_MAP: Record<string, string> = {
   'CZ': 'CZK',
   'HU': 'HUF',
   'RO': 'RON',
-  'BG': 'BGN',
-  'HR': 'HRK',
+  // Bulgaria adopted the euro on 1 January 2026, fixed at EUR 1 = BGN 1.95583;
+  // the lev stopped being legal tender on 1 February 2026. The BGN record is
+  // kept above for historical amounts; live formatting must be EUR.
+  'BG': 'EUR',
+  // Croatia adopted the euro on 1 January 2023, replacing the kuna. The HRK
+  // record is kept above for historical amounts; live formatting must be EUR.
+  'HR': 'EUR',
   'RS': 'RSD',
   'UA': 'UAH',
   'RU': 'RUB',
+  // Added 2026-08 alongside their CURRENCY_INFO records above — every country
+  // with a computable consumption-tax rate now resolves a currency.
+  'MX': 'MXN',
+  'BY': 'BYN',
+  'BO': 'BOB',
+  'KH': 'KHR',
+  'EC': 'USD', // dollarized since 2000 — the US dollar is legal tender
+  'KZ': 'KZT',
+  'LA': 'LAK',
+  'MN': 'MNT',
+  'PY': 'PYG',
+  'LK': 'LKR',
+  'UZ': 'UZS',
   'FR': 'EUR',
   'AT': 'EUR',
   'EE': 'EUR',

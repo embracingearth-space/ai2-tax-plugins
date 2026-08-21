@@ -14,6 +14,8 @@
  * Reference: Code Général des Impôts de Madagascar
  */
 
+import { toCsv } from '../exportUtils';
+
 import type {
   TaxFilingPlugin,
   FormSection,
@@ -318,7 +320,8 @@ const madagascarPlugin: TaxFilingPlugin = {
     ];
   },
 
-  async generateExport(values: FieldValues): Promise<ExportOutput> {
+  async generateExport(values: FieldValues, format: string): Promise<ExportOutput> {
+    if (format === 'csv') return toCsv(values, `TVA-MG-${new Date().toISOString().slice(0, 10)}`);
     return {
       data: JSON.stringify(values, null, 2),
       filename: `TVA-MG-${new Date().toISOString().slice(0, 10)}.json`,

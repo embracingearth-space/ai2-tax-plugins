@@ -12,6 +12,8 @@
  *   Quarterly instalment payments if tax >$3,000 net.
  */
 
+import { toCsv } from '../exportUtils';
+
 import type {
   TaxFilingPlugin, FormSection, FieldValues, CalculatedFields,
   AggregationMapping, ValidationResult, RoundingConfig, ExportFormat, ExportOutput,
@@ -213,8 +215,13 @@ const caItPlugin: TaxFilingPlugin = {
     { id: 'json', label: 'JSON', mimeType: 'application/json', fileExtension: 'json' },
     { id: 'csv', label: 'CSV', mimeType: 'text/csv', fileExtension: 'csv' },
   ],
-  async generateExport(v) {
-    return { data: JSON.stringify(v, null, 2), filename: `T1-CA-${new Date().toISOString().slice(0, 10)}.json`, mimeType: 'application/json' };
+  async generateExport(v: FieldValues, format: string): Promise<ExportOutput> {
+    if (format === 'csv') return toCsv(v, `T1-CA-${new Date().toISOString().slice(0, 10)}`);
+    return {
+      data: JSON.stringify(v, null, 2),
+      filename: `T1-CA-${new Date().toISOString().slice(0, 10)}.json`,
+      mimeType: 'application/json',
+    };
   },
   getPortalSubmissionInfo: () => ({ portalUrl: 'https://www.canada.ca/en/revenue-agency/services/e-services/digital-services-individuals/netfile.html', submissionMethod: 'manual_upload' as const, apiReady: false }),
   hasSubJurisdictions: () => true,

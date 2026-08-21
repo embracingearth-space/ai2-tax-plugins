@@ -253,10 +253,12 @@ const ukPlugin: TaxFilingPlugin = {
     return help[fieldId] ?? null;
   },
 
+  // 'pdf' removed 2026-08: generateExport below has no PDF branch, so it fell
+  // through to the plain JSON return — "PDF Summary" downloaded a .json file
+  // with a .json MIME type. Re-add it once a PDF branch actually exists.
   getSupportedExportFormats: (): ExportFormat[] => [
     { id: 'json', label: 'MTD JSON', mimeType: 'application/json', fileExtension: 'json' },
     { id: 'csv', label: 'CSV', mimeType: 'text/csv', fileExtension: 'csv' },
-    { id: 'pdf', label: 'PDF Summary', mimeType: 'application/pdf', fileExtension: 'pdf' },
   ],
 
   async generateExport(v, format) {

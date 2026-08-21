@@ -15,6 +15,7 @@ import type {
   AggregationMapping, ValidationResult, RoundingConfig, ExportFormat, ExportOutput,
 } from '../types';
 import { getStudentLoanRepayment } from '../data/studentLoan';
+import { toCsv } from '../exportUtils';
 
 const TAX_FREE = 18200;
 
@@ -206,8 +207,13 @@ const auItPlugin: TaxFilingPlugin = {
     { id: 'json', label: 'JSON', mimeType: 'application/json', fileExtension: 'json' },
     { id: 'csv', label: 'CSV', mimeType: 'text/csv', fileExtension: 'csv' },
   ],
-  async generateExport(v) {
-    return { data: JSON.stringify(v, null, 2), filename: `ITR-AU-${new Date().toISOString().slice(0, 10)}.json`, mimeType: 'application/json' };
+  async generateExport(v: FieldValues, format: string): Promise<ExportOutput> {
+    if (format === 'csv') return toCsv(v, `ITR-AU-${new Date().toISOString().slice(0, 10)}`);
+    return {
+      data: JSON.stringify(v, null, 2),
+      filename: `ITR-AU-${new Date().toISOString().slice(0, 10)}.json`,
+      mimeType: 'application/json',
+    };
   },
   getPortalSubmissionInfo: () => ({ portalUrl: 'https://my.gov.au', submissionMethod: 'manual_upload' as const, apiReady: false }),
   hasSubJurisdictions: () => true,

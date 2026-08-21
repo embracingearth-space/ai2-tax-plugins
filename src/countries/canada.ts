@@ -7,6 +7,8 @@
  *   Provincial variations: ON=13%, NB/NL/NS=15%, PE=15%, QC uses QST (separate).
  */
 
+import { toCsv } from '../exportUtils';
+
 import type {
   TaxFilingPlugin,
   FormSection,
@@ -262,7 +264,8 @@ const caPlugin: TaxFilingPlugin = {
     { id: 'csv', label: 'CSV', mimeType: 'text/csv', fileExtension: 'csv' },
   ],
 
-  async generateExport(v) {
+  async generateExport(v: FieldValues, format: string): Promise<ExportOutput> {
+    if (format === 'csv') return toCsv(v, `GST-HST-CA-${new Date().toISOString().slice(0, 10)}`);
     return {
       data: JSON.stringify(v, null, 2),
       filename: `GST-HST-CA-${new Date().toISOString().slice(0, 10)}.json`,

@@ -10,6 +10,8 @@
  *   Standard deduction (single): $15,750 (2025, OBBBA), $16,100 (2026).
  */
 
+import { toCsv } from '../exportUtils';
+
 import type {
   TaxFilingPlugin, FormSection, FieldValues, CalculatedFields,
   AggregationMapping, ValidationResult, RoundingConfig, ExportFormat, ExportOutput,
@@ -229,8 +231,13 @@ const usItPlugin: TaxFilingPlugin = {
     { id: 'json', label: 'JSON', mimeType: 'application/json', fileExtension: 'json' },
     { id: 'csv', label: 'CSV', mimeType: 'text/csv', fileExtension: 'csv' },
   ],
-  async generateExport(v) {
-    return { data: JSON.stringify(v, null, 2), filename: `ScheduleC-US-${new Date().toISOString().slice(0, 10)}.json`, mimeType: 'application/json' };
+  async generateExport(v: FieldValues, format: string): Promise<ExportOutput> {
+    if (format === 'csv') return toCsv(v, `ScheduleC-US-${new Date().toISOString().slice(0, 10)}`);
+    return {
+      data: JSON.stringify(v, null, 2),
+      filename: `ScheduleC-US-${new Date().toISOString().slice(0, 10)}.json`,
+      mimeType: 'application/json',
+    };
   },
   getPortalSubmissionInfo: () => ({ portalUrl: 'https://www.irs.gov/filing/e-file-options', submissionMethod: 'manual_upload' as const, apiReady: false }),
   hasSubJurisdictions: () => true,

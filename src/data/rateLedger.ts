@@ -12,7 +12,79 @@
  * gets effectiveTo set and a NEW dated row is appended. Announced future changes are
  * added ahead of time (future effectiveFrom) and activate automatically by date.
  * This is what lets the app resolve the rate that applied DURING a transaction's tax
- * period (before/after a change) and keep historical filings correct.
+ * period (before/after a change) and keep historical filings correct — FOR THE
+ * PART OF HISTORY A ROW ACTUALLY DATES.
+ *
+ * THE CAVEAT THAT MATTERS: 71 of the 105 rows carry RATE_FLOOR (2000-01-01) as
+ * their effectiveFrom, meaning "known true since at least this anchor," not
+ * "became true on this date." Most are annotated in their own `note` as
+ * long-standing or stable for decades, but the ledger records no actual change
+ * history before that floor for those rows. This is a risk only from the floor
+ * ONWARD, not before it: resolveRateRow rejects any date earlier than a row's
+ * effectiveFrom, so a query dated before 2000-01-01 resolves to nothing, not
+ * to the floor row. A transaction dated on or after the floor but before a
+ * real (undated, unrecorded) later change will resolve to the FLOOR-anchored
+ * rate, which may not be what was actually charged at that later time.
+ *
+ * Rows and countries are different counts and are easy to conflate, so each is
+ * stated plainly. Of 88 countries, 26 carry at least one genuinely dated row and
+ * 62 are floor-only. Separately, 9 countries record an actual TRANSITION - a
+ * SERIES (one country + stateProvince + taxType) holding more than one row, so a
+ * change is resolvable across it: CA, EC, EE, FI, GH, IL, KZ, RO, RU. Canada is
+ * in that list for its federal GST series (7% -> 6% -> 5%), NOT for having two
+ * rows: its GST and Ontario HST rows are parallel series and counting them as a
+ * transition was the bug this distinction was drawn to fix. The open gap is the
+ * 62 floor-only countries; backfilling real pre-2000 or pre-verification change
+ * dates for them is a per-country research task, not something to synthesise.
+ *
+ * NO SERIES HAS A HOLE. Within a series each effectiveTo is the next
+ * effectiveFrom, so every date inside a series resolves to exactly one row. This
+ * is asserted, because it did not used to hold and the failure was silent:
+ * Ghana's rows ran 12.5% to 2023-01-01 and then 15% from 2026-01-01, and every
+ * date in between resolved to NO row - which getStandardRateAsOf renders as 0,
+ * indistinguishable from a country that genuinely levies nothing. The missing
+ * Act 1087 row (15% from 1 January 2023) now closes it.
+ *
+ * Note the converse is NOT a hole and must not be "fixed" into one: a series may
+ * legitimately START late, because the tax itself started late. Ontario HST
+ * begins 1 July 2010 and nothing precedes it, since before that Ontario charged
+ * federal GST plus a provincial RST this ledger does not model. That row used to
+ * run from the floor and so claimed 13% HST for a decade in which the tax did
+ * not exist - a worse error than a stale rate, and one a continuity check cannot
+ * see, which is why the start dates are pinned separately.
+ *
+ * EVERY ROW NAMES AN AUTHORITY AND A URL, asserted. `verified` is a separate and
+ * stricter claim - that the cited page was actually read and agreed.
+ *
+ * ISRAEL IS FIVE ROWS, NOT TWO, and finding the other three is why. The 2000
+ * floor row originally carried 17% all the way to a 2025-01-01 rise, cited to
+ * a Knesset record that only actually speaks to the 2025 change - reading
+ * "17%" out of that citation and projecting it back to 2000 was itself an
+ * overclaim, the same species of error as Ghana's missing row and Ecuador's
+ * truncated window, just one layer further in: not a wrong RATE but a wrong
+ * CONFIDENCE about how long the rate held. The ITA's own pages (read via a
+ * real browser after automated fetches returned empty for two and 403'd for
+ * the third) show a rise to 17% on 1 September 2012, a rise to 18% on
+ * 2 June 2013, and a cut back to 17% on 1 October 2015 - three real, dated,
+ * verified rows, now all present.
+ *
+ * That still leaves a genuine gap, narrower than before but not closed: the
+ * 2000-2012-09-01 floor row is NOT verified, on purpose. The ITA's OWN 2005
+ * page (already cited elsewhere in this ledger) records a 17%->16.5% cut on
+ * 1 September 2005 with a further cut to 16% PLANNED for 2007; secondary
+ * sources additionally describe a 15.5%<->16% round-trip around the 2009
+ * financial crisis. None of those intervening boundaries are dated precisely
+ * enough here to split out, so the floor row states its best-known rate
+ * (16%, confirmed only as the rate immediately before the 2012 rise) rather
+ * than a rate verified back to 2000. This is the one closed row this ledger
+ * cannot currently mark verified honestly, and it is named explicitly in
+ * __tests__/rateLedger rather than silently exempted, so a SECOND such gap
+ * cannot appear unnoticed.
+ *
+ * These figures are asserted in __tests__/rateLedger. The assertions derive
+ * their values from RATE_LEDGER and never read this comment, so they catch the
+ * ledger changing under the paragraph - not the paragraph being edited to
+ * disagree with itself. Change one, change both.
  */
 import { RATE_LEDGER } from './rateLedger.data';
 

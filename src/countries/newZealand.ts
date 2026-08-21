@@ -6,6 +6,8 @@
  *   Filing: 2-monthly (default), monthly (voluntary), 6-monthly (small).
  */
 
+import { toCsv } from '../exportUtils';
+
 import type {
   TaxFilingPlugin,
   FormSection,
@@ -250,7 +252,8 @@ const nzPlugin: TaxFilingPlugin = {
     { id: 'csv', label: 'CSV', mimeType: 'text/csv', fileExtension: 'csv' },
   ],
 
-  async generateExport(v) {
+  async generateExport(v: FieldValues, format: string): Promise<ExportOutput> {
+    if (format === 'csv') return toCsv(v, `GST-NZ-${new Date().toISOString().slice(0, 10)}`);
     return {
       data: JSON.stringify(v, null, 2),
       filename: `GST-NZ-${new Date().toISOString().slice(0, 10)}.json`,

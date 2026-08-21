@@ -7,6 +7,8 @@
  *   All amounts in SGD, 2 decimal places.
  */
 
+import { toCsv } from '../exportUtils';
+
 import type {
   TaxFilingPlugin,
   FormSection,
@@ -302,7 +304,8 @@ const sgPlugin: TaxFilingPlugin = {
     { id: 'csv', label: 'CSV', mimeType: 'text/csv', fileExtension: 'csv' },
   ],
 
-  async generateExport(v) {
+  async generateExport(v: FieldValues, format: string): Promise<ExportOutput> {
+    if (format === 'csv') return toCsv(v, `GST-F5-SG-${new Date().toISOString().slice(0, 10)}`);
     return {
       data: JSON.stringify(v, null, 2),
       filename: `GST-F5-SG-${new Date().toISOString().slice(0, 10)}.json`,
