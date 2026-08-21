@@ -1,7 +1,7 @@
 /**
  * India GSTR-3B Plugin (Monthly Summary Return) - ai2fin.com
  * GST Network (GSTN) - India's Goods and Services Tax
- * Reference: https://www.gst.gov.in/help/helpmodules
+ * Reference: https://www.gst.gov.in/help/returns
  * ARCHITECTURE: India GST has 3 components: IGST (inter-state), CGST + SGST (intra-state).
  *   Standard rate: 18% (9% CGST + 9% SGST, or 18% IGST for inter-state).
  *   Financial year: 1 April to 31 March. Monthly filing mandatory above turnover threshold.
@@ -72,7 +72,7 @@ const inPlugin: TaxFilingPlugin = {
     name: 'GSTN',
     fullName: 'Goods and Services Tax Network',
     portalUrl: 'https://www.gst.gov.in',
-    helpUrl: 'https://www.gst.gov.in/help/helpmodules',
+    helpUrl: 'https://www.gst.gov.in/help/returns',
   },
   taxFamily: 'GST',
   isFullPlugin: true,
