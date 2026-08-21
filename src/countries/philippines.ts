@@ -25,7 +25,7 @@ const phPlugin: TaxFilingPlugin = {
     name: 'BIR',
     fullName: 'Bureau of Internal Revenue',
     portalUrl: 'https://efps.bir.gov.ph',
-    helpUrl: 'https://www.bir.gov.ph/index.php/tax-information/value-added-tax.html',
+    helpUrl: 'https://www.bir.gov.ph/value-added-tax',
   },
   taxFamily: 'VAT',
   isFullPlugin: true,

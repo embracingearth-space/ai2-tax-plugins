@@ -1,7 +1,7 @@
 /**
  * China VAT Return (增值税纳税申报表) - ai2fin.com
  * State Taxation Administration (STA / 国家税务总局)
- * Reference: https://etax.chinatax.gov.cn
+ * Reference: https://www.chinatax.gov.cn
  * ARCHITECTURE: Three tiers — 13% (manufacturing, goods), 9% (transport, construction, agriculture),
  *   6% (services, intangibles). Small-scale taxpayers: 3% (1% temporarily).
  *   FY: Jan-Dec. Monthly filing for general taxpayers, quarterly for small-scale.
@@ -22,7 +22,11 @@ const cnPlugin: TaxFilingPlugin = {
   authority: {
     name: 'STA',
     fullName: 'State Taxation Administration (国家税务总局)',
-    portalUrl: 'https://etax.chinatax.gov.cn',
+    // China files VAT through PROVINCIAL e-tax portals (see getSubJurisdictions),
+    // not one national one — https://etax.chinatax.gov.cn returns 404 (checked in a
+    // real browser, not just a script). The STA site is the authoritative entry
+    // point that routes to the right province. Verified 2026-08-22. embracingearth.space
+    portalUrl: 'https://www.chinatax.gov.cn',
     helpUrl: 'https://www.chinatax.gov.cn',
   },
   taxFamily: 'VAT',
@@ -130,7 +134,7 @@ const cnPlugin: TaxFilingPlugin = {
       mimeType: 'application/json',
     };
   },
-  getPortalSubmissionInfo: () => ({ portalUrl: 'https://etax.chinatax.gov.cn', submissionMethod: 'manual_upload' as const, apiReady: false }),
+  getPortalSubmissionInfo: () => ({ portalUrl: 'https://www.chinatax.gov.cn', submissionMethod: 'manual_upload' as const, apiReady: false }),
   hasSubJurisdictions: () => true,
   getSubJurisdictions: () => [
     { code: 'BJ', name: 'Beijing' }, { code: 'SH', name: 'Shanghai' }, { code: 'GD', name: 'Guangdong' },

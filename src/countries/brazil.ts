@@ -31,7 +31,7 @@ const brPlugin: TaxFilingPlugin = {
     name: 'RFB',
     fullName: 'Receita Federal do Brasil',
     portalUrl: 'https://www.gov.br/receitafederal',
-    helpUrl: 'https://www.gov.br/receitafederal/pt-br/assuntos/orientacao-tributaria/declaracoes-e-demonstrativos/sped-sistema-publico-de-escrituracao-digital/escrituracao-fiscal-digital-efd-contribuicoes',
+    helpUrl: 'https://www.gov.br/receitafederal/pt-br/assuntos/orientacao-tributaria/declaracoes-e-demonstrativos',
   },
   taxFamily: 'HYBRID',
   isFullPlugin: true,

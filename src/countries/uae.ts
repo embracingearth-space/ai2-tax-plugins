@@ -25,7 +25,7 @@ const aePlugin: TaxFilingPlugin = {
     name: 'FTA',
     fullName: 'Federal Tax Authority',
     portalUrl: 'https://tax.gov.ae',
-    helpUrl: 'https://u.ae/en/information-and-services/finance-and-investment/taxation/vat',
+    helpUrl: 'https://tax.gov.ae/en/taxes/vat.aspx',
   },
   taxFamily: 'VAT',
   isFullPlugin: true,

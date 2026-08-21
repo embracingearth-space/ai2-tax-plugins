@@ -1,7 +1,7 @@
 /**
  * Singapore GST Return (Form GST F5) - ai2fin.com
  * Inland Revenue Authority of Singapore (IRAS)
- * Reference: https://www.iras.gov.sg/taxes/goods-services-tax-(gst)/filing-gst/how-to-file-gst-f5-f8
+ * Reference: https://www.iras.gov.sg/taxes/goods-services-tax-(gst)/filing-gst
  * ARCHITECTURE: 16 boxes. GST rate: 9% (from 1 Jan 2024).
  *   Financial year: Jan-Dec (or company chosen). Default quarterly filing.
  *   All amounts in SGD, 2 decimal places.
@@ -32,7 +32,7 @@ const sgPlugin: TaxFilingPlugin = {
     fullName: 'Inland Revenue Authority of Singapore',
     portalUrl: 'https://www.iras.gov.sg',
     helpUrl:
-      'https://www.iras.gov.sg/taxes/goods-services-tax-(gst)/filing-gst/how-to-file-gst-f5-f8',
+      'https://www.iras.gov.sg/taxes/goods-services-tax-(gst)/filing-gst',
   },
   taxFamily: 'GST',
   isFullPlugin: true,

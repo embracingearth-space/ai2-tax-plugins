@@ -55,6 +55,35 @@ PR on overlapping/duplicate effective windows, out-of-range rates, or missing
 provenance. Use `getStandardTaxRate(country, asOf)` / `resolveRateRow(country, asOf)`
 to resolve the rate that applied during a given tax period.
 
+## Authority URLs (`portalUrl` / `helpUrl`)
+
+Every plugin names its tax authority's lodgement portal and guidance page. These rot
+without any code change — agencies reorganise their sites and the old path starts
+returning 404 — so they need periodic re-checking:
+
+```bash
+npm run check:urls
+```
+
+The checker reports; it never edits a URL. It classifies each result three ways, and
+the distinction matters:
+
+- **dead** — 404/410, or a 200 whose page body says "page not found" (a soft 404).
+  Actionable: find the authority's current page and replace it.
+- **login-wall** — redirects to an auth page. Only a defect on a `helpUrl`, which must
+  be publicly readable; a `portalUrl` is *supposed* to require a login to lodge.
+- **inconclusive** — 403 or a timeout. **Not actionable on its own.** Government sites
+  routinely bot-block or geo-fence scripted clients while working fine for a person.
+
+**Always confirm in a real browser before changing a URL.** A plain HTTP client cannot
+tell "blocked" from "broken", and several of these URLs return 403 to a script and 200
+to a browser (canada.ca, aade.gr, myir.ird.govt.nz). Check the page actually covers the
+topic too — a 200 is not enough, as some sites serve a soft-404 or a login redirect with
+a success status.
+
+Known **unverifiable from outside the country** (leave them alone unless you can check
+locally): `nra.bg` (Bulgaria), `cfr.gov.mt` (Malta, Cloudflare), `sat.gob.mx` (Mexico).
+
 ## Adding a country plugin
 
 1. Add implementation under `src/countries/`

@@ -223,7 +223,7 @@ const caItPlugin: TaxFilingPlugin = {
       mimeType: 'application/json',
     };
   },
-  getPortalSubmissionInfo: () => ({ portalUrl: 'https://www.canada.ca/en/revenue-agency/services/e-services/digital-services-individuals/netfile.html', submissionMethod: 'manual_upload' as const, apiReady: false }),
+  getPortalSubmissionInfo: () => ({ portalUrl: 'https://www.canada.ca/en/revenue-agency/services/e-services/digital-services-individuals/netfile-overview.html', submissionMethod: 'manual_upload' as const, apiReady: false }),
   hasSubJurisdictions: () => true,
   getSubJurisdictions: () => CA_PROVINCES,
   supportsCustomFields: () => false,

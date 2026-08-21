@@ -35,7 +35,7 @@ const nzPlugin: TaxFilingPlugin = {
     fullName: 'Inland Revenue Department',
     portalUrl: 'https://www.ird.govt.nz',
     helpUrl:
-      'https://www.ird.govt.nz/gst/filing-and-paying-gst-and-provisional-tax/filing-gst-returns',
+      'https://www.ird.govt.nz/gst',
   },
   taxFamily: 'GST',
   isFullPlugin: true,
