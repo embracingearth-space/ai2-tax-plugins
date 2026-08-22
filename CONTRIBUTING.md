@@ -82,6 +82,16 @@ to a browser (canada.ca, aade.gr, myir.ird.govt.nz). Check the page actually cov
 topic too — a 200 is not enough, as some sites serve a soft-404 or a login redirect with
 a success status.
 
+Some sites answer **200 for every path**. `bir.gov.ph` serves its SPA shell for any URL
+and renders a blank body for routes that do not exist, so `/vat` and `/tax-information`
+look alive to any checker. Judge by what the page actually *renders*, not by its status:
+an empty body is a broken page, and shipping one is worse than shipping no link at all —
+a 404 at least tells the reader the page is gone.
+
+If an authority has genuinely removed a guidance page and published nothing equivalent,
+**omit `helpUrl`** (it is optional) rather than substituting a homepage. The app labels
+that link as guidance on the return; a homepage under that label is a false promise.
+
 When replacing a dead URL, find the **equivalent page**, not merely a page that loads.
 An authority that reorganises usually keeps the same document at a new path (IRD moved
 `filing-and-paying-gst-and-provisional-tax` → `filing-and-paying-gst-and-refunds`), so
