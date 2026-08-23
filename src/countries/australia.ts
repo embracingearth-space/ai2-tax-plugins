@@ -28,7 +28,11 @@ import type {
   ExportFormat,
   ExportOutput,
   TaxTreatmentDefinition,
+  AnnualReportDefinition,
 } from '../types';
+import type { DepreciationRules } from '../depreciation';
+import AU_DEPRECIATION_RULES from './australiaDepreciation';
+import AU_ANNUAL_REPORTS from './australiaAnnualReports';
 
 const AU_GST_RATE = 0.1;
 
@@ -1148,6 +1152,19 @@ const australiaPlugin: TaxFilingPlugin = {
         defaultFor: ['transfers', 'loan_principal', 'owner_drawings', 'superannuation', 'dividends', 'tax_payments'],
       },
     ];
+  },
+
+  /**
+   * Capital allowances. The general rules (prime cost, diminishing value) plus
+   * the small business concessions (instant asset write-off, general pool).
+   */
+  getDepreciationRules(): DepreciationRules {
+    return AU_DEPRECIATION_RULES;
+  },
+
+  /** The TPAR — the one annual report AU lodges outside the BAS. */
+  getAnnualReports(): AnnualReportDefinition[] {
+    return [...AU_ANNUAL_REPORTS];
   },
 };
 

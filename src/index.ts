@@ -9,6 +9,8 @@
  * - Factory: createAdaptiveGenericPlugin (for building new plugins)
  * - EU Factory: createEUPlugin (for adding EU member states)
  * - Treatments: GENERIC_TREATMENTS, getTreatmentsForPlugin (transaction → box mapping)
+ * - Depreciation: GENERIC_DEPRECIATION_RULES, getDepreciationRules (capital allowances)
+ * - Annual reports: AnnualReportDefinition (AU TPAR)
  */
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -36,6 +38,9 @@ export type {
   CanonicalTreatmentCode,
   TreatmentSide,
   TaxTreatmentDefinition,
+  AnnualReportColumnType,
+  AnnualReportColumn,
+  AnnualReportDefinition,
 } from './types';
 
 // ─── Tax treatments (transaction → box mapping catalogue) ────────────────────
@@ -47,6 +52,42 @@ export {
   getTreatmentDefinition,
   resolveTreatmentRate,
 } from './treatments';
+
+// ─── Depreciation / capital allowances ───────────────────────────────────────
+export {
+  GENERIC_DEPRECIATION_RULES,
+  getDepreciationRules,
+  computeDeclineInValue,
+  computeBalancingAdjustment,
+  DV_RATE_MULTIPLIER,
+  DV_RATE_MULTIPLIER_PRE_10_MAY_2006,
+} from './depreciation';
+
+export type {
+  DepreciationMethod,
+  DepreciationRules,
+  DeclineInValueInput,
+  DeclineInValueOutcome,
+  EffectiveLifeCategory,
+  InstantAssetWriteOffInfo,
+  BalancingAdjustmentInput,
+  BalancingAdjustmentOutcome,
+} from './depreciation';
+
+// Australia — the only jurisdiction here with its own capital-allowance rules.
+export {
+  AU_DEPRECIATION_RULES,
+  AU_EFFECTIVE_LIFE_CATEGORIES,
+  AU_EFFECTIVE_LIFE_DETERMINATION,
+  AU_INSTANT_ASSET_WRITE_OFF_ROWS,
+  AU_SMALL_BUSINESS_POOL_RATES,
+  AU_DEPRECIATION_AUTHORITY_URLS,
+  auInstantAssetWriteOff,
+  auSmallBusinessPoolWriteOff,
+} from './countries/australiaDepreciation';
+
+// ─── Annual reports (lodged separately from the activity statement) ──────────
+export { AU_TPAR, AU_ANNUAL_REPORTS, AU_TPRS_SERVICES, tparDueDate } from './countries/australiaAnnualReports';
 
 // ─── Registry ────────────────────────────────────────────────────────────────
 export {
