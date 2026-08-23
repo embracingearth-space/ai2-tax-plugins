@@ -46,6 +46,7 @@ describe('IE depreciation — regime and constants', () => {
       'inUseAtPeriodEnd',
       'isCar',
       'co2GPerKm',
+      'expenditureIncurredOn',
       'isCommercialVehicle',
       'isEnergyEfficientSeai',
     ]);
@@ -82,50 +83,128 @@ describe('IE wear and tear — 12.5% of allowable cost, straight line', () => {
 
 // ─── The car cap by CO₂ band ────────────────────────────────────────────────
 
-describe('IE cars — the €24,000 specified limit by CO₂ band', () => {
+describe('IE cars — the €24,000 specified amount by CO₂ category (s.380L TCA 1997)', () => {
   it('a €48,000 car at 120 g/km is deemed €24,000 → €3,000 a year', () => {
     const cost = ieAllowableCost({ cost: 48000, isCar: true, co2GPerKm: 120 });
-    expect(cost).toMatchObject({ allowableCost: 24000, band: 'A-C', capApplied: true, verified: true });
+    expect(cost).toMatchObject({
+      allowableCost: 24000,
+      band: 'A',
+      regime: 'pre_2027',
+      capApplied: true,
+      verified: true,
+    });
     expect(ieWearAndTear({ allowableCost: cost.allowableCost, inUseAtPeriodEnd: true }).allowance).toBe(3000);
   });
 
-  it('the A-C band deems €24,000 in BOTH directions — a cheaper car claims on €24,000 too', () => {
+  it('the full-limit rung deems €24,000 in BOTH directions — a cheaper car claims on €24,000 too', () => {
     const cheap = ieAllowableCost({ cost: 18000, isCar: true, co2GPerKm: 100 });
     expect(cheap.allowableCost).toBe(24000);
     expect(cheap.capApplied).toBe(true);
   });
 
-  it('a €48,000 car at 160 g/km gets the lower of half the limit and half the cost → €1,500 a year', () => {
-    const cost = ieAllowableCost({ cost: 48000, isCar: true, co2GPerKm: 160 });
-    expect(cost).toMatchObject({ allowableCost: 12000, band: 'D-E', capApplied: true });
+  it('Category B (up to 140 g/km) still gets the full €24,000 before 2027', () => {
+    const cost = ieAllowableCost({ cost: 48000, isCar: true, co2GPerKm: 135 });
+    expect(cost).toMatchObject({ allowableCost: 24000, band: 'B', regime: 'pre_2027' });
+  });
+
+  it('Category C (141–155 g/km) gets the lesser of €12,000 and half the cost → €1,500 a year', () => {
+    const cost = ieAllowableCost({ cost: 48000, isCar: true, co2GPerKm: 150 });
+    expect(cost).toMatchObject({ allowableCost: 12000, band: 'C', capApplied: true });
     expect(ieWearAndTear({ allowableCost: cost.allowableCost, inUseAtPeriodEnd: true }).allowance).toBe(1500);
-    // Half the cost wins where the car is cheap: €20,000 at 160 g/km → €10,000.
-    expect(ieAllowableCost({ cost: 20000, isCar: true, co2GPerKm: 160 }).allowableCost).toBe(10000);
+    // Half the cost wins where the car is cheap: €20,000 at 150 g/km → €10,000.
+    expect(ieAllowableCost({ cost: 20000, isCar: true, co2GPerKm: 150 }).allowableCost).toBe(10000);
   });
 
-  it('over 190 g/km gets nothing', () => {
-    const cost = ieAllowableCost({ cost: 48000, isCar: true, co2GPerKm: 200 });
-    expect(cost).toMatchObject({ allowableCost: 0, band: 'F-G' });
+  it('over 155 g/km gets nothing — a 160 g/km car is Category D and claims zero', () => {
+    const cost = ieAllowableCost({ cost: 48000, isCar: true, co2GPerKm: 160 });
+    expect(cost).toMatchObject({ allowableCost: 0, band: 'D' });
     expect(ieWearAndTear({ allowableCost: cost.allowableCost, inUseAtPeriodEnd: true }).allowance).toBe(0);
+    expect(ieAllowableCost({ cost: 48000, isCar: true, co2GPerKm: 180 })).toMatchObject({
+      allowableCost: 0,
+      band: 'E',
+    });
+    expect(ieAllowableCost({ cost: 48000, isCar: true, co2GPerKm: 200 })).toMatchObject({
+      allowableCost: 0,
+      band: 'F',
+    });
   });
 
-  it('no CO₂ figure on record is Category G, with the manual’s treatment', () => {
+  it('no CO₂ figure on record is deemed Category F and gets nothing', () => {
     const unknown = ieAllowableCost({ cost: 30000, isCar: true });
-    expect(unknown).toMatchObject({ allowableCost: 0, band: 'F-G', verified: true });
-    expect(unknown.note).toMatch(/Category G/);
+    expect(unknown).toMatchObject({ allowableCost: 0, band: 'F', verified: true });
+    expect(unknown.note).toMatch(/Category F/);
     expect(ieAllowableCost({ cost: 30000, isCar: true, co2GPerKm: null }).allowableCost).toBe(0);
   });
 
-  it('the band boundaries are 155 and 190 inclusive', () => {
-    expect(ieAllowableCost({ cost: 48000, isCar: true, co2GPerKm: 155 }).band).toBe('A-C');
-    expect(ieAllowableCost({ cost: 48000, isCar: true, co2GPerKm: 156 }).band).toBe('D-E');
-    expect(ieAllowableCost({ cost: 48000, isCar: true, co2GPerKm: 190 }).band).toBe('D-E');
-    expect(ieAllowableCost({ cost: 48000, isCar: true, co2GPerKm: 191 }).band).toBe('F-G');
+  // The boundaries CodeRabbit asked for on PR #36: the pre-2027 rungs turn at
+  // 140/141 (full → half) and at 155/156 (half → nil).
+  it('the pre-2027 rungs turn at 140/141 and 155/156', () => {
+    expect(ieAllowableCost({ cost: 48000, isCar: true, co2GPerKm: 140 })).toMatchObject({
+      band: 'B',
+      allowableCost: 24000,
+    });
+    expect(ieAllowableCost({ cost: 48000, isCar: true, co2GPerKm: 141 })).toMatchObject({
+      band: 'C',
+      allowableCost: 12000,
+    });
+    expect(ieAllowableCost({ cost: 48000, isCar: true, co2GPerKm: 155 })).toMatchObject({
+      band: 'C',
+      allowableCost: 12000,
+    });
+    expect(ieAllowableCost({ cost: 48000, isCar: true, co2GPerKm: 156 })).toMatchObject({
+      band: 'D',
+      allowableCost: 0,
+    });
+  });
+
+  it('the category boundaries themselves are 120/140/155/170/190, inclusive', () => {
+    const band = (co2: number) => ieAllowableCost({ cost: 48000, isCar: true, co2GPerKm: co2 }).band;
+    expect([band(120), band(121)]).toEqual(['A', 'B']);
+    expect([band(140), band(141)]).toEqual(['B', 'C']);
+    expect([band(155), band(156)]).toEqual(['C', 'D']);
+    expect([band(170), band(171)]).toEqual(['D', 'E']);
+    expect([band(190), band(191)]).toEqual(['E', 'F']);
+  });
+
+  // s.33 Finance Act 2024: from 1 January 2027 every rung moves down one category.
+  it('expenditure incurred from 1 January 2027 moves each rung down a category', () => {
+    const from2027 = (co2: number) =>
+      ieAllowableCost({
+        cost: 48000,
+        isCar: true,
+        co2GPerKm: co2,
+        expenditureIncurredOn: '2027-01-01',
+      });
+    expect(from2027(120)).toMatchObject({ band: 'A', regime: 'from_2027', allowableCost: 24000 });
+    expect(from2027(121)).toMatchObject({ band: 'B', regime: 'from_2027', allowableCost: 12000 });
+    expect(from2027(140)).toMatchObject({ band: 'B', regime: 'from_2027', allowableCost: 12000 });
+    expect(from2027(141)).toMatchObject({ band: 'C', regime: 'from_2027', allowableCost: 0 });
+    // Half the cost still wins for a cheap car on the middle rung.
+    expect(
+      ieAllowableCost({ cost: 20000, isCar: true, co2GPerKm: 130, expenditureIncurredOn: '2027-01-01' })
+        .allowableCost,
+    ).toBe(10000);
+  });
+
+  it('the day before the change still uses the pre-2027 rungs, and an absent date defaults to them', () => {
+    expect(
+      ieAllowableCost({ cost: 48000, isCar: true, co2GPerKm: 135, expenditureIncurredOn: '2026-12-31' }),
+    ).toMatchObject({ regime: 'pre_2027', allowableCost: 24000 });
+    expect(ieAllowableCost({ cost: 48000, isCar: true, co2GPerKm: 135 }).regime).toBe('pre_2027');
+    expect(
+      ieAllowableCost({ cost: 48000, isCar: true, co2GPerKm: 135, expenditureIncurredOn: 'not a date' })
+        .regime,
+    ).toBe('pre_2027');
   });
 
   it('commercial vehicles and ordinary plant are uncapped', () => {
     expect(ieAllowableCost({ cost: 48000, isCommercialVehicle: true }).allowableCost).toBe(48000);
-    expect(ieAllowableCost({ cost: 25000 })).toMatchObject({ allowableCost: 25000, band: null, capApplied: false });
+    expect(ieAllowableCost({ cost: 25000 })).toMatchObject({
+      allowableCost: 25000,
+      band: null,
+      regime: null,
+      capApplied: false,
+    });
   });
 });
 

@@ -930,11 +930,22 @@ export interface WriteOffElectiveRules extends DepreciationRules {
 // ─── Straight line, fixed rate (Ireland) ────────────────────────────────────
 
 /**
- * Revenue's CO₂ bands for the car cost cap, VRT-category style: A–C is at or
- * under 155 g/km, D–E is 156–190, F–G is over 190 — and a car with no CO₂
- * figure on record is treated as Category G.
+ * The car category by CO₂ emissions, s.380K TCA 1997 as amended by s.14
+ * Finance Act 2020: A is at or under 120 g/km, B is 121–140, C is 141–155,
+ * D is 156–170, E is 171–190, F is over 190. These six replaced the earlier
+ * A–G categories for expenditure incurred on or after 1 January 2021. A car
+ * whose CO₂ emissions are not documented is deemed to be in Category F.
  */
-export type IeCo2Band = 'A-C' | 'D-E' | 'F-G';
+export type IeCo2Band = 'A' | 'B' | 'C' | 'D' | 'E' | 'F';
+
+/**
+ * Which set of emissions-based limits applies, s.380L TCA 1997. The limits
+ * turn on WHEN THE EXPENDITURE WAS INCURRED, not on the accounting period:
+ * `pre_2027` is the regime as amended by Finance Acts 2019 and 2020, and
+ * `from_2027` is s.33 Finance Act 2024's tighter thresholds, which apply to
+ * expenditure incurred from 1 January 2027.
+ */
+export type IeCarLimitRegime = 'pre_2027' | 'from_2027';
 
 /**
  * What the Irish rules need to know about an asset. Everything beyond `cost`
@@ -945,20 +956,29 @@ export interface IeAssetInput {
   cost: number;
   /** A passenger car — the specified-limit cap by CO₂ band applies. */
   isCar?: boolean | null;
-  /** Official CO₂ figure in g/km. Without it a car falls into Category G and gets nothing. */
+  /** Official CO₂ figure in g/km. Without it a car is deemed Category F and gets nothing. */
   co2GPerKm?: number | null;
   /** A van, lorry or other commercial vehicle: no cost cap. */
   isCommercialVehicle?: boolean | null;
   /** On the SEAI Triple E register: 100% accelerated capital allowance in year one. */
   isEnergyEfficientSeai?: boolean | null;
+  /**
+   * When the expenditure on the car was incurred. s.380L keys the emissions
+   * limits on this date, and s.33 Finance Act 2024 tightens them for
+   * expenditure incurred from 1 January 2027. Omitted, the pre-2027 limits
+   * apply — the regime in force for every euro spent up to 31 December 2026.
+   */
+  expenditureIncurredOn?: Date | string | null;
 }
 
 export interface IeAllowableCostOutcome {
   /** What the 12.5% is applied to — the deemed cost for a banded car, the net cost otherwise. */
   allowableCost: number;
-  /** The CO₂ band a car fell into, or null for a non-car. */
+  /** The CO₂ category a car fell into, or null for a non-car. */
   band: IeCo2Band | null;
-  /** Whether the specified limit changed the figure (in either direction — A–C deems €24,000 even for a cheaper car). */
+  /** Which set of s.380L limits was applied, or null for a non-car. */
+  regime: IeCarLimitRegime | null;
+  /** Whether the specified limit changed the figure (in either direction — the top band deems €24,000 even for a cheaper car). */
   capApplied: boolean;
   verified: boolean;
   note: string;

@@ -305,12 +305,24 @@ working untouched.
   filled in must not claim a year's allowance — and a period shorter than 12 months
   pro-rates by months (nine months of a €25,000 machine is €2,343.75). A days-based input
   is refused: Ireland shortens the PERIOD, not the hold.
-- `allowableCost(asset)` — the car cost cap from Tax and Duty Manual Part 11-00-01, against
-  the €24,000 specified limit by CO₂ band: up to 155 g/km (categories A–C) the car is
-  DEEMED to cost €24,000 whatever it actually cost, in both directions; 156–190 g/km (D–E)
-  gets the lower of half the limit and half the cost; over 190 g/km (F–G) gets nothing; and
-  a car with no CO₂ figure on record is treated as Category G. Commercial vehicles are
-  uncapped.
+- `allowableCost(asset)` — the car cost cap from ss.380K and 380L TCA 1997 (Part 11C),
+  against the €24,000 specified amount by CO₂ category. The six categories substituted by
+  s.14 Finance Act 2020 for expenditure incurred on or after 1 January 2021 are A up to
+  120 g/km, B 121–140, C 141–155, D 156–170, E 171–190 and F above 190. For expenditure
+  incurred BEFORE 1 January 2027: categories A and B are DEEMED to cost €24,000 whatever
+  the car actually cost, in both directions; category C gets the lesser of €12,000 and half
+  the cost; D, E and F get nothing. For expenditure incurred FROM 1 January 2027, s.33
+  Finance Act 2024 moves each rung down a category — €24,000 for A only, the lesser of
+  €12,000 and half the cost for B, nothing for C through F — so `IeAssetInput` takes
+  `expenditureIncurredOn` and the outcome reports which `regime` it applied. A car whose
+  emissions cannot be verified is deemed Category F and gets nothing. Commercial vehicles
+  are uncapped.
+- SOURCE CORRECTION: an earlier draft of this module took the bands from Tax and Duty
+  Manual Part 11-00-01, which is still published but is stamped "Document last reviewed
+  November 2019" and describes the seven-category A–G regime with 155 g/km and 190 g/km
+  thresholds that s.19 Finance Act 2019 and s.14 Finance Act 2020 superseded. The rules and
+  the `readMore` link now follow the Notes for Guidance to Part 11C (Finance Act 2025
+  Edition) instead.
 - The accelerated capital allowance — 100% in year one for energy-efficient equipment on
   the SEAI Triple E register — ships as the one concession, gated on the
   `isEnergyEfficientSeai` field, and `immediate_writeoff` carries its arithmetic. No

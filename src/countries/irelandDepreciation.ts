@@ -7,7 +7,8 @@
  * allowable cost a year, straight line, over 8 years — the rate for capital
  * expenditure incurred since 4 December 2002. Everything below was read from
  * Revenue's "Capital allowances and deductions" page (published 25 Sep 2025)
- * and the Tax and Duty Manual Part 11-00-01 on cars (2026-08-24):
+ * and the Notes for Guidance to Part 11C TCA 1997, Finance Act 2025 Edition
+ * (checked 2026-08-24, UTC):
  *
  *   • The allowance runs only where the asset is IN USE FOR THE TRADE AT THE
  *     END of the accounting period, and is reduced for a period shorter than
@@ -16,13 +17,26 @@
  *     not claim a year's allowance.
  *   • The cost is the NET cost — after grants and any VAT that can be
  *     reclaimed.
- *   • CARS are capped by CO₂ band against the specified limit of €24,000
- *     (TDM Part 11-00-01): at or under 155 g/km (categories A–C) the deemed
- *     cost is €24,000 REGARDLESS of the actual cost — even a cheaper car;
- *     156–190 g/km (D–E) gets the lower of half the specified limit and half
- *     the actual cost; over 190 g/km (F–G) gets nothing. A car with no CO₂
- *     figure on record is treated as Category G. Commercial vehicles are not
+ *   • CARS are capped by CO₂ category against the specified amount of €24,000
+ *     (ss.380K and 380L TCA 1997, Part 11C). The categories, as amended by
+ *     s.14 Finance Act 2020 for expenditure incurred on or after 1 January
+ *     2021, are A up to 120 g/km, B 121–140, C 141–155, D 156–170, E 171–190
+ *     and F over 190. For expenditure incurred BEFORE 1 January 2027 the
+ *     allowable cost is €24,000 for categories A and B REGARDLESS of the
+ *     actual cost — even a cheaper car; the lesser of €12,000 and half the
+ *     cost for category C; and nil for D, E and F. For expenditure incurred
+ *     FROM 1 January 2027, s.33 Finance Act 2024 moves each rung down: €24,000
+ *     for category A only, the lesser of €12,000 and half the cost for B, and
+ *     nil for C, D, E and F. A car whose emissions Revenue cannot verify is
+ *     deemed to be in Category F and gets nothing. Commercial vehicles are not
  *     capped (Part 11-00-03).
+ *
+ *     NOTE ON SOURCES: Tax and Duty Manual Part 11-00-01 still describes the
+ *     SEVEN-category A–G regime with 155 g/km and 190 g/km thresholds, but its
+ *     cover is stamped "Document last reviewed November 2019" — it predates
+ *     the commencement of s.19 Finance Act 2019 and s.14 Finance Act 2020.
+ *     The statute as amended governs, so the categories above come from
+ *     Part 11C, not from that manual.
  *   • The ACCELERATED CAPITAL ALLOWANCE gives 100% in year one for
  *     energy-efficient equipment on the SEAI Triple E register (also gas
  *     vehicles and refuelling equipment, and equipment in an employee crèche
@@ -54,6 +68,8 @@ import {
   type FirstYearConcession,
   type IeAllowableCostOutcome,
   type IeAssetInput,
+  type IeCarLimitRegime,
+  type IeCo2Band,
   type IeWearAndTearInput,
   type IeWearAndTearOutcome,
   type InstantAssetWriteOffInfo,
@@ -62,19 +78,32 @@ import {
 
 const REVENUE_CAPITAL_ALLOWANCES =
   'https://www.revenue.ie/en/companies-and-charities/corporation-tax-for-companies/corporation-tax/capital-allowances-and-deductions.aspx';
-const REVENUE_TDM_CARS =
-  'https://www.revenue.ie/en/tax-professionals/tdm/income-tax-capital-gains-tax-corporation-tax/part-11/11-00-01.pdf';
+const REVENUE_NOTES_PART_11C =
+  'https://www.revenue.ie/en/tax-professionals/documents/notes-for-guidance/tca/part11c.pdf';
 
 /** s.284 TCA 1997: 12.5% a year for expenditure incurred since 4 December 2002. */
 export const IE_WEAR_AND_TEAR_RATE = 0.125;
 /** The write-off period the 12.5% implies. */
 export const IE_WEAR_AND_TEAR_YEARS = 8;
-/** The specified limit for cars (TDM Part 11-00-01). */
+/** The "specified amount" for cars, s.380K(4) TCA 1997. */
 export const IE_CAR_SPECIFIED_LIMIT = 24000;
-/** Category A–C: CO₂ emissions up to and including this figure, in g/km. */
-export const IE_CAR_CO2_BAND_AC_MAX = 155;
-/** Category D–E: CO₂ emissions up to and including this figure (and above the A–C line). */
-export const IE_CAR_CO2_BAND_DE_MAX = 190;
+/** Half the specified amount — the ceiling for the middle category, s.380L(3). */
+export const IE_CAR_HALF_SPECIFIED_LIMIT = IE_CAR_SPECIFIED_LIMIT / 2;
+/** Category A: CO₂ emissions up to and including this figure, in g/km (s.380K, FA 2020). */
+export const IE_CAR_CO2_CATEGORY_A_MAX = 120;
+/** Category B: up to and including this figure, above the Category A line. */
+export const IE_CAR_CO2_CATEGORY_B_MAX = 140;
+/** Category C: up to and including this figure, above the Category B line. */
+export const IE_CAR_CO2_CATEGORY_C_MAX = 155;
+/** Category D: up to and including this figure, above the Category C line. */
+export const IE_CAR_CO2_CATEGORY_D_MAX = 170;
+/** Category E: up to and including this figure, above the Category D line. Category F is anything higher. */
+export const IE_CAR_CO2_CATEGORY_E_MAX = 190;
+/**
+ * The day s.33 Finance Act 2024's tighter emissions limits bite. Expenditure
+ * incurred on or after this date uses the `from_2027` rungs.
+ */
+export const IE_CAR_LIMIT_REGIME_CHANGE_DATE = '2027-01-01';
 
 /** Round to whole cents. */
 function toCents(value: number): number {
@@ -84,10 +113,68 @@ function toCents(value: number): number {
 // ─── Allowable cost — the car cap by CO₂ band ───────────────────────────────
 
 /**
+ * A car's CO₂ category, s.380K(2) TCA 1997 as amended by s.14 Finance Act
+ * 2020. Six categories, A to F, for expenditure incurred on or after
+ * 1 January 2021 — the earlier seven-category A–G table is superseded.
+ */
+export function ieCarCo2Category(co2GPerKm: number): IeCo2Band {
+  const grams = Number(co2GPerKm);
+  if (grams <= IE_CAR_CO2_CATEGORY_A_MAX) return 'A';
+  if (grams <= IE_CAR_CO2_CATEGORY_B_MAX) return 'B';
+  if (grams <= IE_CAR_CO2_CATEGORY_C_MAX) return 'C';
+  if (grams <= IE_CAR_CO2_CATEGORY_D_MAX) return 'D';
+  if (grams <= IE_CAR_CO2_CATEGORY_E_MAX) return 'E';
+  return 'F';
+}
+
+/**
+ * Which set of s.380L limits applies to expenditure incurred on a date. The
+ * cut is 1 January 2027 (s.33 Finance Act 2024); an unrecorded or unparseable
+ * date falls to `pre_2027`, the regime in force for every euro spent up to
+ * 31 December 2026.
+ */
+export function ieCarLimitRegime(expenditureIncurredOn?: Date | string | null): IeCarLimitRegime {
+  if (expenditureIncurredOn == null) return 'pre_2027';
+  const when =
+    expenditureIncurredOn instanceof Date
+      ? expenditureIncurredOn
+      : new Date(String(expenditureIncurredOn));
+  if (Number.isNaN(when.getTime())) return 'pre_2027';
+  return when >= new Date(`${IE_CAR_LIMIT_REGIME_CHANGE_DATE}T00:00:00Z`) ? 'from_2027' : 'pre_2027';
+}
+
+/** Which category gets the full specified amount, and which gets half, in each regime. */
+const IE_CAR_LIMIT_RUNGS: Record<IeCarLimitRegime, { full: IeCo2Band; half: IeCo2Band }> = {
+  pre_2027: { full: 'B', half: 'C' },
+  from_2027: { full: 'A', half: 'B' },
+};
+
+const IE_CATEGORY_ORDER: IeCo2Band[] = ['A', 'B', 'C', 'D', 'E', 'F'];
+
+/** The g/km ceiling of a category, for the note. Category F has none. */
+const IE_CATEGORY_CEILING: Record<IeCo2Band, number | null> = {
+  A: IE_CAR_CO2_CATEGORY_A_MAX,
+  B: IE_CAR_CO2_CATEGORY_B_MAX,
+  C: IE_CAR_CO2_CATEGORY_C_MAX,
+  D: IE_CAR_CO2_CATEGORY_D_MAX,
+  E: IE_CAR_CO2_CATEGORY_E_MAX,
+  F: null,
+};
+
+function ieRegimeNote(regime: IeCarLimitRegime): string {
+  return regime === 'from_2027'
+    ? 'the limits for expenditure incurred from 1 January 2027 (s.33 Finance Act 2024)'
+    : 'the limits for expenditure incurred before 1 January 2027';
+}
+
+/**
  * What the 12.5% is applied to. For anything that is not a car this is simply
- * the net cost. For a car it is the banded figure from TDM Part 11-00-01 —
- * and the A–C band DEEMS €24,000 in both directions, so a €18,000 low-emission
+ * the net cost. For a car it is the figure s.380L deems it to have cost — and
+ * the top rung DEEMS €24,000 in both directions, so an €18,000 low-emission
  * car claims on €24,000 and a €48,000 one claims on €24,000 too.
+ *
+ * Which rung a category sits on moves on 1 January 2027, so the answer depends
+ * on `asset.expenditureIncurredOn` as well as the emissions.
  */
 export function ieAllowableCost(asset: IeAssetInput): IeAllowableCostOutcome {
   const cost = Math.max(0, Number(asset.cost) || 0);
@@ -95,6 +182,7 @@ export function ieAllowableCost(asset: IeAssetInput): IeAllowableCostOutcome {
     return {
       allowableCost: cost,
       band: null,
+      regime: null,
       capApplied: false,
       verified: true,
       note:
@@ -105,50 +193,67 @@ export function ieAllowableCost(asset: IeAssetInput): IeAllowableCostOutcome {
             'reclaimable VAT.',
     };
   }
+  const regime = ieCarLimitRegime(asset.expenditureIncurredOn);
   const co2 = asset.co2GPerKm;
   if (co2 == null || !Number.isFinite(Number(co2))) {
     return {
       allowableCost: 0,
-      band: 'F-G',
+      band: 'F',
+      regime,
       capApplied: true,
       verified: true,
       note:
-        'A car without confirmation of its CO₂ emissions is treated as belonging to Category G, ' +
-        'so no wear and tear allowance is due. Record the official CO₂ figure to use the banded ' +
-        'limits.',
+        'A car whose CO₂ emissions cannot be verified is deemed to be in Category F, so no wear ' +
+        'and tear allowance is due. Record the official CO₂ figure from the vehicle registration ' +
+        'certificate to use the banded limits.',
     };
   }
-  const grams = Number(co2);
-  if (grams <= IE_CAR_CO2_BAND_AC_MAX) {
+  const band = ieCarCo2Category(Number(co2));
+  const rungs = IE_CAR_LIMIT_RUNGS[regime];
+  const rank = IE_CATEGORY_ORDER.indexOf(band);
+  const ceiling = IE_CATEGORY_CEILING[band];
+  const range =
+    ceiling == null
+      ? `over ${IE_CAR_CO2_CATEGORY_E_MAX} g/km`
+      : rank === 0
+        ? `up to ${ceiling} g/km`
+        : `${(IE_CATEGORY_CEILING[IE_CATEGORY_ORDER[rank - 1]] as number) + 1}–${ceiling} g/km`;
+
+  if (rank <= IE_CATEGORY_ORDER.indexOf(rungs.full)) {
     return {
       allowableCost: IE_CAR_SPECIFIED_LIMIT,
-      band: 'A-C',
+      band,
+      regime,
       capApplied: cost !== IE_CAR_SPECIFIED_LIMIT,
       verified: true,
       note:
-        `Category A–C (up to ${IE_CAR_CO2_BAND_AC_MAX} g/km): the car is deemed to cost the ` +
-        `specified limit of €${IE_CAR_SPECIFIED_LIMIT.toLocaleString('en-IE')}, whatever it ` +
-        'actually cost.',
+        `Category ${band} (${range}) under ${ieRegimeNote(regime)}: the car is deemed to cost ` +
+        `the specified amount of €${IE_CAR_SPECIFIED_LIMIT.toLocaleString('en-IE')}, whatever ` +
+        'it actually cost.',
     };
   }
-  if (grams <= IE_CAR_CO2_BAND_DE_MAX) {
-    const allowable = Math.min(toCents(IE_CAR_SPECIFIED_LIMIT / 2), toCents(cost / 2));
+  if (band === rungs.half) {
     return {
-      allowableCost: allowable,
-      band: 'D-E',
+      allowableCost: Math.min(IE_CAR_HALF_SPECIFIED_LIMIT, toCents(cost / 2)),
+      band,
+      regime,
       capApplied: true,
       verified: true,
       note:
-        `Category D–E (${IE_CAR_CO2_BAND_AC_MAX + 1}–${IE_CAR_CO2_BAND_DE_MAX} g/km): the ` +
-        'allowable cost is the lower of half the specified limit and half the actual cost.',
+        `Category ${band} (${range}) under ${ieRegimeNote(regime)}: the allowable cost is the ` +
+        `lesser of €${IE_CAR_HALF_SPECIFIED_LIMIT.toLocaleString('en-IE')} and half the actual ` +
+        'cost.',
     };
   }
   return {
     allowableCost: 0,
-    band: 'F-G',
+    band,
+    regime,
     capApplied: true,
     verified: true,
-    note: `Category F–G (over ${IE_CAR_CO2_BAND_DE_MAX} g/km): no wear and tear allowance is due.`,
+    note:
+      `Category ${band} (${range}) under ${ieRegimeNote(regime)}: no wear and tear allowance ` +
+      'is due.',
   };
 }
 
@@ -222,13 +327,16 @@ const IE_EXPLAINER: DepreciationExplainer = {
     'of the cost a year, the same amount for 8 years.',
   whenItApplies:
     'Assets in use for the trade at the end of the accounting period, on the net cost after ' +
-    'grants and any VAT you can reclaim. Cars are capped by CO₂ band against the €24,000 ' +
-    'specified limit — the highest-emission band gets nothing — while commercial vehicles are ' +
-    'uncapped. Energy-efficient equipment on the SEAI Triple E register can instead claim 100% ' +
-    'in year one under the accelerated capital allowance.',
+    'grants and any VAT you can reclaim. Cars are capped by CO₂ category against the €24,000 ' +
+    'specified amount — a car up to 140 g/km is deemed to cost €24,000, 141 to 155 g/km gets ' +
+    'the lesser of €12,000 and half the cost, and anything higher gets nothing — while ' +
+    'commercial vehicles are uncapped. Spend on a car from 1 January 2027 and each rung moves ' +
+    'down a category: only 120 g/km and under keeps the full €24,000. Energy-efficient ' +
+    'equipment on the SEAI Triple E register can instead claim 100% in year one under the ' +
+    'accelerated capital allowance.',
   howItWorks: [
-    'Record the net cost — after grants and reclaimable VAT — and, for a car, its official CO₂ figure.',
-    'Work out the allowable cost: the net cost for most assets; for a car, the CO₂-banded figure against the €24,000 specified limit.',
+    'Record the net cost — after grants and reclaimable VAT — and, for a car, its official CO₂ figure and the date you incurred the expenditure.',
+    'Work out the allowable cost: the net cost for most assets; for a car, the CO₂-banded figure against the €24,000 specified amount.',
     'Claim 12.5% of the allowable cost each year for 8 years, reduced for an accounting period shorter than 12 months — and only where the asset is still in use for the trade at the period end.',
     'The tax written down value is the allowable cost less what you have claimed; a disposal triggers a balancing allowance or charge against it.',
   ],
@@ -239,8 +347,8 @@ const IE_EXPLAINER: DepreciationExplainer = {
       authority: 'Revenue',
     },
     {
-      label: 'Tax and Duty Manual Part 11-00-01 — cars: capital allowances and lease-hire payments',
-      url: REVENUE_TDM_CARS,
+      label: 'Notes for Guidance — Part 11C: emissions-based limits for certain road vehicles',
+      url: REVENUE_NOTES_PART_11C,
       authority: 'Revenue',
     },
   ],
@@ -269,7 +377,7 @@ const IE_EXTRA_ASSET_FIELDS: AssetFieldSpec[] = [
     label: 'Passenger car',
     type: 'boolean',
     required: false,
-    help: 'Cars are capped by CO₂ band against the €24,000 specified limit.',
+    help: 'Cars are capped by CO₂ category against the €24,000 specified amount.',
   },
   {
     key: 'co2GPerKm',
@@ -277,9 +385,19 @@ const IE_EXTRA_ASSET_FIELDS: AssetFieldSpec[] = [
     type: 'number',
     required: false,
     help:
-      'The official CO₂ figure decides a car’s band: up to 155 g/km is deemed to cost ' +
-      '€24,000, 156–190 gets half, over 190 gets nothing — and a car with no figure recorded ' +
-      'is treated as the highest band.',
+      'The official CO₂ figure decides a car’s category: up to 140 g/km (A or B) is deemed to ' +
+      'cost €24,000, 141–155 (C) gets the lesser of €12,000 and half the cost, and over ' +
+      '155 gets nothing — and a car with no figure recorded is deemed Category F, which gets ' +
+      'nothing. From 1 January 2027 each rung moves down a category.',
+  },
+  {
+    key: 'expenditureIncurredOn',
+    label: 'Date the car expenditure was incurred',
+    type: 'text',
+    required: false,
+    help:
+      'The emissions limits tighten for expenditure incurred from 1 January 2027: only a car ' +
+      'up to 120 g/km keeps the full €24,000 then. Left blank, the pre-2027 limits apply.',
   },
   {
     key: 'isCommercialVehicle',
@@ -452,7 +570,7 @@ export const IE_DEPRECIATION_RULES: StraightLineFixedRules = {
 /** The pages these rules were read from, for a "where does this come from" link. */
 export const IE_DEPRECIATION_AUTHORITY_URLS = {
   capitalAllowances: REVENUE_CAPITAL_ALLOWANCES,
-  tdmCars: REVENUE_TDM_CARS,
+  notesPart11C: REVENUE_NOTES_PART_11C,
 } as const;
 
 export default IE_DEPRECIATION_RULES;
