@@ -108,6 +108,12 @@ export type {
   SgEligibilityOutcome,
   SgAllowanceOutcome,
   SgLowValueCapOutcome,
+  StraightLineFixedRules,
+  IeCo2Band,
+  IeAssetInput,
+  IeAllowableCostOutcome,
+  IeWearAndTearInput,
+  IeWearAndTearOutcome,
   PartYearInput,
   DepreciationExplainer,
   DepreciationVocabulary,
@@ -231,6 +237,20 @@ export {
   sgAllowanceForYear,
   sgLowValueCap,
 } from './countries/singaporeDepreciation';
+
+// Ireland — Revenue's fixed 12.5% straight-line wear and tear (car cost cap by CO₂ band).
+export {
+  IE_DEPRECIATION_RULES,
+  IE_DEPRECIATION_AUTHORITY_URLS,
+  IE_DISPOSAL_BALANCING,
+  IE_WEAR_AND_TEAR_RATE,
+  IE_WEAR_AND_TEAR_YEARS,
+  IE_CAR_SPECIFIED_LIMIT,
+  IE_CAR_CO2_BAND_AC_MAX,
+  IE_CAR_CO2_BAND_DE_MAX,
+  ieAllowableCost,
+  ieWearAndTear,
+} from './countries/irelandDepreciation';
 
 
 // ─── Annual reports (lodged separately from the activity statement) ──────────
