@@ -61,13 +61,23 @@ export {
   getDepreciationRules,
   computeDeclineInValue,
   computeBalancingAdjustment,
+  sortNewestFirst,
+  resolveEffectiveDated,
   DV_RATE_MULTIPLIER,
   DV_RATE_MULTIPLIER_PRE_10_MAY_2006,
 } from './depreciation';
 
 export type {
   DepreciationMethod,
+  DepreciationRegime,
   DepreciationRules,
+  RatePerAssetRules,
+  PartYearInput,
+  DepreciationExplainer,
+  DepreciationVocabulary,
+  FirstYearConcession,
+  AssetFieldSpec,
+  EffectiveDatedRow,
   DeclineInValueInput,
   DeclineInValueOutcome,
   EffectiveLifeCategory,
@@ -76,7 +86,7 @@ export type {
   BalancingAdjustmentOutcome,
 } from './depreciation';
 
-// Australia — the only jurisdiction here with its own capital-allowance rules.
+// Australia — the ATO's effective-life regime.
 export {
   AU_DEPRECIATION_RULES,
   AU_EFFECTIVE_LIFE_CATEGORIES,
@@ -92,6 +102,31 @@ export {
 } from './countries/australiaDepreciation';
 
 export type { AuWriteOffRow } from './countries/australiaDepreciation';
+
+// New Zealand — Inland Revenue's rate-per-asset regime (IR265 rates, whole-month part years).
+export {
+  NZ_DEPRECIATION_RULES,
+  NZ_RATE_CATEGORIES,
+  NZ_RATE_SOURCE,
+  NZ_LOW_VALUE_ASSET_ROWS,
+  NZ_INVESTMENT_BOOST_ROWS,
+  NZ_INVESTMENT_BOOST_START,
+  NZ_POOLING_RULES,
+  NZ_DEPRECIATION_AUTHORITY_URLS,
+  nzRateFor,
+  nzWholeMonthsUsed,
+  nzLowValueThreshold,
+  nzInvestmentBoost,
+  nzInvestmentBoostSplit,
+} from './countries/newZealandDepreciation';
+
+export type {
+  NzRateCategory,
+  NzLowValueRow,
+  NzInvestmentBoostRow,
+  NzInvestmentBoostInfo,
+  NzInvestmentBoostSplit,
+} from './countries/newZealandDepreciation';
 
 // ─── Annual reports (lodged separately from the activity statement) ──────────
 export {

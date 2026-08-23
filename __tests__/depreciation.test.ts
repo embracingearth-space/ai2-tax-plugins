@@ -711,9 +711,10 @@ describe('AU effective lives — the Commissioner\'s Table B, short and sourced'
 
 describe('Generic depreciation rules — every other country', () => {
   it('a country with no rules of its own falls back to the generic set', () => {
-    expect(newZealandPlugin.getDepreciationRules).toBeUndefined();
-    expect(getDepreciationRules(newZealandPlugin)).toBe(GENERIC_DEPRECIATION_RULES);
+    expect(singaporePlugin.getDepreciationRules).toBeUndefined();
     expect(getDepreciationRules(singaporePlugin)).toBe(GENERIC_DEPRECIATION_RULES);
+    // New Zealand has its own since 2.2.0 — see depreciationNZ.test.ts.
+    expect(getDepreciationRules(newZealandPlugin).countryCode).toBe('NZ');
   });
 
   it('Australia gets its own', () => {
