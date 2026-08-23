@@ -19,6 +19,8 @@ Enterprise-grade tax filing plugin engine for `ai2fin.com`.
 - Validation and sandbox-friendly plugin shape checks
 - Extensible metadata for official form references and filing cadence
 - Tax treatment catalogue: canonical transaction codes mapped to each country's official boxes
+- Capital allowances: prime cost and diminishing value everywhere, with the AU effective lives, instant asset write-off and small business pool
+- Annual reports lodged outside the activity statement (AU Taxable payments annual report)
 
 ## Install
 
@@ -118,6 +120,73 @@ The host is expected to sum each treatment into the aggregate keys the plugins a
 | `expenses_standard` | `PURCHASE_STANDARD` gross (field declared tax-inclusive) | JP purchases |
 | `output_tax` / `input_tax` | Sum of tax on sales / sum of claimable tax on purchases (accounts method) | AU 1A/1B, CA 103/106, SG Box 7, ZA Field 17 |
 | `payroll_gross` / `payroll_withheld` | `WAGES` gross / `WITHHOLDING` gross | AU W1 / W2 |
+
+## Depreciation and annual reports
+
+A depreciation schedule is arithmetic over one income year — an opening adjustable value, a rate, the days the asset was held — and the arithmetic is the same shape everywhere; only the rates, the effective lives and the write-off concessions are jurisdictional. `getDepreciationRules(plugin)` hands back the country's own rules where it has them and `GENERIC_DEPRECIATION_RULES` otherwise, so every country gets a schedule and no country is given another country's numbers.
+
+The formulas are the ATO's, from *Prime cost (straight line) and diminishing value methods*:
+
+```text
+Prime cost        = cost       × (days held ÷ denominator) × (100% ÷ effective life)
+Diminishing value = base value × (days held ÷ denominator) × (200% ÷ effective life)
+```
+
+150% replaces 200% for an asset first held before 10 May 2006, and `base value` is the opening adjustable value for the year plus any second-element (improvement) cost incurred during it — pass that as `secondElementCostThisYear` and a $5,000 opening value improved by $1,000 declines from $6,000, carrying the improvement into the closing value. The three other methods refuse a second-element cost instead of quietly ignoring it, because each needs something the module is not told; the error says what to pass instead.
+
+The denominator is the one the jurisdiction publishes, and it is not always the length of the income year. The ATO fixes it at 365 in every year while stating on the same page that days held can be 366 in a leap year, so a full leap-year hold legitimately claims 366/365 of a year — dividing by 366 instead would shorten every leap-year claim by about a quarter of a percent, small on one asset and systematic across a register. Ask `rules.dayFractionDenominator(daysInIncomeYear)` rather than counting days yourself, and note that the Australian rules do not merely document the 365: `declineInValue` applies it, overriding whatever `daysInYear` you passed, so passing 366 returns exactly what passing 365 returns. `GENERIC_DEPRECIATION_RULES` honours your value, since with no jurisdiction there is no published convention to override it with.
+
+Private use is not applied to the decline at all: it is computed on the full base and only the taxable-use portion is deductible, which is why a schedule carries separate *decline in value* and *deductible* columns and why the value carried into the next year is the full decline. The decline is clamped at the base value so an asset cannot depreciate below zero, and `balancingAdjustment` on disposal returns termination value less adjustable value weighted by taxable use — positive is assessable income, negative is a deduction.
+
+| Method | Available in | Rate |
+| --- | --- | --- |
+| `prime_cost` | every country | 100% ÷ effective life, applied to cost |
+| `diminishing_value` | every country | 200% ÷ effective life (150% before 10 May 2006), applied to the opening value |
+| `immediate_writeoff` | AU | the whole opening value, in year one, with no day apportionment |
+| `pool` | AU | 15% in the allocation year, 30% each year after |
+
+Australia is the only jurisdiction with rules of its own today. Its effective lives are read from Table B of the Income Tax Assessment (Effective Life of Depreciating Assets) Determination 2025 (F2025L01097), which commenced on 16 September 2025 and replaced the withdrawn TR 2022/1 line of rulings; fifteen common categories ship, each carrying the exact Table B wording it came from. The list is short on purpose — an asset that could not be read straight out of the determination is left out for you to look up or self-assess, because a wrong effective life is a wrong deduction every year for the life of the asset. Everywhere else `effectiveLife()` returns null and `effectiveLifeCategories()` returns an empty list rather than a guess.
+
+`instantAssetWriteOff(date)` is effective-dated and stops at 30 June 2026 deliberately. The ATO states $20,000 per asset for the 2023-24, 2024-25 and 2025-26 income years and states nothing at all for 2026-27, so a 2026-27 date comes back as `{ limit: null, verified: false }` with a note asking you to confirm the current limit. $20,000 is not carried forward and the $1,000 statutory reversion is not assumed, because an unverified statutory threshold that looks confident is worse than a blank — nobody checks a number that looks sure of itself. Show the note, not a figure. The related low-pool-balance rule, which deducts the whole pool where the balance before deductions sits under the write-off limit, is exposed as `auSmallBusinessPoolWriteOff()` instead of being applied quietly inside `declineInValue`, and it answers `null` rather than `false` for a date whose limit is unverified.
+
+```ts
+import { getPluginForCountry, getDepreciationRules } from '@ai2/tax-plugins';
+
+const rules = getDepreciationRules(getPluginForCountry('AU'));
+
+rules.defaultMethod;                       // 'diminishing_value'
+rules.effectiveLife('computer_laptop');    // 2 — Table B, "Mobile/portable computers"
+rules.effectiveLife('espresso_machine');   // null — not shipped, so self-assess it
+
+// One income year for a $2,000 fridge held 122 days (the ATO's own worked example).
+rules.declineInValue({
+  method: 'prime_cost',
+  cost: 2000,
+  openingAdjustableValue: 2000,
+  effectiveLifeYears: 10,
+  daysHeld: 122,     // may be 366 in a leap income year
+  daysInYear: 365,   // AU fixes the denominator at 365; the rules enforce it
+}); // → { declineInValue: 66.85, closingAdjustableValue: 1933.15, rate: 0.1 }
+
+const writeOff = rules.instantAssetWriteOff(new Date('2026-07-01'));
+writeOff.limit;      // null
+writeOff.verified;   // false — render writeOff.note, never a number
+```
+
+Annual reports are the ones lodged separately from the activity statement, and Australia declares the only one so far: the Taxable payments annual report, due 28 August for the financial year just ended. `getAnnualReports()` is absent on every other plugin, so a country-aware UI simply does not show the report.
+
+| Column | Type | The ATO's wording |
+| --- | --- | --- |
+| `abn` | `abn` | Contractor's Australian business number (ABN), if known |
+| `name` | `text` | Contractor's name (business name or individual's name) |
+| `address` | `text` | Contractor's address |
+| `grossPaidInclGst` | `currency` | Gross amount paid for the financial year, including GST and any tax withheld |
+| `totalGst` | `currency` | Total GST included in the gross amount paid |
+| `taxWithheldNoAbn` | `currency` | Total tax withheld where an ABN was not quoted |
+
+Those six are exactly what the ATO's *TPAR contractor details to report* says the report must include. Contractor phone number, email address and bank account details are deliberately absent: the ATO lists those separately as extra information it *may ask for* about a contractor, not as data the annual report carries, so collecting them here would tell you to send the ATO something the TPAR does not report.
+
+Amounts are whole dollars with no cents, and a contractor whose ABN changed during the year gets one row per ABN, so payee identity for the report is the ABN rather than the name. Two different tests decide whether you lodge, and each service carries the one that applies to it. Cleaning, courier and road freight, information technology, and security, investigation or surveillance use the ordinary 10% test — payments received for that service are 10% or more of your business income, with courier and road freight counted together. Building and construction is not exempt from a test; it has a different one. You primarily operate in building and construction services, and so lodge, if 50% or more of your current-year business income is earned from providing them, **or** 50% or more of your current-year business activity relates to them, **or** 50% or more of the immediately preceding year's business income was earned from providing them — that last limb catching a year that is itself under the threshold. `auTprsQualifies()` evaluates the applicable test, inclusive at the boundary, and throws rather than answering "no" when it is given nothing to test. The report is prepared here for you to check before lodging — it is not the ATO lodgment file, which needs an accredited SBR channel — so lodge it through ATO online services, compatible business software, or your registered tax or BAS agent.
 
 ## Development
 

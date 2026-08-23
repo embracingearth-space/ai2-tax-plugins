@@ -141,7 +141,17 @@ export const RATE_FLOOR = '2000-01-01';
  */
 export function toYmd(d: string | Date): string {
   if (typeof d === 'string') return d.slice(0, 10);
-  return d.toISOString().slice(0, 10);
+  // LOCAL calendar parts, never toISOString(). A Date built from local parts —
+  // new Date(2023, 6, 1), the first day of an Australian income year — is
+  // 2023-06-30T14:00Z in Sydney, and toISOString() would key it as 30 June.
+  // That is the wrong side of every boundary this ledger exists to resolve:
+  // the rate row that started on 1 July, the write-off limit that started on
+  // 1 July, the financial year that started on 1 July. The caller's Date
+  // means the day they see on their calendar; this reads that day back.
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 }
 
 export interface ResolveOptions {

@@ -4,6 +4,11 @@
  * Architecture: Plugin-based per country, shared framework for periods, drafts, export, audit.
  */
 
+// Type-only import: the depreciation contract lives with its arithmetic in
+// ./depreciation, and this reference is erased at compile time, so the two
+// modules do not form a runtime cycle.
+import type { DepreciationRules } from './depreciation';
+
 // ─── Identity & Authority ───────────────────────────────────────────────────
 
 export interface AuthorityInfo {
@@ -203,6 +208,87 @@ export interface TaxTreatmentDefinition {
   defaultFor?: string[];
 }
 
+// ─── Annual reports (lodged separately from the activity statement) ─────────
+
+export type AnnualReportColumnType = 'text' | 'currency' | 'abn';
+
+export interface AnnualReportColumn {
+  id: string;
+  /** Sentence-case label for the screen. */
+  label: string;
+  type: AnnualReportColumnType;
+  /** The authority's own wording for the same column, where it differs. */
+  officialLabel?: string;
+}
+
+/**
+ * How an authority decides whether payments for a service bring the payer into
+ * a reporting system.
+ *
+ * - `income_share` — the share of the payer's own business income earned from
+ *   providing that service reaches a threshold (the ATO's 10% TPRS test).
+ * - `primarily_in_industry` — the payer operates PRIMARILY in that industry,
+ *   which the authority may test on more than income alone (the ATO's 50%
+ *   building-and-construction test, whose limbs include the share of business
+ *   ACTIVITY and the PRIOR year's income).
+ *
+ * There is deliberately no "no test at all" member. A service that looks exempt
+ * usually has a DIFFERENT test rather than none, and a boolean that says "always
+ * lodge" hides that difference behind something that reads like a fact.
+ */
+export type AnnualReportQualificationTest = 'income_share' | 'primarily_in_industry';
+
+/** A service whose contractor payments can bring a business into a reporting system. */
+export interface AnnualReportQualifyingService {
+  key: string;
+  label: string;
+  /** Which test decides whether this service brings the payer in. */
+  test: AnnualReportQualificationTest;
+  /** The share, in percent, that the test turns on — 10 or 50 for the ATO. */
+  thresholdPercent: number;
+  /**
+   * The test is ALSO met by the share of business ACTIVITY relating to the
+   * service, not only by the share of income.
+   */
+  activityLimb?: boolean;
+  /**
+   * The test is ALSO met by the income share of the financial year immediately
+   * before the current one — so a year under the threshold can still qualify on
+   * the back of the year before it.
+   */
+  priorYearLimb?: boolean;
+  /**
+   * The authority's own separately-named services that this single entry is
+   * measured as one for. Present only where the authority combines them.
+   */
+  combines?: string[];
+}
+
+/**
+ * A report a business lodges once a year, separately from its activity
+ * statement — the AU Taxable payments annual report (TPAR) is the first.
+ *
+ * A definition describes the report; it does not produce the lodgment file.
+ * Those formats are authority-specific and usually need an accredited channel
+ * (SBR for the ATO), so `lodgmentNote` says plainly where the report is
+ * actually lodged.
+ */
+export interface AnnualReportDefinition {
+  id: 'tpar' | string;
+  label: string;
+  authority: AuthorityInfo;
+  /** The lodgment due date for a financial year ending on this date. */
+  dueDate(financialYearEnd: Date): Date;
+  columns: AnnualReportColumn[];
+  /** The authority requires whole dollars with no cents. */
+  wholeDollarsOnly: boolean;
+  /** The services that bring a business into the reporting system, and the test each one uses. */
+  qualifyingServices?: AnnualReportQualifyingService[];
+  /** How the reporting threshold works, in the authority's terms. */
+  thresholdNote?: string;
+  lodgmentNote: string;
+}
+
 // ─── Main Plugin Interface ──────────────────────────────────────────────────
 
 export interface TaxFilingPlugin {
@@ -240,4 +326,17 @@ export interface TaxFilingPlugin {
    * plugins without one fall back to GENERIC_TREATMENTS via getTreatmentsForPlugin().
    */
   getTaxTreatments?(): TaxTreatmentDefinition[];
+
+  /**
+   * Capital allowance rules (methods, effective lives, write-off thresholds).
+   * Optional: plugins without one fall back to GENERIC_DEPRECIATION_RULES via
+   * getDepreciationRules(), so every country still gets a schedule.
+   */
+  getDepreciationRules?(): DepreciationRules;
+
+  /**
+   * Annual reports lodged separately from the activity statement. Optional and
+   * rare — only a country that actually has one declares it (AU: TPAR).
+   */
+  getAnnualReports?(): AnnualReportDefinition[];
 }
