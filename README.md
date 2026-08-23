@@ -127,12 +127,16 @@ A depreciation schedule is arithmetic over one income year — an opening adjust
 
 The formulas are the ATO's, from *Prime cost (straight line) and diminishing value methods*:
 
-```
-Prime cost        = cost       × (days held ÷ days in year) × (100% ÷ effective life)
-Diminishing value = base value × (days held ÷ days in year) × (200% ÷ effective life)
+```text
+Prime cost        = cost       × (days held ÷ denominator) × (100% ÷ effective life)
+Diminishing value = base value × (days held ÷ denominator) × (200% ÷ effective life)
 ```
 
-150% replaces 200% for an asset first held before 10 May 2006, and `base value` is the opening adjustable value for the year: cost plus second-element costs, less the decline up to the end of the prior year. `days in year` is a parameter and never an assumption, because a leap income year has 366 days and hardcoding 365 in the denominator overstates every part-year claim by a quarter of a percent — small on one asset, systematic across a register. Private use is not applied to the decline at all: it is computed on the full base and only the taxable-use portion is deductible, which is why a schedule carries separate *decline in value* and *deductible* columns and why the value carried into the next year is the full decline. The decline is clamped at the opening adjustable value so an asset cannot depreciate below zero, and `balancingAdjustment` on disposal returns termination value less adjustable value weighted by taxable use — positive is assessable income, negative is a deduction.
+150% replaces 200% for an asset first held before 10 May 2006, and `base value` is the opening adjustable value for the year plus any second-element (improvement) cost incurred during it — pass that as `secondElementCostThisYear` and a $5,000 opening value improved by $1,000 declines from $6,000, carrying the improvement into the closing value. The three other methods refuse a second-element cost instead of quietly ignoring it, because each needs something the module is not told; the error says what to pass instead.
+
+The denominator is the one the jurisdiction publishes, and it is not always the length of the income year. The ATO fixes it at 365 in every year while stating on the same page that days held can be 366 in a leap year, so a full leap-year hold legitimately claims 366/365 of a year — dividing by 366 instead would shorten every leap-year claim by about a quarter of a percent, small on one asset and systematic across a register. Ask `rules.dayFractionDenominator(daysInIncomeYear)` rather than counting days yourself, and note that the Australian rules do not merely document the 365: `declineInValue` applies it, overriding whatever `daysInYear` you passed, so passing 366 returns exactly what passing 365 returns. `GENERIC_DEPRECIATION_RULES` honours your value, since with no jurisdiction there is no published convention to override it with.
+
+Private use is not applied to the decline at all: it is computed on the full base and only the taxable-use portion is deductible, which is why a schedule carries separate *decline in value* and *deductible* columns and why the value carried into the next year is the full decline. The decline is clamped at the base value so an asset cannot depreciate below zero, and `balancingAdjustment` on disposal returns termination value less adjustable value weighted by taxable use — positive is assessable income, negative is a deduction.
 
 | Method | Available in | Rate |
 | --- | --- | --- |
@@ -160,8 +164,8 @@ rules.declineInValue({
   cost: 2000,
   openingAdjustableValue: 2000,
   effectiveLifeYears: 10,
-  daysHeld: 122,
-  daysInYear: 365,   // 366 in a leap income year
+  daysHeld: 122,     // may be 366 in a leap income year
+  daysInYear: 365,   // AU fixes the denominator at 365; the rules enforce it
 }); // → { declineInValue: 66.85, closingAdjustableValue: 1933.15, rate: 0.1 }
 
 const writeOff = rules.instantAssetWriteOff(new Date('2026-07-01'));
@@ -180,7 +184,9 @@ Annual reports are the ones lodged separately from the activity statement, and A
 | `totalGst` | `currency` | Total GST included in the gross amount paid |
 | `taxWithheldNoAbn` | `currency` | Total tax withheld where an ABN was not quoted |
 
-Amounts are whole dollars with no cents, and a contractor whose ABN changed during the year gets one row per ABN, so payee identity for the report is the ABN rather than the name. The five reportable services are building and construction, cleaning, courier and road freight, information technology, and security, investigation or surveillance; a business lodges where payments received for a reportable service are 10% or more of its business income (courier and road freight counted together), except for building and construction, which lodges regardless. The report is prepared here for you to check before lodging — it is not the ATO lodgment file, which needs an accredited SBR channel — so lodge it through ATO online services, compatible business software, or your registered tax or BAS agent.
+Those six are exactly what the ATO's *TPAR contractor details to report* says the report must include. Contractor phone number, email address and bank account details are deliberately absent: the ATO lists those separately as extra information it *may ask for* about a contractor, not as data the annual report carries, so collecting them here would tell you to send the ATO something the TPAR does not report.
+
+Amounts are whole dollars with no cents, and a contractor whose ABN changed during the year gets one row per ABN, so payee identity for the report is the ABN rather than the name. Two different tests decide whether you lodge, and each service carries the one that applies to it. Cleaning, courier and road freight, information technology, and security, investigation or surveillance use the ordinary 10% test — payments received for that service are 10% or more of your business income, with courier and road freight counted together. Building and construction is not exempt from a test; it has a different one. You primarily operate in building and construction services, and so lodge, if 50% or more of your current-year business income is earned from providing them, **or** 50% or more of your current-year business activity relates to them, **or** 50% or more of the immediately preceding year's business income was earned from providing them — that last limb catching a year that is itself under the threshold. `auTprsQualifies()` evaluates the applicable test, inclusive at the boundary, and throws rather than answering "no" when it is given nothing to test. The report is prepared here for you to check before lodging — it is not the ATO lodgment file, which needs an accredited SBR channel — so lodge it through ATO online services, compatible business software, or your registered tax or BAS agent.
 
 ## Development
 
