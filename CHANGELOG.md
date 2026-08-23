@@ -1,5 +1,64 @@
 # Changelog
 
+## 2.2.0 — 2026-08-24
+
+Depreciation regimes, and New Zealand. Additive: every new `DepreciationRules`
+member has a value on every rules object that ships, `declineInValue` still
+accepts `daysHeld` / `daysInYear` exactly as before, and a host on 2.1.0 keeps
+working untouched.
+
+### Added — regime machinery (`src/depreciation.ts`)
+
+- `DepreciationRules.regime` — `'effective_life' | 'rate_per_asset' | 'pooled_allowance' |
+  'class_cca' | 'generic'`. The countries do not share a model, and a host branches on this
+  rather than printing one country's schedule for every country. Australia is
+  `effective_life`, New Zealand `rate_per_asset`, the fallback `generic`; the two pooled
+  regimes (UK pools, Canadian CCA classes) are named so the type is complete, and are not
+  implemented.
+- `explainer()` on every rules object — `whatItIs`, `whenItApplies`, `howItWorks[]`,
+  `readMore[]` (official pages only) and a `vocabulary` that drives column labels, so a
+  schedule prints "Adjustable value" for the ATO, "Adjusted tax value" for Inland Revenue.
+  The generic explainer says plainly that no country-specific rules are loaded and links
+  nowhere.
+- `firstYearConcessions(onDate)` — effective-dated concessions with their `verified` state
+  (AU: the instant asset write-off; NZ: the low value asset threshold and Investment Boost).
+- `extraAssetFields()` — what the register must collect beyond the common fields (NZ:
+  `isNewAsset`).
+- `RatePerAssetRules` — `regime: 'rate_per_asset'`, `partYear: 'months_whole'`,
+  `rateFor(categoryKey)`, `lowValueThreshold(onDate)`, `investmentBoost(onDate)`.
+- `DeclineInValueInput.partYear` — `{ kind: 'days', daysHeld, daysInYear }` or
+  `{ kind: 'months', monthsUsed }`. `monthsUsed` must be a whole number from 0 to 12; a
+  part-month is the caller's to round UP (Inland Revenue: "count part-months as whole
+  months") and the engine throws on a fraction rather than inventing a denominator.
+- `DeclineInValueInput.annualRate` — a published rate as a fraction, applied as-is to prime
+  cost and diminishing value with no 200% multiplier and no life. `effectiveLifeYears` is
+  ignored when it is given and required when it is not.
+- `sortNewestFirst` / `resolveEffectiveDated` — the effective-dated resolver, generic over any
+  `{ effectiveFrom }` row.
+
+### Added — New Zealand (`src/countries/newZealandDepreciation.ts`)
+
+- Diminishing value is `cost × rate` in year one and `adjusted tax value × rate` after;
+  straight line is `cost × SL rate` every year. Pinned to Inland Revenue's own example: a
+  $10,000 espresso machine at 30% DV claims $3,000, carries $7,000, and bought 20 May in an
+  April year claims 11 months — $2,750 — not 10 and not a day fraction.
+- `nzWholeMonthsUsed(acquired, yearEnd)` — whole months inclusive of the month of purchase;
+  the 1st and the 31st of a month both count it. The NZ rules REFUSE a days-based input
+  rather than computing an ATO number for an IRD return.
+- Low value asset threshold, effective-dated and verified on all three rows: $500 up to
+  16 March 2020, $5,000 from 17 March 2020 to 16 March 2021, $1,000 from 17 March 2021.
+- Investment Boost: for NEW assets bought from 22 May 2025, 20% of the cost is an expense
+  and the remaining 80% is depreciated. `nzInvestmentBoostSplit` models it as a reduction
+  of the depreciable base; before that date the answer is `{ percent: null, verified: false }`,
+  and an unanswered `isNewAsset` is not new.
+- Seventeen IR265 (March 2026) rates, each with its page, category heading and asset
+  description as printed. GST-registered taxpayers depreciate the GST-exclusive cost;
+  business-use % applies to the claim, not the adjusted tax value.
+- Pooling is exposed as `NZ_POOLING_RULES` metadata (DV only, lowest rate, no buildings, no
+  removal) and the `pool` method throws; pool arithmetic is not built.
+- `newZealandPlugin.getDepreciationRules()` now returns these rules instead of the generic
+  fallback.
+
 ## 2.1.0 — 2026-08-23
 
 Depreciation schedules and annual reports. Additive: every new plugin method is

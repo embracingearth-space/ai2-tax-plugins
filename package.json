@@ -1,6 +1,6 @@
 {
   "name": "@ai2/tax-plugins",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "Country-specific tax filing plugins for BAS, VAT, GST, and activity statement returns — ai2fin.com",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

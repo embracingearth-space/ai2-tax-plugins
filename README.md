@@ -140,12 +140,12 @@ Private use is not applied to the decline at all: it is computed on the full bas
 
 | Method | Available in | Rate |
 | --- | --- | --- |
-| `prime_cost` | every country | 100% ÷ effective life, applied to cost |
-| `diminishing_value` | every country | 200% ÷ effective life (150% before 10 May 2006), applied to the opening value |
-| `immediate_writeoff` | AU | the whole opening value, in year one, with no day apportionment |
+| `prime_cost` | every country | 100% ÷ effective life, applied to cost — or a published `annualRate` as-is (NZ straight line) |
+| `diminishing_value` | every country | 200% ÷ effective life (150% before 10 May 2006), applied to the opening value — or a published `annualRate` as-is (NZ) |
+| `immediate_writeoff` | AU, NZ | the whole opening value, in year one, with no day or month apportionment (NZ: a low value asset) |
 | `pool` | AU | 15% in the allocation year, 30% each year after |
 
-Australia is the only jurisdiction with rules of its own today. Its effective lives are read from Table B of the Income Tax Assessment (Effective Life of Depreciating Assets) Determination 2025 (F2025L01097), which commenced on 16 September 2025 and replaced the withdrawn TR 2022/1 line of rulings; fifteen common categories ship, each carrying the exact Table B wording it came from. The list is short on purpose — an asset that could not be read straight out of the determination is left out for you to look up or self-assess, because a wrong effective life is a wrong deduction every year for the life of the asset. Everywhere else `effectiveLife()` returns null and `effectiveLifeCategories()` returns an empty list rather than a guess.
+Australia's effective lives are read from Table B of the Income Tax Assessment (Effective Life of Depreciating Assets) Determination 2025 (F2025L01097), which commenced on 16 September 2025 and replaced the withdrawn TR 2022/1 line of rulings; fifteen common categories ship, each carrying the exact Table B wording it came from. The list is short on purpose — an asset that could not be read straight out of the determination is left out for you to look up or self-assess, because a wrong effective life is a wrong deduction every year for the life of the asset. Everywhere else `effectiveLife()` returns null and `effectiveLifeCategories()` returns an empty list rather than a guess.
 
 `instantAssetWriteOff(date)` is effective-dated and stops at 30 June 2026 deliberately. The ATO states $20,000 per asset for the 2023-24, 2024-25 and 2025-26 income years and states nothing at all for 2026-27, so a 2026-27 date comes back as `{ limit: null, verified: false }` with a note asking you to confirm the current limit. $20,000 is not carried forward and the $1,000 statutory reversion is not assumed, because an unverified statutory threshold that looks confident is worse than a blank — nobody checks a number that looks sure of itself. Show the note, not a figure. The related low-pool-balance rule, which deducts the whole pool where the balance before deductions sits under the write-off limit, is exposed as `auSmallBusinessPoolWriteOff()` instead of being applied quietly inside `declineInValue`, and it answers `null` rather than `false` for a date whose limit is unverified.
 
@@ -171,6 +171,38 @@ rules.declineInValue({
 const writeOff = rules.instantAssetWriteOff(new Date('2026-07-01'));
 writeOff.limit;      // null
 writeOff.verified;   // false — render writeOff.note, never a number
+```
+
+### Depreciation regimes
+
+The countries do not share one model, and `rules.regime` says which one a plugin implements so a host can branch instead of printing one country's schedule everywhere. Australia is `effective_life`: the ATO publishes a life in years, the rate is 100% or 200% divided by that life, and a part year is days held over a fixed 365. New Zealand is `rate_per_asset`: Inland Revenue publishes the diminishing value and straight line rate for each asset in IR265, the rate is applied as-is with no multiplier and no life, and a part year is whole months over twelve with a part-month counted as a whole month — bought on 20 May in an April year is eleven months, so the IRD's $10,000 espresso machine at 30% claims $2,750 in year one rather than $3,000, and the rules refuse a days-based input rather than compute an ATO number for an IRD return. The United Kingdom and Canada are pooled regimes, `pooled_allowance` and `class_cca`, where the pool or the class is the unit rather than the asset; the type names them so the discriminator is complete, and they come next.
+
+Every rules object carries an `explainer()` in the authority's own vocabulary, with `readMore` links to official pages only and a `vocabulary` that drives the schedule's column labels, so the carried value prints as "Adjustable value" for the ATO and "Adjusted tax value" for Inland Revenue. `firstYearConcessions(date)` lists the concessions in force on a date with their `verified` state, and `extraAssetFields()` lists what the register must collect beyond the common fields — New Zealand needs `isNewAsset`, because Investment Boost (20% of the cost as an immediate expense for new assets bought from 22 May 2025, the remaining 80% depreciated) applies to new assets only and an unanswered field is not new. The low value asset threshold is effective-dated the way the Australian write-off is, $1,000 from 17 March 2021 with the temporary $5,000 window and the earlier $500 behind it, and seventeen IR265 rates ship with their page, heading and asset description as printed.
+
+```ts
+import {
+  getPluginForCountry,
+  getDepreciationRules,
+  nzWholeMonthsUsed,
+  nzInvestmentBoostSplit,
+  type RatePerAssetRules,
+} from '@ai2/tax-plugins';
+
+const nz = getDepreciationRules(getPluginForCountry('NZ')) as RatePerAssetRules;
+nz.regime;                               // 'rate_per_asset'
+nz.explainer().vocabulary.writtenDown;   // 'Adjusted tax value'
+
+const rate = nz.rateFor('coffee_maker');   // { dv: 0.3, sl: 0.21, source: 'IR265 … p.20 …' }
+const split = nzInvestmentBoostSplit({ cost: 10000, acquiredOn: '2025-06-01', isNewAsset: true });
+// → { applied: true, expensedNow: 2000, depreciableCost: 8000, percent: 20, verified: true }
+
+nz.declineInValue({
+  method: 'diminishing_value',
+  cost: split.depreciableCost,
+  openingAdjustableValue: split.depreciableCost,
+  annualRate: rate!.dv,
+  partYear: { kind: 'months', monthsUsed: nzWholeMonthsUsed('2025-06-01', '2026-03-31') }, // 10
+}); // → { declineInValue: 2000, closingAdjustableValue: 6000, rate: 0.3 }
 ```
 
 Annual reports are the ones lodged separately from the activity statement, and Australia declares the only one so far: the Taxable payments annual report, due 28 August for the financial year just ended. `getAnnualReports()` is absent on every other plugin, so a country-aware UI simply does not show the report.
