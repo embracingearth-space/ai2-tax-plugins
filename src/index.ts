@@ -9,7 +9,7 @@
  * - Factory: createAdaptiveGenericPlugin (for building new plugins)
  * - EU Factory: createEUPlugin (for adding EU member states)
  * - Treatments: GENERIC_TREATMENTS, getTreatmentsForPlugin (transaction → box mapping)
- * - Depreciation: GENERIC_DEPRECIATION_RULES, getDepreciationRules, computePoolPeriod, computeClassPeriod (capital allowances)
+ * - Depreciation: GENERIC_DEPRECIATION_RULES, getDepreciationRules, computePoolPeriod, computeClassPeriod, computeMacrsYear, computeBlockPeriod (capital allowances)
  * - Annual reports: AnnualReportDefinition (AU TPAR)
  */
 
@@ -63,6 +63,8 @@ export {
   computeBalancingAdjustment,
   computePoolPeriod,
   computeClassPeriod,
+  computeMacrsYear,
+  computeBlockPeriod,
   sortNewestFirst,
   resolveEffectiveDated,
   DV_RATE_MULTIPLIER,
@@ -101,6 +103,30 @@ export type {
   ClassPeriodDisposal,
   ClassPeriodInput,
   ClassPeriodOutcome,
+  MacrsRules,
+  UsAssetKind,
+  UsAssetInput,
+  UsPropertyClassAssignment,
+  UsTableConvention,
+  UsTablePercentOutcome,
+  UsConventionInput,
+  UsConventionOutcome,
+  UsSection179Outcome,
+  UsBonusOutcome,
+  UsAutoCapOutcome,
+  UsDeMinimisOutcome,
+  MacrsYearInput,
+  MacrsYearOutcome,
+  BlockWdvRules,
+  InBlockKey,
+  InAssetKind,
+  InAssetInput,
+  InBlockAssignment,
+  InHalfRateOutcome,
+  InAdditionalDepreciationOutcome,
+  BlockPeriodAddition,
+  BlockPeriodInput,
+  BlockPeriodOutcome,
   PartYearInput,
   DepreciationExplainer,
   DepreciationVocabulary,
@@ -208,6 +234,7 @@ export {
 } from './countries/canadaDepreciation';
 
 export type { CaCcaClassRow, CaVehicleCapRow } from './countries/canadaDepreciation';
+
 
 // ─── Annual reports (lodged separately from the activity statement) ──────────
 export {

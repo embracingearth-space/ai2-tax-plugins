@@ -94,16 +94,25 @@ export type DepreciationMethod =
  *                       rate pools, writing down allowance on the pool balance).
  *   class_cca         — the CLASS is the unit (CA: capital cost allowance on
  *                       the undepreciated capital cost of each class).
+ *   macrs             — the IRS publishes a PERCENTAGE TABLE per recovery
+ *                       period and convention (US: Publication 946 Appendix A);
+ *                       the year's deduction is the table figure times the
+ *                       basis left after §179 and bonus depreciation.
+ *   block_wdv         — the BLOCK is the unit (IN: a fixed rate on the written
+ *                       down value of each block of assets, half the rate for
+ *                       an asset put to use under 180 days in its first year).
  *   generic           — no country-specific rules are loaded.
  *
- * A host branches on this: AU/NZ print a per-asset schedule; UK/CA print a
- * pool/class statement. All five are implemented.
+ * A host branches on this: AU/NZ/US print a per-asset schedule; UK/CA/IN print
+ * a pool/class/block statement. All seven are implemented.
  */
 export type DepreciationRegime =
   | 'effective_life'
   | 'rate_per_asset'
   | 'pooled_allowance'
   | 'class_cca'
+  | 'macrs'
+  | 'block_wdv'
   | 'generic';
 
 /**
@@ -573,6 +582,252 @@ export interface ClassCcaRules extends DepreciationRules {
   passengerVehicleCap(year: number): CaVehicleCapOutcome;
   /** The capital cost limit for a zero-emission passenger vehicle in class 54, before tax. */
   zeroEmissionVehicleCap(year: number): CaVehicleCapOutcome;
+}
+
+// ─── MACRS (United States) ──────────────────────────────────────────────────
+
+/**
+ * What a US asset IS, in the words Table B-1 of Publication 946 uses, so
+ * `propertyClass` can suggest an asset class where the register has not
+ * recorded one.
+ */
+export type UsAssetKind =
+  | 'office_furniture'
+  | 'computer'
+  | 'data_handling'
+  | 'automobile'
+  | 'light_truck'
+  | 'heavy_truck'
+  | 'trailer'
+  | 'land_improvement'
+  | 'other';
+
+/**
+ * What the US rules need to know about an asset. Everything beyond `cost` is
+ * optional and tri-state: an unanswered question is never a "yes".
+ */
+export interface UsAssetInput {
+  cost: number;
+  kind?: UsAssetKind | null;
+  /** A Table B-1 asset class the register already holds ('00.12'); when present it wins over `kind`. */
+  assetClass?: string | null;
+  acquiredDate?: Date | string | null;
+  placedInServiceDate?: Date | string | null;
+  /** A passenger automobile subject to the §280F annual caps. */
+  isPassengerAutomobile?: boolean | null;
+}
+
+export interface UsPropertyClassAssignment {
+  /** The GDS recovery period in years, or null where the class is not recorded here. */
+  recoveryYears: number | null;
+  /** The Table B-1 asset class ('00.12'), or null where none applies. */
+  assetClass: string | null;
+  label: string;
+  /** Where the class was read from. */
+  source: string;
+  verified: boolean;
+  note?: string;
+}
+
+/**
+ * Which percentage table a year's rate is read from: Table A-1 (half-year
+ * convention) or Tables A-2..A-5 (mid-quarter, by the quarter the asset was
+ * placed in service). Mid-month real-property tables are not shipped.
+ */
+export type UsTableConvention = 'half_year' | { midQuarter: 1 | 2 | 3 | 4 };
+
+export interface UsTablePercentOutcome {
+  /** The table figure for the year as printed, 0-100, or null where the table is not shipped. */
+  percent: number | null;
+  /** Which Publication 946 table the figure came from. */
+  table: string;
+  verified: boolean;
+  note?: string;
+}
+
+export interface UsConventionInput {
+  /**
+   * Total depreciable bases of MACRS property placed in service in each
+   * quarter of the tax year — Q1 through Q4 — excluding nonresidential real
+   * property, residential rental property and property placed in service and
+   * disposed of in the same year. Pub 946: the basis reflects the §179
+   * reduction but NOT the special depreciation allowance.
+   */
+  basesByQuarter: [number, number, number, number];
+}
+
+export interface UsConventionOutcome {
+  convention: 'half_year' | 'mid_quarter';
+  /** The last quarter's share of the year's total depreciable bases, as a fraction. */
+  q4Share: number;
+  verified: true;
+  note: string;
+}
+
+export interface UsSection179Outcome {
+  /** The dollar limit for the tax year, or null where the year is not recorded. */
+  limit: number | null;
+  /** The limit is reduced dollar for dollar where §179 property placed in service exceeds this. */
+  phaseOutThreshold: number | null;
+  /** The sport utility vehicle cap for the year. */
+  suvCap: number | null;
+  verified: boolean;
+  note: string;
+}
+
+export interface UsBonusOutcome {
+  /** The special depreciation allowance as a percentage (100, 40), or null where unrecorded. */
+  percent: number | null;
+  verified: boolean;
+  note: string;
+}
+
+export interface UsAutoCapOutcome {
+  /**
+   * The §280F passenger automobile caps as [year 1, year 2, year 3, each
+   * succeeding year], or null where that year's revenue procedure has not
+   * been read.
+   */
+  caps: [number, number, number, number] | null;
+  verified: boolean;
+  note: string;
+}
+
+export interface UsDeMinimisOutcome {
+  /** Per item or invoice. */
+  limit: number;
+  verified: boolean;
+  note: string;
+}
+
+/**
+ * A jurisdiction where the IRS publishes the schedule itself — the United
+ * States. An asset gets a recovery period (Table B-1), a convention (half-year
+ * unless the >40%-in-Q4 test forces mid-quarter) and a percentage table
+ * (Appendix A); most small businesses never reach the table, because §179,
+ * bonus depreciation and the de minimis safe harbor expense the cost in year
+ * one. The arithmetic lives in `computeMacrsYear`.
+ */
+export interface MacrsRules extends DepreciationRules {
+  regime: 'macrs';
+  /** The Table B-1 asset class and GDS recovery period for an asset. */
+  propertyClass(asset: UsAssetInput): UsPropertyClassAssignment;
+  /** The Appendix A table figure for a recovery period, year (1-based) and convention. */
+  tablePercent(recoveryYears: number, yearIndex: number, convention: UsTableConvention): UsTablePercentOutcome;
+  /** Half-year unless more than 40% of the year's depreciable bases landed in the fourth quarter. */
+  convention(input: UsConventionInput): UsConventionOutcome;
+  /** The §179 dollar limit, phase-out threshold and SUV cap for a tax year. */
+  section179(taxYear: number): UsSection179Outcome;
+  /** The special depreciation allowance for an asset's acquisition and placed-in-service dates. */
+  bonusPercent(acquired: Date | string, placedInService: Date | string): UsBonusOutcome;
+  /** The §280F passenger automobile caps for a placed-in-service year, with or without bonus. */
+  autoCap(placedInServiceYear: number, withBonus: boolean): UsAutoCapOutcome;
+  /** The de minimis safe harbor per-item limit: $2,500, or $5,000 with an applicable financial statement. */
+  deMinimis(hasAfs: boolean): UsDeMinimisOutcome;
+}
+
+// ─── Block WDV (India) ──────────────────────────────────────────────────────
+
+/** The blocks these rules resolve to, from Appendix I of the Income-tax Rules 2026. */
+export type InBlockKey =
+  | 'building_residential'
+  | 'building_other'
+  | 'building_temporary'
+  | 'furniture_fittings'
+  | 'plant_machinery_general'
+  | 'motor_car'
+  | 'motor_vehicle_hire'
+  | 'aeroplane'
+  | 'computers_software'
+  | 'books_profession'
+  | 'ships'
+  | 'intangibles';
+
+/** What an Indian asset IS, in the words Appendix I uses. */
+export type InAssetKind =
+  | 'building_residential'
+  | 'building_other'
+  | 'building_temporary'
+  | 'furniture'
+  | 'electrical_fittings'
+  | 'machinery'
+  | 'plant'
+  | 'office_appliance'
+  | 'motor_car'
+  | 'bus_lorry_taxi_hire'
+  | 'aeroplane'
+  | 'computer'
+  | 'software'
+  | 'books'
+  | 'ship'
+  | 'intangible'
+  | 'other';
+
+/**
+ * What the Indian rules need to know about an asset. The four booleans behind
+ * additional depreciation are tri-state: an unanswered question is never a
+ * "yes".
+ */
+export interface InAssetInput {
+  cost: number;
+  kind?: InAssetKind | null;
+  /** A block the register already holds; when present it wins over `kind`. */
+  blockKey?: string | null;
+  /** The assessee manufactures or produces an article or thing, or generates power. */
+  isManufacturer?: boolean | null;
+  /** New, not previously used by any person. */
+  isNewAsset?: boolean | null;
+  isOfficeAppliance?: boolean | null;
+  isRoadTransportVehicle?: boolean | null;
+  /** Days the asset was put to use in the tax year it was acquired (1 April – 31 March). */
+  putToUseDays?: number | null;
+}
+
+export interface InBlockAssignment {
+  block: InBlockKey | string;
+  /** The Appendix I rate as a fraction (0.4 = 40%), or null where the block is not on the list. */
+  rate: number | null;
+  label: string;
+  /** The Appendix I item the rate was read from. */
+  source: string;
+  verified: boolean;
+  note?: string;
+}
+
+export interface InHalfRateOutcome {
+  half: boolean;
+  /** What the block rate is multiplied by for this addition: 0.5 or 1. */
+  factor: 0.5 | 1;
+  verified: true;
+  note: string;
+}
+
+export interface InAdditionalDepreciationOutcome {
+  eligible: boolean;
+  /** 20 where the full rate applies in year one; null where not eligible. */
+  percent: number | null;
+  /** 10 + 10: the split where the asset was put to use under 180 days. */
+  splitYearOne: number | null;
+  splitYearTwo: number | null;
+  verified: boolean;
+  note: string;
+}
+
+/**
+ * A jurisdiction where the BLOCK is the unit — India. Assets are contributions
+ * to a block of assets; depreciation under section 33 of the Income-tax Act
+ * 2025 is the Appendix I rate on the block's written down value, with half the
+ * rate for an asset acquired in the year and put to use under 180 days. The
+ * arithmetic lives in `computeBlockPeriod`.
+ */
+export interface BlockWdvRules extends DepreciationRules {
+  regime: 'block_wdv';
+  /** Which block an asset joins, by Appendix I of the Income-tax Rules 2026. */
+  blockFor(asset: InAssetInput): InBlockAssignment;
+  /** Section 33(4): under 180 days' use in the year of acquisition halves the rate. */
+  halfRate(putToUseDays: number): InHalfRateOutcome;
+  /** Section 33(8)-(9): 20% additional depreciation for a manufacturer's new plant and machinery. */
+  additionalDepreciation(asset: InAssetInput): InAdditionalDepreciationOutcome;
 }
 
 // ─── Effective-dated rows ───────────────────────────────────────────────────
@@ -1135,6 +1390,229 @@ export function computeClassPeriod(input: ClassPeriodInput): ClassPeriodOutcome 
   const closingUcc = input.classEmptied ? 0 : toCents(column7 - ccaClaimed);
 
   return done({ firstYearAdjustment, baseAmount, maxCca, ccaClaimed, closingUcc });
+}
+
+// ─── MACRS year arithmetic (macrs regime) ───────────────────────────────────
+
+export interface MacrsYearInput {
+  /** Unadjusted basis — cost, with the business-use share already applied by the caller. */
+  cost: number;
+  /** The recovery year, 1-based. */
+  yearIndex: number;
+  /** The Appendix A table figure for THIS year, 0-100 as printed. */
+  tablePercent: number;
+  /**
+   * The §179 deduction elected on this asset. Deducted in year 1; pass it in
+   * every year so the depreciable basis stays reduced. Capped at cost here —
+   * the annual dollar limit and the phase-out are the host's to apply across
+   * ALL the year's §179 property, not one asset's.
+   */
+  section179?: number;
+  /**
+   * The special depreciation allowance percentage for this asset (100, 40, 0).
+   * Deducted in year 1 on the basis left after §179; pass it in every year so
+   * the depreciable basis stays reduced.
+   */
+  bonusPercent?: number;
+  /**
+   * The §280F passenger automobile cap for THIS year, or null/undefined where
+   * none applies. Applied as a ceiling on the year's total deduction.
+   */
+  autoCap?: number | null;
+}
+
+export interface MacrsYearOutcome {
+  /** §179 deducted this year — year 1 only. */
+  section179: number;
+  /** The special depreciation allowance deducted this year — year 1 only. */
+  bonus: number;
+  /** Table percentage times the depreciable basis. */
+  tableDepreciation: number;
+  /** The year's total deduction, after the §280F cap. */
+  deduction: number;
+  cappedByAutoLimit: boolean;
+  /** Cost less §179 less bonus: what the table percentage applies to, every year. */
+  depreciableBasis: number;
+}
+
+/**
+ * One recovery year of one asset, in the IRS's order (Pub 946 chapters 2-4):
+ * the §179 election comes off the cost first; the special depreciation
+ * allowance is a percentage of what §179 left; the Appendix A table figure
+ * applies to the basis left after both; and for a passenger automobile the
+ * §280F cap is a ceiling on the year's total. Years after the first deduct
+ * the table figure only — §179 and bonus are passed in every year purely so
+ * the depreciable basis stays reduced.
+ *
+ * Per year only. Multi-year replay is the host's: the depreciable basis is
+ * constant across years, so it calls this once per year with the year's table
+ * percentage and cap.
+ */
+export function computeMacrsYear(input: MacrsYearInput): MacrsYearOutcome {
+  const cost = Math.max(0, Number(input.cost) || 0);
+  const yearIndex = Number(input.yearIndex);
+  if (!Number.isInteger(yearIndex) || yearIndex < 1) {
+    throw new RangeError(`yearIndex must be a whole number from 1 (received ${String(input.yearIndex)})`);
+  }
+  const pct = Number(input.tablePercent);
+  if (!Number.isFinite(pct) || pct < 0 || pct > 100) {
+    throw new RangeError(
+      `tablePercent must be 0-100 as the table prints it — 14.29 for 14.29% (received ${String(input.tablePercent)})`,
+    );
+  }
+  const bonusPct = input.bonusPercent == null ? 0 : Number(input.bonusPercent);
+  if (!Number.isFinite(bonusPct) || bonusPct < 0 || bonusPct > 100) {
+    throw new RangeError(`bonusPercent must be 0-100 (received ${String(input.bonusPercent)})`);
+  }
+  const section179 = Math.min(cost, Math.max(0, Number(input.section179) || 0));
+  const afterS179 = toCents(cost - section179);
+  const bonusAmount = toCents((afterS179 * bonusPct) / 100);
+  const depreciableBasis = toCents(afterS179 - bonusAmount);
+  const tableDepreciation = toCents((depreciableBasis * pct) / 100);
+
+  const firstYear = yearIndex === 1;
+  const uncapped = toCents((firstYear ? section179 + bonusAmount : 0) + tableDepreciation);
+  const cap = input.autoCap == null ? null : Math.max(0, Number(input.autoCap) || 0);
+  const deduction = cap == null ? uncapped : Math.min(uncapped, cap);
+
+  return {
+    section179: firstYear ? section179 : 0,
+    bonus: firstYear ? bonusAmount : 0,
+    tableDepreciation,
+    deduction,
+    cappedByAutoLimit: cap != null && uncapped > cap,
+    depreciableBasis,
+  };
+}
+
+// ─── Block period arithmetic (block_wdv regime) ─────────────────────────────
+
+export interface BlockPeriodAddition {
+  /** Actual cost of the addition. */
+  cost: number;
+  /**
+   * Days the asset was put to use in this tax year. Under 180 halves the rate
+   * on this addition (section 33(4)); omitted or 180 and over gets the full
+   * rate.
+   */
+  putToUseDays?: number | null;
+}
+
+export interface BlockPeriodInput {
+  /** Written down value of the block brought forward. */
+  openingWdv: number;
+  /** The Appendix I block rate as a fraction (0.4 = 40%). */
+  rate: number;
+  additions?: BlockPeriodAddition[];
+  /** Moneys receivable for assets sold, discarded, demolished or destroyed during the year. */
+  saleProceeds?: number;
+  /** Every asset in the block was sold: the block ceases to exist at year end. */
+  blockEmptied?: boolean;
+}
+
+export interface BlockPeriodOutcome {
+  openingWdv: number;
+  /** Additions put to use 180 days or more (or with no days recorded). */
+  additionsFullRate: number;
+  /** Additions put to use under 180 days — half the rate in this year. */
+  additionsHalfRate: number;
+  saleProceeds: number;
+  /** Opening plus additions less sale proceeds — the written down value the rate applies to. */
+  wdvBeforeDepreciation: number;
+  depreciationFullRate: number;
+  depreciationHalfRate: number;
+  depreciation: number;
+  /**
+   * Sale proceeds exceeded the block, or the block was emptied: the excess or
+   * remainder is a short-term capital gain or loss under the Act, which is a
+   * return item, not a depreciation figure — flagged, never computed here.
+   */
+  shortTermCapitalGainReview: boolean;
+  closingWdv: number;
+}
+
+/**
+ * One tax year (1 April – 31 March) of one block, in section 33's order:
+ * opening written down value; additions at actual cost, split by the 180-day
+ * test; moneys receivable for what was sold comes off; depreciation at the
+ * Appendix I rate on what remains — half the rate on the under-180-day
+ * additions still represented in the balance, the full rate on the rest —
+ * never more than the balance; and the closing written down value carries
+ * forward. Proceeds exceeding the balance, or a block with nothing left in
+ * it, end depreciation for the year and raise `shortTermCapitalGainReview`
+ * instead: the gain or loss is the return's business, not this module's.
+ *
+ * Per year only. Multi-year replay is the host's: it calls this once per year
+ * with last year's `closingWdv` as this year's `openingWdv`.
+ */
+export function computeBlockPeriod(input: BlockPeriodInput): BlockPeriodOutcome {
+  const openingWdv = Math.max(0, Number(input.openingWdv) || 0);
+  const rate = Number(input.rate);
+  if (!Number.isFinite(rate) || rate < 0 || rate > 1) {
+    throw new RangeError(`rate must be a fraction in [0, 1] — 0.4 for 40% (received ${String(input.rate)})`);
+  }
+
+  let additionsFullRate = 0;
+  let additionsHalfRate = 0;
+  for (const a of input.additions ?? []) {
+    const cost = Math.max(0, Number(a.cost) || 0);
+    if (a.putToUseDays == null) {
+      additionsFullRate += cost;
+      continue;
+    }
+    const days = Number(a.putToUseDays);
+    if (!Number.isFinite(days) || days < 0 || days > 366) {
+      throw new RangeError(
+        `putToUseDays must be 0-366 — the days the asset was used in the tax year (received ${String(a.putToUseDays)})`,
+      );
+    }
+    if (days < 180) additionsHalfRate += cost;
+    else additionsFullRate += cost;
+  }
+
+  const saleProceeds = Math.max(0, Number(input.saleProceeds) || 0);
+  const balance = toCents(openingWdv + additionsFullRate + additionsHalfRate - saleProceeds);
+
+  const done = (partial: Partial<BlockPeriodOutcome>): BlockPeriodOutcome => ({
+    openingWdv,
+    additionsFullRate: toCents(additionsFullRate),
+    additionsHalfRate: toCents(additionsHalfRate),
+    saleProceeds: toCents(saleProceeds),
+    wdvBeforeDepreciation: balance,
+    depreciationFullRate: 0,
+    depreciationHalfRate: 0,
+    depreciation: 0,
+    shortTermCapitalGainReview: false,
+    closingWdv: 0,
+    ...partial,
+  });
+
+  // Proceeds swallowed the block: the excess is a short-term capital gain
+  // under the Act's section 50 equivalent. Flagged for review, never computed.
+  if (balance <= 0) {
+    return done({ shortTermCapitalGainReview: true });
+  }
+
+  // Nothing left in the block: the remaining balance is a short-term capital
+  // loss on the return, not depreciation. Same flag, same silence.
+  if (input.blockEmptied) {
+    return done({ shortTermCapitalGainReview: true });
+  }
+
+  // Sale proceeds come off the full-rate portion first, so the half-rate
+  // restriction keeps biting on the under-180-day additions.
+  const halfBase = Math.min(additionsHalfRate, balance);
+  const fullBase = toCents(balance - halfBase);
+  const depreciationFullRate = toCents(fullBase * rate);
+  const depreciationHalfRate = toCents(halfBase * rate * 0.5);
+  const depreciation = Math.min(balance, toCents(depreciationFullRate + depreciationHalfRate));
+
+  return done({
+    depreciationFullRate,
+    depreciationHalfRate,
+    depreciation,
+    closingWdv: toCents(balance - depreciation),
+  });
 }
 
 // ─── Generic (jurisdiction-neutral) rules ───────────────────────────────────
