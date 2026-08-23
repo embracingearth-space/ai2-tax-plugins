@@ -1,5 +1,52 @@
 # Changelog
 
+## 2.1.0 — 2026-08-23
+
+Depreciation schedules and annual reports. Additive: every new plugin method is
+optional, no existing field, id or aggregate key changed, and a host on 2.0.0
+keeps working untouched.
+
+### Added — depreciation (capital allowances)
+- `DepreciationRules` on `src/depreciation.ts`, reached with
+  `getDepreciationRules(plugin)`: `declineInValue()` for one income year,
+  `effectiveLife()` / `effectiveLifeCategories()`, an effective-dated
+  `instantAssetWriteOff()` and `balancingAdjustment()` for disposals.
+  `TaxFilingPlugin.getDepreciationRules?()` is optional.
+- `GENERIC_DEPRECIATION_RULES` — prime cost and diminishing value at 200% for
+  every country, no write-off, no pool, `effectiveLife()` null. It refuses the
+  write-off and pool methods rather than inventing a rate, and invents no other
+  country's effective lives.
+- The formulas are the ATO's: cost (or base value) × days held ÷ days in year ×
+  100% (or 200%) ÷ effective life, with 150% for an asset first held before
+  10 May 2006. `daysInYear` is a parameter, so a leap income year passes 366;
+  the decline is clamped at the opening adjustable value; private use is left to
+  the caller because it reduces the deduction, not the value carried forward.
+- Australia: all four methods, `diminishing_value` as the default, fifteen
+  effective-life categories read from Table B of the Income Tax Assessment
+  (Effective Life of Depreciating Assets) Determination 2025 (F2025L01097,
+  commenced 16 September 2025), and the general small business pool at 15% in
+  the allocation year and 30% after. `auSmallBusinessPoolWriteOff()` exposes the
+  low-pool-balance rule rather than applying it inside `declineInValue()`.
+
+### Added — annual reports
+- `AnnualReportDefinition` and the optional `TaxFilingPlugin.getAnnualReports?()`.
+- Australia declares the Taxable payments annual report: due 28 August after the
+  financial year end, whole dollars with no cents, the six ATO contractor
+  columns, and the five reportable services with building and construction
+  flagged as lodging regardless of the 10% threshold (courier and road freight
+  combined for that test). The definition describes the report; it does not
+  produce the ATO lodgment file, and `lodgmentNote` says so.
+
+### Honesty
+- The AU instant asset write-off is $20,000 for 2023-24, 2024-25 and 2025-26 and
+  **null with `verified: false` for 2026-27 onwards**, because the ATO publishes
+  nothing for that year. $20,000 is not carried forward and the $1,000 statutory
+  reversion is not assumed — render the note, not a number. A test asserts this
+  directly, since a test that passed with the threshold carried forward would be
+  a test that let a false statutory figure reach a tax return.
+- Effective lives outside Australia are not invented; the category list is empty
+  and `effectiveLife()` returns null so the user enters their own.
+
 ## 2.0.0 — 2026-08-23
 
 Activity statements re-verified against the authorities' own forms, plus the
