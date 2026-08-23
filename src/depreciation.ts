@@ -97,8 +97,7 @@ export type DepreciationMethod =
  *   generic           — no country-specific rules are loaded.
  *
  * A host branches on this: AU/NZ print a per-asset schedule; UK/CA print a
- * pool/class statement. `effective_life`, `rate_per_asset`, `pooled_allowance`
- * and `generic` are implemented; `class_cca` is named and comes next.
+ * pool/class statement. All five are implemented.
  */
 export type DepreciationRegime =
   | 'effective_life'
@@ -466,6 +465,114 @@ export interface PooledAllowanceRules extends DepreciationRules {
   eligibility(asset: UkAssetInput): UkEligibilityOutcome;
   /** The small pools allowance limit for a period, pro-rated like the AIA. */
   smallPoolsAllowance(period: UkPeriod): UkSmallPoolsOutcome;
+}
+
+// ─── Class CCA (Canada) ─────────────────────────────────────────────────────
+
+/**
+ * The CRA classes these rules resolve to. `CaClassAssignment.cls` is typed as
+ * a string so a host that stores a class this list does not cover ("43",
+ * "16") round-trips it; `CA_CCA_CLASSES` is the list with rates.
+ */
+export type CaCcaClass = '1' | '8' | '10' | '10.1' | '12' | '14.1' | '50' | '54' | '55';
+
+/**
+ * What a Canadian asset IS, in the words the classes page uses, so `classFor`
+ * can suggest a class where the register has not recorded one.
+ */
+export type CaAssetKind =
+  | 'building'
+  | 'furniture'
+  | 'appliance'
+  | 'machinery'
+  | 'equipment'
+  | 'tool'
+  | 'photocopier'
+  | 'phone_equipment'
+  | 'computer'
+  | 'systems_software'
+  | 'software'
+  | 'motor_vehicle'
+  | 'passenger_vehicle'
+  | 'taxi_or_rental_vehicle'
+  | 'goodwill'
+  | 'licence_unlimited'
+  | 'other';
+
+/**
+ * What the Canadian rules need to know about an asset. Everything beyond
+ * `cost` is optional and tri-state: an unanswered question is never a "yes".
+ */
+export interface CaAssetInput {
+  /** Capital cost BEFORE GST/HST and PST — the class 10 / 10.1 test uses the pre-tax price. */
+  cost: number;
+  kind?: CaAssetKind | null;
+  /** A class the register already holds; when present it wins over `kind`. */
+  ccaClass?: string | null;
+  isZeroEmissionVehicle?: boolean | null;
+  acquiredDate?: Date | string | null;
+  /** Defaults to `acquiredDate`. The enhanced first-year rules key on this year. */
+  availableForUseDate?: Date | string | null;
+  /** Bought from a non-arm's-length person, or on a rollover: not eligible for the AII. */
+  nonArmsLength?: boolean | null;
+}
+
+export interface CaClassAssignment {
+  cls: CaCcaClass | string;
+  /** The class rate as a fraction (0.3 = 30%), or null where the class is not on the list. */
+  rate: number | null;
+  /** The canada.ca page the rate was read from. */
+  source: string;
+  verified: boolean;
+  note?: string;
+}
+
+export interface CaFirstYearOutcome {
+  /** Whether the half-year rule applies to this addition. */
+  halfYear: boolean;
+  /**
+   * The accelerated investment incentive factor on the net addition: 1.5 for
+   * property available for use before 2024, 1 for 2024-2027 (the half-year
+   * rule stays suspended and nothing is added), null where the AII does not
+   * apply (ZEV classes, pre-21 Nov 2018 property, non-arm's-length).
+   */
+  aiiMultiplier: number | null;
+  /**
+   * The all-in factor the net addition is multiplied by to reach the base
+   * amount for CCA — what `computeClassPeriod` takes as `baseMultiplier`.
+   * 0.5 under the half-year rule; 1.5 or 1 under the AII; 10/3, 2.5 or 11/6
+   * for a class 54 zero-emission vehicle (so that 30% of it is 100%, 75%, 55%).
+   */
+  baseMultiplier: number;
+  /** The first-year claim as a percentage of cost, where it is a round figure (ZEV 100/75/55); null otherwise. */
+  enhancedPercent: number | null;
+  verified: boolean;
+  note: string;
+}
+
+export interface CaVehicleCapOutcome {
+  /** The prescribed amount before sales taxes, or null where that year is not on the page. */
+  cap: number | null;
+  verified: boolean;
+  note: string;
+}
+
+/**
+ * A jurisdiction where the CLASS is the unit — Canada. Assets are
+ * contributions to a numbered class; capital cost allowance is a rate on the
+ * class's undepreciated capital cost each year, after the half-year rule or
+ * the accelerated investment incentive has adjusted the year's net additions.
+ */
+export interface ClassCcaRules extends DepreciationRules {
+  regime: 'class_cca';
+  /** Which class an asset joins, by the CRA's "Classes of depreciable property" page. */
+  classFor(asset: CaAssetInput): CaClassAssignment;
+  /** Half-year rule, AII or ZEV enhancement for an addition available for use on a date. */
+  firstYear(asset: CaAssetInput, onDate: Date | string): CaFirstYearOutcome;
+  /** The class 10.1 threshold for a passenger vehicle bought in a calendar year, before tax. */
+  passengerVehicleCap(year: number): CaVehicleCapOutcome;
+  /** The capital cost limit for a zero-emission passenger vehicle in class 54, before tax. */
+  zeroEmissionVehicleCap(year: number): CaVehicleCapOutcome;
 }
 
 // ─── Effective-dated rows ───────────────────────────────────────────────────
@@ -851,6 +958,183 @@ export function computePoolPeriod(input: PoolPeriodInput): PoolPeriodOutcome {
     ),
     closingWdv,
   };
+}
+
+// ─── Class period arithmetic (class_cca regime) ─────────────────────────────
+
+export interface ClassPeriodAddition {
+  /** Capital cost of the addition (for a class 10.1 or 54 vehicle, already capped at the prescribed amount plus tax). */
+  cost: number;
+  /**
+   * The factor this addition's net amount is multiplied by to reach the base
+   * amount for CCA — `CaFirstYearOutcome.baseMultiplier`. Defaults to 0.5,
+   * the half-year rule; 1 where the AII suspends it (2024-2027); 1.5 under the
+   * AII before 2024; 10/3, 2.5 or 11/6 for a class 54 zero-emission vehicle.
+   */
+  baseMultiplier?: number;
+}
+
+export interface ClassPeriodDisposal {
+  /** Proceeds of disposition less related expenses. */
+  proceeds: number;
+  /** Capital cost of the property disposed of; the amount taken out of the class is the LESSER of proceeds and this. */
+  capitalCost?: number;
+}
+
+export interface ClassPeriodInput {
+  /** Undepreciated capital cost at the start of the year (T2125 Area A column 2). */
+  openingUcc: number;
+  /** The class rate as a fraction (0.2 = 20%). */
+  rate: number;
+  additions?: ClassPeriodAddition[];
+  disposals?: ClassPeriodDisposal[];
+  /** No property is left in the class at the end of the year: a positive balance is a terminal loss. */
+  classEmptied?: boolean;
+  /**
+   * Class 10.1: the recapture and terminal loss rules do not apply. In the
+   * year the vehicle is disposed of, `halfYearOnSale` claims 50% of the CCA
+   * that would have been allowed had it still been owned (base = half the
+   * opening UCC), provided it was owned at the end of the previous year.
+   */
+  noRecaptureOrTerminalLoss?: boolean;
+  halfYearOnSale?: boolean;
+  /**
+   * CCA is optional — "any amount you like, from zero to the maximum". A cap
+   * on this year's claim; null or undefined claims the maximum.
+   */
+  claimLimit?: number | null;
+  /** A fiscal period shorter than 365 days prorates the claim: days ÷ 365. Defaults to 1. */
+  shortYearFraction?: number;
+}
+
+export interface ClassPeriodOutcome {
+  openingUcc: number;
+  additions: number;
+  /** The lesser of proceeds and capital cost, summed. */
+  disposals: number;
+  /** Column 7: opening + additions − disposals, before any adjustment. */
+  uccAfterAdditionsAndDispositions: number;
+  /** Positive where column 7 is negative: goes on the return as income, and the class closes at zero. */
+  recapture: number;
+  /** Positive where the class is emptied with a balance left: deductible, and the class closes at zero. */
+  terminalLoss: number;
+  /** Signed: negative for the half-year reduction, positive for the AII / ZEV uplift. */
+  firstYearAdjustment: number;
+  /** Column 19: the amount the rate is applied to. */
+  baseAmount: number;
+  rate: number;
+  /** The most that can be claimed this year. */
+  maxCca: number;
+  /** What was claimed: the maximum, or `claimLimit` where lower. */
+  ccaClaimed: number;
+  /** Column 22: column 7 less CCA claimed; zero after a recapture or terminal loss. */
+  closingUcc: number;
+}
+
+/**
+ * One year of one class, in the CRA's order (T2125 Area A): opening UCC;
+ * additions in; dispositions out at the LESSER of proceeds and capital cost;
+ * the UCC after additions and dispositions (column 7) — negative is a
+ * recapture, positive with nothing left in the class is a terminal loss, and
+ * in either case no CCA and the class closes at zero; otherwise the
+ * first-year adjustment on the net additions (the half-year rule takes half
+ * off, the accelerated investment incentive adds a half on or merely leaves
+ * the whole amount in, a zero-emission vehicle adds more); CCA at the class
+ * rate on that base, prorated for a short fiscal period and never more than
+ * the balance; and the closing UCC, which is column 7 less the CCA claimed.
+ *
+ * Dispositions reduce the additions NOT eligible for the AII before the
+ * eligible ones — the AII page's Example 5: "The disposition is first offset
+ * against the NEP before reducing the eligible acquisition." Here that is
+ * "lowest `baseMultiplier` first", which is the same ordering.
+ *
+ * Per year only. Multi-year replay is the host's: it calls this once per
+ * year with last year's `closingUcc` as this year's `openingUcc`.
+ */
+export function computeClassPeriod(input: ClassPeriodInput): ClassPeriodOutcome {
+  const openingUcc = Math.max(0, Number(input.openingUcc) || 0);
+  const rate = Number(input.rate);
+  if (!Number.isFinite(rate) || rate < 0 || rate > 1) {
+    throw new RangeError(`rate must be a fraction in [0, 1] — 0.2 for 20% (received ${String(input.rate)})`);
+  }
+  const shortYearFraction = input.shortYearFraction == null ? 1 : Number(input.shortYearFraction);
+  if (!Number.isFinite(shortYearFraction) || shortYearFraction <= 0 || shortYearFraction > 1) {
+    throw new RangeError(
+      `shortYearFraction must be in (0, 1] — days in the fiscal period ÷ 365 (received ${String(input.shortYearFraction)})`,
+    );
+  }
+
+  const adds = (input.additions ?? []).map((a) => {
+    const cost = Math.max(0, Number(a.cost) || 0);
+    const m = a.baseMultiplier == null ? 0.5 : Number(a.baseMultiplier);
+    if (!Number.isFinite(m) || m < 0) {
+      throw new RangeError(`baseMultiplier must be a non-negative number (received ${String(a.baseMultiplier)})`);
+    }
+    return { cost, m };
+  });
+  const additions = adds.reduce((t, a) => t + a.cost, 0);
+
+  let disposals = 0;
+  for (const d of input.disposals ?? []) {
+    const proceeds = Math.max(0, Number(d.proceeds) || 0);
+    disposals +=
+      d.capitalCost != null ? Math.min(proceeds, Math.max(0, Number(d.capitalCost) || 0)) : proceeds;
+  }
+
+  const column7 = toCents(openingUcc + additions - disposals);
+
+  const done = (partial: Partial<ClassPeriodOutcome>): ClassPeriodOutcome => ({
+    openingUcc,
+    additions: toCents(additions),
+    disposals: toCents(disposals),
+    uccAfterAdditionsAndDispositions: column7,
+    recapture: 0,
+    terminalLoss: 0,
+    firstYearAdjustment: 0,
+    baseAmount: 0,
+    rate,
+    maxCca: 0,
+    ccaClaimed: 0,
+    closingUcc: 0,
+    ...partial,
+  });
+
+  if (column7 < 0) {
+    // Class 10.1 has no recapture: the balance simply closes at zero.
+    return done({ recapture: input.noRecaptureOrTerminalLoss ? 0 : toCents(-column7) });
+  }
+
+  if (input.classEmptied && !input.noRecaptureOrTerminalLoss) {
+    return done({ terminalLoss: column7 });
+  }
+
+  let baseAmount: number;
+  let firstYearAdjustment = 0;
+  if (input.halfYearOnSale) {
+    // Class 10.1 in the year of sale: half the CCA that would have been
+    // allowed — the base is 50% of the opening UCC, the additions and
+    // dispositions of the year notwithstanding.
+    baseAmount = toCents(openingUcc * 0.5);
+  } else {
+    // Dispositions come off the least-favoured additions first (the half-year
+    // ones before the AII ones), then off the opening balance.
+    let remaining = disposals;
+    for (const a of [...adds].sort((x, y) => x.m - y.m)) {
+      const offset = Math.min(a.cost, remaining);
+      remaining -= offset;
+      firstYearAdjustment += (a.cost - offset) * (a.m - 1);
+    }
+    firstYearAdjustment = toCents(firstYearAdjustment);
+    baseAmount = toCents(Math.max(0, column7 + firstYearAdjustment));
+  }
+
+  const maxCca = toCents(Math.min(column7, baseAmount * rate * shortYearFraction));
+  const ccaClaimed =
+    input.claimLimit == null ? maxCca : toCents(Math.min(maxCca, Math.max(0, Number(input.claimLimit) || 0)));
+  // A class 10.1 vehicle sold this year leaves the class: nothing carries forward.
+  const closingUcc = input.classEmptied ? 0 : toCents(column7 - ccaClaimed);
+
+  return done({ firstYearAdjustment, baseAmount, maxCca, ccaClaimed, closingUcc });
 }
 
 // ─── Generic (jurisdiction-neutral) rules ───────────────────────────────────

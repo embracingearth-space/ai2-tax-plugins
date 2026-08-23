@@ -9,7 +9,7 @@
  * - Factory: createAdaptiveGenericPlugin (for building new plugins)
  * - EU Factory: createEUPlugin (for adding EU member states)
  * - Treatments: GENERIC_TREATMENTS, getTreatmentsForPlugin (transaction → box mapping)
- * - Depreciation: GENERIC_DEPRECIATION_RULES, getDepreciationRules, computePoolPeriod (capital allowances)
+ * - Depreciation: GENERIC_DEPRECIATION_RULES, getDepreciationRules, computePoolPeriod, computeClassPeriod (capital allowances)
  * - Annual reports: AnnualReportDefinition (AU TPAR)
  */
 
@@ -62,6 +62,7 @@ export {
   computeDeclineInValue,
   computeBalancingAdjustment,
   computePoolPeriod,
+  computeClassPeriod,
   sortNewestFirst,
   resolveEffectiveDated,
   DV_RATE_MULTIPLIER,
@@ -89,6 +90,17 @@ export type {
   PoolPeriodDisposal,
   PoolPeriodInput,
   PoolPeriodOutcome,
+  ClassCcaRules,
+  CaCcaClass,
+  CaAssetKind,
+  CaAssetInput,
+  CaClassAssignment,
+  CaFirstYearOutcome,
+  CaVehicleCapOutcome,
+  ClassPeriodAddition,
+  ClassPeriodDisposal,
+  ClassPeriodInput,
+  ClassPeriodOutcome,
   PartYearInput,
   DepreciationExplainer,
   DepreciationVocabulary,
