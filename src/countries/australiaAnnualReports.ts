@@ -15,7 +15,12 @@
  * Reference: https://www.ato.gov.au/businesses-and-organisations/preparing-lodging-and-paying/reports-and-returns/taxable-payments-annual-report
  */
 
-import type { AnnualReportDefinition, AuthorityInfo } from '../types';
+import type {
+  AnnualReportDefinition,
+  AnnualReportQualificationTest,
+  AnnualReportQualifyingService,
+  AuthorityInfo,
+} from '../types';
 
 const ATO_TPAR_HELP =
   'https://www.ato.gov.au/businesses-and-organisations/preparing-lodging-and-paying/reports-and-returns/taxable-payments-annual-report';
@@ -56,27 +61,178 @@ export function tparDueDateYmd(financialYearEnd: Date): string {
 }
 
 /**
- * The five services that bring a business into the reporting system. Building
- * and construction is the one with no threshold test: a business that pays
- * contractors for building and construction services lodges regardless of what
- * share of its income those services are.
+ * The five services that bring a business into the reporting system — and the
+ * TWO DIFFERENT TESTS that decide it.
+ *
+ * Building and construction is NOT exempt from qualification. It has its own
+ * test, and modelling it as "always lodge" tells a business with an incidental
+ * building payment to lodge a report it does not owe. The ATO's own words, from
+ * "Building and construction services" (last updated 23 April 2024):
+ *
+ *   "You are considered to be a business that primarily operates in building and
+ *    construction services if any apply:
+ *      • in the current financial year, 50% or more of your business income is
+ *        earned from providing building and construction services
+ *      • in the current financial year, 50% or more of your business activity
+ *        relates to building and construction services
+ *      • in the financial year immediately before the current financial year,
+ *        50% or more of your business income was earned from providing building
+ *        and construction services"
+ *
+ * The other four use the ordinary TPRS test: 10% or more of business income from
+ * providing that service in the current year, with courier and road freight
+ * measured together.
+ *
+ * Reference: https://www.ato.gov.au/businesses-and-organisations/preparing-lodging-and-paying/reports-and-returns/taxable-payments-annual-report/work-out-if-you-need-to-lodge-a-tpar/building-and-construction-services
  */
-export const AU_TPRS_SERVICES = [
-  { key: 'building_and_construction', label: 'Building and construction services', alwaysLodge: true },
-  { key: 'cleaning', label: 'Cleaning services' },
-  { key: 'courier_and_road_freight', label: 'Courier and road freight services' },
-  { key: 'information_technology', label: 'Information technology services' },
+export const AU_TPRS_SERVICES: AnnualReportQualifyingService[] = [
+  {
+    key: 'building_and_construction',
+    label: 'Building and construction services',
+    test: 'primarily_in_industry',
+    thresholdPercent: 50,
+    activityLimb: true,
+    priorYearLimb: true,
+  },
+  { key: 'cleaning', label: 'Cleaning services', test: 'income_share', thresholdPercent: 10 },
+  {
+    key: 'courier_and_road_freight',
+    label: 'Courier and road freight services',
+    test: 'income_share',
+    thresholdPercent: 10,
+    combines: ['Courier services', 'Road freight services'],
+  },
+  {
+    key: 'information_technology',
+    label: 'Information technology services',
+    test: 'income_share',
+    thresholdPercent: 10,
+  },
   {
     key: 'security_investigation_surveillance',
     label: 'Security, investigation or surveillance services',
+    test: 'income_share',
+    thresholdPercent: 10,
   },
 ];
+
+const TPRS_SERVICE_BY_KEY = new Map(AU_TPRS_SERVICES.map((s) => [s.key, s] as const));
+
+/** Which limb of a test was satisfied. */
+export type TprsQualificationLimb =
+  | 'current_year_income'
+  | 'current_year_activity'
+  | 'prior_year_income';
+
+export interface TprsQualificationInput {
+  /** One of the `AU_TPRS_SERVICES` keys. An unknown key throws rather than answering "no". */
+  service: string;
+  /** 0-100: share of CURRENT-year business income earned from providing that service. */
+  currentYearIncomePercent?: number;
+  /**
+   * 0-100: share of CURRENT-year business ACTIVITY relating to that service.
+   * Only the primarily-in-industry test has this limb; it is ignored elsewhere.
+   */
+  currentYearActivityPercent?: number;
+  /**
+   * 0-100: share of the IMMEDIATELY PRECEDING year's business income.
+   * Only the primarily-in-industry test has this limb; it is ignored elsewhere.
+   */
+  priorYearIncomePercent?: number;
+}
+
+export interface TprsQualificationOutcome {
+  /** True where any limb of the applicable test is met. */
+  mustLodge: boolean;
+  test: AnnualReportQualificationTest;
+  thresholdPercent: number;
+  /** The limbs that were met. Empty when the test is not satisfied. */
+  limbsMet: TprsQualificationLimb[];
+  note: string;
+}
+
+/**
+ * Whether payments for a reportable service oblige a business to lodge a TPAR.
+ *
+ * The test is "or", not "and": ANY limb reaching the threshold qualifies. The
+ * boundary is inclusive — the ATO says "50% or more" and "10% or more", so 50 is
+ * in and 49 is out.
+ *
+ * Supplying no figure at all throws rather than returning `false`. A confident
+ * "you do not need to lodge" on no evidence is exactly the kind of answer a tax
+ * product should not give.
+ */
+export function auTprsQualifies(input: TprsQualificationInput): TprsQualificationOutcome {
+  const service = TPRS_SERVICE_BY_KEY.get(input.service);
+  if (!service) {
+    throw new RangeError(
+      `"${String(input.service)}" is not a TPRS reportable service. Expected one of: ` +
+        `${AU_TPRS_SERVICES.map((s) => s.key).join(', ')}.`,
+    );
+  }
+
+  const currentIncome = toPercentOrNull(input.currentYearIncomePercent);
+  const currentActivity = toPercentOrNull(input.currentYearActivityPercent);
+  const priorIncome = toPercentOrNull(input.priorYearIncomePercent);
+  if (currentIncome === null && currentActivity === null && priorIncome === null) {
+    throw new RangeError(
+      'auTprsQualifies needs at least one of currentYearIncomePercent, ' +
+        'currentYearActivityPercent or priorYearIncomePercent — with none of them there is ' +
+        'nothing to test, and answering "no" would be a guess.',
+    );
+  }
+
+  const threshold = service.thresholdPercent;
+  const limbsMet: TprsQualificationLimb[] = [];
+  if (currentIncome !== null && currentIncome >= threshold) limbsMet.push('current_year_income');
+  if (service.activityLimb && currentActivity !== null && currentActivity >= threshold) {
+    limbsMet.push('current_year_activity');
+  }
+  if (service.priorYearLimb && priorIncome !== null && priorIncome >= threshold) {
+    limbsMet.push('prior_year_income');
+  }
+
+  const mustLodge = limbsMet.length > 0;
+  const note = mustLodge
+    ? `${service.label}: the ${threshold}% test is met, so a TPAR is due for this year.`
+    : `${service.label}: no limb of the ${threshold}% test is met on the figures given, so no ` +
+      'TPAR is due for this service. Check the other reportable services separately.';
+
+  return { mustLodge, test: service.test, thresholdPercent: threshold, limbsMet, note };
+}
+
+function toPercentOrNull(value: number | undefined): number | null {
+  if (value === undefined || value === null) return null;
+  const n = Number(value);
+  if (!Number.isFinite(n)) return null;
+  return Math.min(100, Math.max(0, n));
+}
 
 export const AU_TPAR: AnnualReportDefinition = {
   id: 'tpar',
   label: 'Taxable payments annual report (TPAR)',
   authority: ATO_AUTHORITY,
   dueDate: tparDueDate,
+  /**
+   * EXACTLY the fields the TPAR carries, and deliberately no more.
+   *
+   * "TPAR contractor details to report" (last updated 23 April 2024) lists what
+   * "you must include in your TPAR": the contractor's ABN if known, name and
+   * address, and the three totals below. Phone number, email address and bank
+   * account details appear on the same page in a SEPARATE sentence — "We may ask
+   * for extra information about your contractors, including their: phone number,
+   * email address, bank account details (if they are paid by electronic bank
+   * transfer)" — which is a possible follow-up REQUEST from the ATO, not a
+   * column of the report.
+   *
+   * So they are not columns here. Adding them would tell a user to hand the ATO
+   * contractor banking details the annual report does not carry, and a tax
+   * product that over-collects on a guess is worse than one that collects what
+   * the form asks for. Keep them out unless the ATO's list of what the report
+   * must include changes.
+   *
+   * Reference: https://www.ato.gov.au/businesses-and-organisations/preparing-lodging-and-paying/reports-and-returns/taxable-payments-annual-report/tpar-contractor-details-to-report
+   */
   columns: [
     {
       id: 'abn',
@@ -115,10 +271,17 @@ export const AU_TPAR: AnnualReportDefinition = {
   wholeDollarsOnly: true,
   qualifyingServices: AU_TPRS_SERVICES,
   thresholdNote:
-    'Lodge a TPAR if you paid contractors for a reportable service and the payments you ' +
-    'received for that service are 10% or more of your business income. Courier and road ' +
-    'freight are combined for the 10% test. The test does not apply to building and ' +
-    'construction services — if you paid contractors for those, you lodge regardless.',
+    'Two different tests decide this. For cleaning, courier and road freight, information ' +
+    'technology, and security, investigation or surveillance services: lodge a TPAR if the ' +
+    'payments you received for that service are 10% or more of your business income, and note ' +
+    'that courier and road freight are combined for that 10% test. Building and construction ' +
+    'is not exempt from a test — it has a different one. You primarily operate in building ' +
+    'and construction services, and so lodge, if ANY of these apply: in the current financial ' +
+    'year, 50% or more of your business income is earned from providing building and ' +
+    'construction services; in the current financial year, 50% or more of your business ' +
+    'activity relates to building and construction services; or in the financial year ' +
+    'immediately before the current one, 50% or more of your business income was earned from ' +
+    'providing building and construction services.',
   lodgmentNote:
     'This report is prepared here so you can check it before you lodge. It is not the ATO ' +
     'lodgment file: lodge your TPAR through ATO online services, compatible business ' +

@@ -41,6 +41,8 @@ export type {
   AnnualReportColumnType,
   AnnualReportColumn,
   AnnualReportDefinition,
+  AnnualReportQualificationTest,
+  AnnualReportQualifyingService,
 } from './types';
 
 // ─── Tax treatments (transaction → box mapping catalogue) ────────────────────
@@ -96,8 +98,15 @@ export {
   AU_TPAR,
   AU_ANNUAL_REPORTS,
   AU_TPRS_SERVICES,
+  auTprsQualifies,
   tparDueDate,
   tparDueDateYmd,
+} from './countries/australiaAnnualReports';
+
+export type {
+  TprsQualificationInput,
+  TprsQualificationLimb,
+  TprsQualificationOutcome,
 } from './countries/australiaAnnualReports';
 
 // ─── Registry ────────────────────────────────────────────────────────────────

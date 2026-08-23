@@ -29,6 +29,7 @@ import {
   type DepreciationRules,
   AU_DAY_FRACTION_DENOMINATOR,
   tparDueDateYmd,
+  auTprsQualifies,
   resolveWriteOffRow,
   sortWriteOffRowsNewestFirst,
   type AuWriteOffRow,
@@ -846,7 +847,7 @@ describe('AU annual reports — Taxable payments annual report (TPAR)', () => {
     expect(AU_TPAR.wholeDollarsOnly).toBe(true);
   });
 
-  it('lists the five TPRS services, and only building and construction always lodges', () => {
+  it('lists the five TPRS services, and building and construction has a DIFFERENT test, not none', () => {
     const services = AU_TPAR.qualifyingServices ?? [];
     expect(services.map((s) => s.key)).toEqual([
       'building_and_construction',
@@ -855,10 +856,26 @@ describe('AU annual reports — Taxable payments annual report (TPAR)', () => {
       'information_technology',
       'security_investigation_surveillance',
     ]);
-    expect(services.find((s) => s.key === 'building_and_construction')?.alwaysLodge).toBe(true);
+
+    const bc = services.find((s) => s.key === 'building_and_construction');
+    expect(bc?.test).toBe('primarily_in_industry');
+    expect(bc?.thresholdPercent).toBe(50);
+    expect(bc?.activityLimb).toBe(true);
+    expect(bc?.priorYearLimb).toBe(true);
+
+    // The other four use the ordinary 10% share test, on current-year income only.
     for (const s of services.filter((x) => x.key !== 'building_and_construction')) {
-      expect(s.alwaysLodge).toBeUndefined();
+      expect(s.test).toBe('income_share');
+      expect(s.thresholdPercent).toBe(10);
+      expect(s.activityLimb).toBeUndefined();
+      expect(s.priorYearLimb).toBeUndefined();
     }
+
+    // Courier and road freight are one entry because the ATO measures them as one.
+    expect(services.find((s) => s.key === 'courier_and_road_freight')?.combines).toEqual([
+      'Courier services',
+      'Road freight services',
+    ]);
   });
 
   it('states the 10% threshold and that courier and road freight are combined', () => {
@@ -867,6 +884,26 @@ describe('AU annual reports — Taxable payments annual report (TPAR)', () => {
     expect(AU_TPAR.thresholdNote).toMatch(/building and construction/i);
   });
 
+  it('the threshold note gives building and construction its own 50% test, not an exemption', () => {
+    const note = AU_TPAR.thresholdNote ?? '';
+    expect(note).toMatch(/50% or more/);
+    expect(note).toMatch(/business activity/i);
+    expect(note).toMatch(/immediately before/i);
+    // The old, wrong model said the test simply did not apply to B&C.
+    expect(note).not.toMatch(/lodge regardless/i);
+    expect(note).not.toMatch(/does not apply to building/i);
+  });
+
+  it('carries the ATO contractor columns and NOT the follow-up-request fields', () => {
+    // Phone, email and bank details are what the ATO "may ask for" separately —
+    // they are not columns of the TPAR, so collecting them here would tell a
+    // user to send the ATO data this report does not carry.
+    const ids = AU_TPAR.columns.map((c) => c.id);
+    expect(ids).not.toContain('phone');
+    expect(ids).not.toContain('email');
+    expect(ids).not.toContain('bankAccount');
+    expect(AU_TPAR.columns).toHaveLength(6);
+  });
 
   it('says plainly that the report is prepared here and lodged through the ATO', () => {
     expect(AU_TPAR.lodgmentNote).toMatch(/prepared here/i);
@@ -874,6 +911,131 @@ describe('AU annual reports — Taxable payments annual report (TPAR)', () => {
     expect(AU_TPAR.lodgmentNote).toMatch(/28 August/);
   });
 });
+// ─── TPRS qualification — two tests, not one test and an exemption ──────────
+
+describe('AU TPAR — building and construction has its own 50% test', () => {
+  // ATO, "Building and construction services" (last updated 23 April 2024):
+  // "You are considered to be a business that primarily operates in building and
+  //  construction services if any apply: in the current financial year, 50% or
+  //  more of your business income is earned from providing building and
+  //  construction services; in the current financial year, 50% or more of your
+  //  business activity relates to building and construction services; in the
+  //  financial year immediately before the current financial year, 50% or more
+  //  of your business income was earned from providing building and
+  //  construction services."
+  const bc = 'building_and_construction';
+
+  it('50% of current-year income is in — the threshold is inclusive', () => {
+    const r = auTprsQualifies({ service: bc, currentYearIncomePercent: 50 });
+    expect(r.mustLodge).toBe(true);
+    expect(r.test).toBe('primarily_in_industry');
+    expect(r.thresholdPercent).toBe(50);
+    expect(r.limbsMet).toEqual(['current_year_income']);
+  });
+
+  it('49% of current-year income is out — it is not "always lodge"', () => {
+    const r = auTprsQualifies({ service: bc, currentYearIncomePercent: 49 });
+    expect(r.mustLodge).toBe(false);
+    expect(r.limbsMet).toEqual([]);
+  });
+
+  it('50% of current-year ACTIVITY qualifies even where the income share does not', () => {
+    const r = auTprsQualifies({
+      service: bc,
+      currentYearIncomePercent: 20,
+      currentYearActivityPercent: 50,
+    });
+    expect(r.mustLodge).toBe(true);
+    expect(r.limbsMet).toEqual(['current_year_activity']);
+  });
+
+  it('the PRIOR-year limb catches a year that is itself below 50% — Sascha\'s Cabinet Makers', () => {
+    // The ATO's own example: a year under the threshold still qualifies on the
+    // back of the year immediately before it.
+    const r = auTprsQualifies({
+      service: bc,
+      currentYearIncomePercent: 30,
+      currentYearActivityPercent: 30,
+      priorYearIncomePercent: 60,
+    });
+    expect(r.mustLodge).toBe(true);
+    expect(r.limbsMet).toEqual(['prior_year_income']);
+  });
+
+  it('49% on every limb qualifies on none of them', () => {
+    const r = auTprsQualifies({
+      service: bc,
+      currentYearIncomePercent: 49,
+      currentYearActivityPercent: 49,
+      priorYearIncomePercent: 49,
+    });
+    expect(r.mustLodge).toBe(false);
+    expect(r.note).toMatch(/50%/);
+  });
+
+  it('every limb over the line is reported, not just the first', () => {
+    const r = auTprsQualifies({
+      service: bc,
+      currentYearIncomePercent: 80,
+      currentYearActivityPercent: 75,
+      priorYearIncomePercent: 90,
+    });
+    expect(r.limbsMet).toEqual([
+      'current_year_income',
+      'current_year_activity',
+      'prior_year_income',
+    ]);
+  });
+});
+
+describe('AU TPAR — the other four services use the ordinary 10% test', () => {
+  it('10% of business income is in, 9% is out', () => {
+    expect(auTprsQualifies({ service: 'cleaning', currentYearIncomePercent: 10 }).mustLodge).toBe(
+      true,
+    );
+    expect(auTprsQualifies({ service: 'cleaning', currentYearIncomePercent: 9 }).mustLodge).toBe(
+      false,
+    );
+  });
+
+  it('reports the 10% test and the income-share shape', () => {
+    const r = auTprsQualifies({ service: 'information_technology', currentYearIncomePercent: 12 });
+    expect(r.test).toBe('income_share');
+    expect(r.thresholdPercent).toBe(10);
+  });
+
+  it('courier and road freight are one entry, measured together', () => {
+    const r = auTprsQualifies({
+      service: 'courier_and_road_freight',
+      currentYearIncomePercent: 10,
+    });
+    expect(r.mustLodge).toBe(true);
+  });
+
+  it('has no activity limb and no prior-year limb — those belong to the 50% test', () => {
+    const r = auTprsQualifies({
+      service: 'security_investigation_surveillance',
+      currentYearIncomePercent: 5,
+      currentYearActivityPercent: 90,
+      priorYearIncomePercent: 90,
+    });
+    expect(r.mustLodge).toBe(false);
+    expect(r.limbsMet).toEqual([]);
+  });
+});
+
+describe('AU TPAR — the qualification test refuses to guess', () => {
+  it('an unknown service throws rather than answering "no"', () => {
+    expect(() =>
+      auTprsQualifies({ service: 'landscaping', currentYearIncomePercent: 90 }),
+    ).toThrow(/not a TPRS reportable service/i);
+  });
+
+  it('no figures at all throws rather than returning a confident false', () => {
+    expect(() => auTprsQualifies({ service: 'cleaning' })).toThrow(/at least one/i);
+  });
+});
+
 describe('AU TPAR — the due date is a calendar date and must not drift', () => {
   it('is 28 August following the financial year end', () => {
     expect(tparDueDateYmd(new Date(2027, 5, 30))).toBe('2027-08-28');
