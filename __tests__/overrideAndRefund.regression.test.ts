@@ -19,6 +19,9 @@ import {
   brazilPlugin,
   mexicoPlugin,
   japanPlugin,
+  indonesiaPlugin,
+  saudiArabiaPlugin,
+  malaysiaPlugin,
 } from '../src';
 
 describe('Regression — user overrides are preserved in calculateFields output', () => {
@@ -47,6 +50,45 @@ describe('Regression — user overrides are preserved in calculateFields output'
     expect(r.pis_output).toBe(100);
     expect(r.cofins_output).toBe(200);
     expect(r.total_output).toBe(300); // override-aware total, not the calc total
+  });
+
+  it('Brazil: overrides are normalised to 2 dp like the totals built from them', () => {
+    const r = brazilPlugin.calculateFields({ pis_output: 100.123, cofins_output: 0, pis_credits: 0, cofins_credits: 0 });
+    expect(r.pis_output).toBe(100.12);
+    expect(r.total_output).toBe(100.12);
+  });
+
+  it('Indonesia: overridden output_vat / input_vat are returned (whole rupiah)', () => {
+    const r = indonesiaPlugin.calculateFields({ domestic_delivery: 1000000, output_vat: 50000, input_vat: 20000 });
+    expect(r.output_vat).toBe(50000); // calc would be 110000
+    expect(r.input_vat).toBe(20000);
+    expect(r.net_vat).toBe(30000);
+  });
+
+  it('Mexico: overridden iva_causado / iva_acreditable are returned', () => {
+    const r = mexicoPlugin.calculateFields({ sales_16: 100000, iva_causado: 5000, iva_acreditable: 1000 });
+    expect(r.iva_causado).toBe(5000); // calc would be 16000
+    expect(r.iva_acreditable).toBe(1000);
+    expect(r.net_iva).toBe(4000);
+  });
+
+  it('Saudi Arabia: overridden output_vat / input_vat are returned', () => {
+    const r = saudiArabiaPlugin.calculateFields({ standard_sales: 100000, output_vat: 5000, input_vat: 1000 });
+    expect(r.output_vat).toBe(5000); // calc would be 15000
+    expect(r.input_vat).toBe(1000);
+    expect(r.net_vat).toBe(4000);
+  });
+
+  it('Malaysia: overridden payables are returned and total_sst follows them', () => {
+    const r = malaysiaPlugin.calculateFields({ taxable_sales_10: 100000, sales_tax_payable: 5000, service_tax_payable: 300 });
+    expect(r.sales_tax_payable).toBe(5000); // calc would be 10000
+    expect(r.service_tax_payable).toBe(300);
+    expect(r.total_sst).toBe(5300);
+  });
+
+  it('Japan: an overridden input_national_total is returned (whole yen)', () => {
+    const r = japanPlugin.calculateFields({ sales_standard: 1000000, input_national_total: 12345 });
+    expect(r.input_national_total).toBe(12345);
   });
 });
 

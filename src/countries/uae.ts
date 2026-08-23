@@ -40,7 +40,7 @@ const aePlugin: TaxFilingPlugin = {
           { id: 'standard_rated_dubai', label: 'Standard rated supplies in Dubai', officialLabel: '1b', type: 'currency', editable: true, required: false },
           { id: 'standard_rated_sharjah', label: 'Standard rated supplies in Sharjah', officialLabel: '1c', type: 'currency', editable: true, required: false },
           { id: 'standard_rated_other', label: 'Standard rated supplies in other Emirates', officialLabel: '1d', type: 'currency', editable: true, required: false },
-          { id: 'total_standard_supplies', label: 'Total standard rated supplies', type: 'currency', calculated: true, editable: false, required: true, autoPopulateFrom: 'income_standard' },
+          { id: 'total_standard_supplies', label: 'Total standard rated supplies', type: 'currency', calculated: true, editable: false, required: true, autoPopulateFrom: 'income_standard_excl_tax' },
           { id: 'tax_refund_supplies', label: 'Tax refunds provided to tourists', officialLabel: '2', type: 'currency', editable: true, required: false },
           { id: 'zero_rated_supplies', label: 'Zero-rated supplies', officialLabel: '3', type: 'currency', editable: true, required: false, helpText: 'Exports, international transport, first supply of residential property, certain education/health' },
           { id: 'exempt_supplies', label: 'Exempt supplies', officialLabel: '4', type: 'currency', editable: true, required: false, helpText: 'Financial services, bare land, local passenger transport, residential property (subsequent)' },
@@ -52,7 +52,7 @@ const aePlugin: TaxFilingPlugin = {
         id: 'purchases',
         title: 'VAT on Expenses and All Other Inputs',
         fields: [
-          { id: 'standard_rated_expenses', label: 'Standard rated expenses', officialLabel: '9', type: 'currency', editable: true, required: true, autoPopulateFrom: 'expenses_standard', helpText: 'Business expenses at 5%' },
+          { id: 'standard_rated_expenses', label: 'Standard rated expenses', officialLabel: '9', type: 'currency', editable: true, required: true, autoPopulateFrom: 'expenses_standard_excl_tax', helpText: 'Business expenses at 5%' },
           { id: 'reverse_charge_paid', label: 'Supplies subject to reverse charge (paid)', officialLabel: '10', type: 'currency', editable: true, required: false },
           { id: 'input_vat', label: 'Total input VAT recoverable', officialLabel: '11', type: 'currency', calculated: true, editable: true, required: true, autoPopulateFrom: 'input_tax' },
         ],
@@ -107,8 +107,11 @@ const aePlugin: TaxFilingPlugin = {
   },
 
   getAutoPopulateMapping: (): AggregationMapping[] => [
-    { fieldId: 'total_standard_supplies', aggregateKey: 'income_standard' },
-    { fieldId: 'standard_rated_expenses', aggregateKey: 'expenses_standard' },
+    // Output/input tax here is field × rate, so these fields are the TAX-EXCLUSIVE
+    // base: auto-fill from the *_excl_tax aggregates, never the gross totals
+    // (gross × rate overstated the tax by the rate). embracingearth.space
+    { fieldId: 'total_standard_supplies', aggregateKey: 'income_standard_excl_tax' },
+    { fieldId: 'standard_rated_expenses', aggregateKey: 'expenses_standard_excl_tax' },
     { fieldId: 'input_vat', aggregateKey: 'input_tax' },
   ],
   getRoundingRules: (): RoundingConfig => ({ method: 'nearest', decimals: 2 }),

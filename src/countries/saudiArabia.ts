@@ -36,7 +36,7 @@ const saPlugin: TaxFilingPlugin = {
         id: 'sales',
         title: 'Sales Subject to VAT (المبيعات الخاضعة)',
         fields: [
-          { id: 'standard_sales', label: 'Standard rated domestic sales (15%)', officialLabel: 'Box 1', type: 'currency', editable: true, required: true, autoPopulateFrom: 'income_standard', helpText: 'Sales of goods/services within KSA at 15%' },
+          { id: 'standard_sales', label: 'Standard rated domestic sales (15%)', officialLabel: 'Box 1', type: 'currency', editable: true, required: true, autoPopulateFrom: 'income_standard_excl_tax', helpText: 'Sales of goods/services within KSA at 15%' },
           { id: 'private_sales_to_gcc', label: 'Sales to registered customers in GCC', officialLabel: 'Box 2', type: 'currency', editable: true, required: false },
           { id: 'zero_rated_domestic', label: 'Zero-rated domestic sales', officialLabel: 'Box 3', type: 'currency', editable: true, required: false, helpText: 'Medicines, medical equipment, qualifying metals' },
           { id: 'exports', label: 'Exports', officialLabel: 'Box 4', type: 'currency', editable: true, required: false },
@@ -49,7 +49,7 @@ const saPlugin: TaxFilingPlugin = {
         id: 'purchases',
         title: 'Purchases Subject to VAT (المشتريات الخاضعة)',
         fields: [
-          { id: 'standard_purchases', label: 'Standard rated domestic purchases', officialLabel: 'Box 7', type: 'currency', editable: true, required: true, autoPopulateFrom: 'expenses_standard' },
+          { id: 'standard_purchases', label: 'Standard rated domestic purchases', officialLabel: 'Box 7', type: 'currency', editable: true, required: true, autoPopulateFrom: 'expenses_standard_excl_tax' },
           { id: 'imports_subject_vat', label: 'Imports subject to VAT (paid at customs)', officialLabel: 'Box 8', type: 'currency', editable: true, required: false },
           { id: 'imports_reverse_charge', label: 'Imports subject to VAT (reverse charge)', officialLabel: 'Box 9', type: 'currency', editable: true, required: false },
           { id: 'zero_rated_purchases', label: 'Zero-rated purchases', officialLabel: 'Box 10', type: 'currency', editable: true, required: false },
@@ -120,8 +120,11 @@ const saPlugin: TaxFilingPlugin = {
   },
 
   getAutoPopulateMapping: (): AggregationMapping[] => [
-    { fieldId: 'standard_sales', aggregateKey: 'income_standard' },
-    { fieldId: 'standard_purchases', aggregateKey: 'expenses_standard' },
+    // Output/input tax here is field × rate, so these fields are the TAX-EXCLUSIVE
+    // base: auto-fill from the *_excl_tax aggregates, never the gross totals
+    // (gross × rate overstated the tax by the rate). embracingearth.space
+    { fieldId: 'standard_sales', aggregateKey: 'income_standard_excl_tax' },
+    { fieldId: 'standard_purchases', aggregateKey: 'expenses_standard_excl_tax' },
     { fieldId: 'input_vat', aggregateKey: 'input_tax' },
   ],
   getRoundingRules: (): RoundingConfig => ({ method: 'nearest', decimals: 2 }),

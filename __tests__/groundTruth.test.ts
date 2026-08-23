@@ -17,6 +17,13 @@ import {
   japanPlugin,
   usaPlugin,
   createEUPlugin,
+  mexicoPlugin,
+  saudiArabiaPlugin,
+  uaePlugin,
+  indonesiaPlugin,
+  thailandPlugin,
+  southKoreaPlugin,
+  philippinesPlugin,
   getPluginForCountry,
   listOfficialCountries,
   getTreatmentsForPlugin,
@@ -344,6 +351,25 @@ describe('Fields declared excl. tax auto-populate from *_excl_tax aggregates', (
       'expenses_domestic_excl_tax', 'income_standard_excl_tax', 'input_vat',
     ]);
     expect([...keysOf(japanPlugin)].sort()).toEqual(['expenses_standard', 'income_standard_excl_tax']);
+  });
+  it('every plugin whose output tax is field × rate auto-fills that field tax-EXCLUSIVE', () => {
+    // Same bug class as EU/SG/JP: the statutory base on these forms excludes the
+    // tax, so a gross auto-fill overstated output tax by the rate.
+    const salesKey = (p: TaxFilingPlugin, fieldId: string) =>
+      p.getAutoPopulateMapping().find((m) => m.fieldId === fieldId)?.aggregateKey;
+    expect(salesKey(mexicoPlugin, 'sales_16')).toBe('income_standard_excl_tax');
+    expect(salesKey(mexicoPlugin, 'purchases_16')).toBe('expenses_standard_excl_tax');
+    expect(salesKey(saudiArabiaPlugin, 'standard_sales')).toBe('income_standard_excl_tax');
+    expect(salesKey(saudiArabiaPlugin, 'standard_purchases')).toBe('expenses_standard_excl_tax');
+    expect(salesKey(uaePlugin, 'total_standard_supplies')).toBe('income_standard_excl_tax');
+    expect(salesKey(uaePlugin, 'standard_rated_expenses')).toBe('expenses_standard_excl_tax');
+    expect(salesKey(indonesiaPlugin, 'domestic_delivery')).toBe('income_standard_excl_tax');
+    expect(salesKey(indonesiaPlugin, 'domestic_acquisition')).toBe('expenses_taxable_excl_tax');
+    expect(salesKey(thailandPlugin, 'taxable_sales')).toBe('income_standard_excl_tax');
+    expect(salesKey(thailandPlugin, 'taxable_purchases')).toBe('expenses_taxable_excl_tax');
+    expect(salesKey(southKoreaPlugin, 'taxable_sales')).toBe('income_standard_excl_tax');
+    expect(salesKey(southKoreaPlugin, 'taxable_purchases')).toBe('expenses_taxable_excl_tax');
+    expect(salesKey(philippinesPlugin, 'vatable_sales')).toBe('income_standard_excl_tax');
   });
   it('JP: sales_standard (excl. tax) only — purchases_standard is declared tax-inclusive', () => {
     expect(mappingOf(japanPlugin).sales_standard).toBe('income_standard_excl_tax');

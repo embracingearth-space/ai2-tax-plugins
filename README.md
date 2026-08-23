@@ -132,7 +132,12 @@ npm run build
 
 - SemVer is used for releases.
 - Breaking contract changes are major versions only.
-- `ai2-core-app` should pin `@ai2/tax-plugins` with a bounded range (for example `^1.0.0`).
+- `ai2-core-app` should pin `@ai2/tax-plugins` with a bounded range (for example `^2.0.0`).
+- **2.0.0 migration** (from 1.x): the host must emit the new aggregate keys listed
+  under *Tax treatments* (notably `income_total_excl_input_taxed`,
+  `expenses_taxable_gross` and the `*_excl_tax` family), and New Zealand
+  statements saved under 1.x must be re-keyed to the official GST101A box numbers.
+  The exact field-id mapping is in `CHANGELOG.md`.
 
 ## Security and data handling
 

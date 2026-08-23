@@ -27,6 +27,12 @@ import { toCsv } from '../exportUtils';
 // effective-dated standard rate is resolved from the single-source rate ledger
 // (getStandardRateAsOf); these rates are only used when a country has no ledger
 // row yet.
+
+/** 0.255 → "25.5", 0.19 → "19", 0.081 → "8.1" — never a rounded-away fraction. */
+function formatRatePercent(rate: number): string {
+  return String(Math.round(rate * 10000) / 100);
+}
+
 const EU_CONFIG: Record<
   string,
   {
@@ -259,7 +265,9 @@ function createEUPlugin(code: string): TaxFilingPlugin {
   // Single source of truth: resolve the current standard rate from the dated
   // ledger, falling back to the EU_CONFIG value if a country has no ledger row.
   const currentRate = getStandardRateAsOf(code) || rate;
-  const ratePercent = (currentRate * 100).toFixed(0);
+  // Statutory rates are not all whole numbers (FI 25.5 %, CH 8.1 %): keep the
+  // decimals the rate actually has so labels never disagree with `rate`.
+  const ratePercent = formatRatePercent(currentRate);
 
   return {
     countryCode: code,

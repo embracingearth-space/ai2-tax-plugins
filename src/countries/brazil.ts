@@ -106,14 +106,16 @@ const brPlugin: TaxFilingPlugin = {
     const pis_credits_calc = Math.round(totalInputBase * PIS_RATE * 100) / 100;
     const cofins_credits_calc = Math.round(totalInputBase * COFINS_RATE * 100) / 100;
 
+    // Overrides are normalised to 2 dp like every calculated figure, so a saved
+    // statement never carries 100.123 beside a 100.12 total. embracingearth.space
     const pis_output = (v.pis_output !== '' && v.pis_output !== undefined && v.pis_output !== null)
-      ? Number(v.pis_output) : pis_output_calc;
+      ? Math.round(Number(v.pis_output) * 100) / 100 : pis_output_calc;
     const cofins_output = (v.cofins_output !== '' && v.cofins_output !== undefined && v.cofins_output !== null)
-      ? Number(v.cofins_output) : cofins_output_calc;
+      ? Math.round(Number(v.cofins_output) * 100) / 100 : cofins_output_calc;
     const pis_credits = (v.pis_credits !== '' && v.pis_credits !== undefined && v.pis_credits !== null)
-      ? Number(v.pis_credits) : pis_credits_calc;
+      ? Math.round(Number(v.pis_credits) * 100) / 100 : pis_credits_calc;
     const cofins_credits = (v.cofins_credits !== '' && v.cofins_credits !== undefined && v.cofins_credits !== null)
-      ? Number(v.cofins_credits) : cofins_credits_calc;
+      ? Math.round(Number(v.cofins_credits) * 100) / 100 : cofins_credits_calc;
 
     // Totals from the override-aware figures so they stay consistent with the
     // per-tax lines a user may have edited. embracingearth.space

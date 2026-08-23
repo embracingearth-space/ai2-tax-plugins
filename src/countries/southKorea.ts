@@ -35,7 +35,7 @@ const krPlugin: TaxFilingPlugin = {
         id: 'sales',
         title: 'Sales (매출)',
         fields: [
-          { id: 'taxable_sales', label: 'Taxable sales (과세 매출)', type: 'currency', editable: true, required: true, autoPopulateFrom: 'income_taxable', helpText: 'Total taxable sales excl. VAT' },
+          { id: 'taxable_sales', label: 'Taxable sales (과세 매출)', type: 'currency', editable: true, required: true, autoPopulateFrom: 'income_standard_excl_tax', helpText: 'Total taxable sales excl. VAT' },
           { id: 'zero_rated_sales', label: 'Zero-rated sales (영세율 매출)', type: 'currency', editable: true, required: false, helpText: 'Exports, international services' },
           { id: 'exempt_sales', label: 'VAT-exempt sales (면세 매출)', type: 'currency', editable: true, required: false, helpText: 'Basic necessities, medical, education, financial services' },
           { id: 'output_vat', label: 'Output VAT (매출세액)', type: 'currency', calculated: true, editable: true, required: true, helpText: 'Taxable sales × 10%' },
@@ -45,7 +45,7 @@ const krPlugin: TaxFilingPlugin = {
         id: 'purchases',
         title: 'Purchases (매입)',
         fields: [
-          { id: 'taxable_purchases', label: 'Taxable purchases (과세 매입)', type: 'currency', editable: true, required: true, autoPopulateFrom: 'expenses_taxable', helpText: 'Total business purchases with e-tax invoices' },
+          { id: 'taxable_purchases', label: 'Taxable purchases (과세 매입)', type: 'currency', editable: true, required: true, autoPopulateFrom: 'expenses_taxable_excl_tax', helpText: 'Total business purchases with e-tax invoices' },
           { id: 'input_vat', label: 'Input VAT (매입세액)', type: 'currency', calculated: true, editable: true, required: true, autoPopulateFrom: 'input_tax', helpText: 'Taxable purchases × 10%' },
           { id: 'input_denied', label: 'Non-deductible input VAT (불공제 매입세액)', type: 'currency', editable: true, required: false, helpText: 'Entertainment, personal use, exempt-supply-related purchases' },
         ],
@@ -102,8 +102,11 @@ const krPlugin: TaxFilingPlugin = {
   },
 
   getAutoPopulateMapping: (): AggregationMapping[] => [
-    { fieldId: 'taxable_sales', aggregateKey: 'income_taxable' },
-    { fieldId: 'taxable_purchases', aggregateKey: 'expenses_taxable' },
+    // Output/input tax here is field × rate, so these fields are the TAX-EXCLUSIVE
+    // base: auto-fill from the *_excl_tax aggregates, never the gross totals
+    // (gross × rate overstated the tax by the rate). embracingearth.space
+    { fieldId: 'taxable_sales', aggregateKey: 'income_standard_excl_tax' },
+    { fieldId: 'taxable_purchases', aggregateKey: 'expenses_taxable_excl_tax' },
     { fieldId: 'input_vat', aggregateKey: 'input_tax' },
   ],
   getRoundingRules: (): RoundingConfig => ({ method: 'nearest', decimals: 0, wholeOnly: true }),
