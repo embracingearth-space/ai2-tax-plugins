@@ -2,7 +2,7 @@
 
 ## 2.2.0 — 2026-08-24
 
-Depreciation regimes, and New Zealand. Additive: every new `DepreciationRules`
+Depreciation regimes — New Zealand, the United Kingdom and Canada. Additive: every new `DepreciationRules`
 member has a value on every rules object that ships, `declineInValue` still
 accepts `daysHeld` / `daysInYear` exactly as before, and a host on 2.1.0 keeps
 working untouched.
@@ -12,9 +12,8 @@ working untouched.
 - `DepreciationRules.regime` — `'effective_life' | 'rate_per_asset' | 'pooled_allowance' |
   'class_cca' | 'generic'`. The countries do not share a model, and a host branches on this
   rather than printing one country's schedule for every country. Australia is
-  `effective_life`, New Zealand `rate_per_asset`, the United Kingdom `pooled_allowance`, the
-  fallback `generic`; Canada's `class_cca` is named so the type is complete, and is not
-  implemented.
+  `effective_life`, New Zealand `rate_per_asset`, the United Kingdom `pooled_allowance`,
+  Canada `class_cca`, the fallback `generic`.
 - `explainer()` on every rules object — `whatItIs`, `whenItApplies`, `howItWorks[]`,
   `readMore[]` (official pages only) and a `vocabulary` that drives column labels, so a
   schedule prints "Adjustable value" for the ATO, "Adjusted tax value" for Inland Revenue.
@@ -48,6 +47,21 @@ working untouched.
   allowance is worked out (never a single-asset pool, and either that or WDA, not both);
   otherwise the writing-down allowance; closing written down value. Per period only — the
   host replays.
+- `ClassCcaRules` — `regime: 'class_cca'`, `classFor(asset)`, `firstYear(asset, onDate)`,
+  `passengerVehicleCap(year)`, `zeroEmissionVehicleCap(year)`, with the `Ca*` input and outcome
+  types. `CaFirstYearOutcome.baseMultiplier` is the all-in factor a net addition is multiplied
+  by to reach the base amount for CCA (0.5 half-year rule, 1.5 or 1 under the AII, 10/3, 2.5
+  or 11/6 for a class 54 zero-emission vehicle), and is what `computeClassPeriod` takes.
+- `computeClassPeriod(input)` — one class for one year in the CRA's order (T2125 Area A):
+  opening UCC; additions in; dispositions out at the LESSER of proceeds and capital cost;
+  column 7 — negative is a recapture, positive with nothing left in the class is a terminal
+  loss, and either way no CCA and the class closes at zero; otherwise the first-year
+  adjustment on the net additions, with dispositions offsetting the non-eligible additions
+  before the eligible ones (the AII page's Example 5); CCA at the class rate, prorated for a
+  short fiscal period and never more than the balance; an optional lower claim
+  (`claimLimit`); class 10.1's `noRecaptureOrTerminalLoss` and `halfYearOnSale` (base = half
+  the opening UCC); closing UCC. Per year only — the host replays. The AII page's Examples 3,
+  5 and 6 replay to the cent.
 
 ### Added — United Kingdom (`src/countries/unitedKingdomDepreciation.ts`)
 
@@ -79,6 +93,47 @@ working untouched.
 - `extraAssetFields()`: `taxpayerType`, `isCar`, `co2GPerKm`, `isNew`. Vocabulary: "Written
   down value", "Writing-down allowance", "Pool". `readMore` links are gov.uk pages only.
 - `ukPlugin.getDepreciationRules()` now returns these rules instead of the generic fallback.
+
+### Added — Canada (`src/countries/canadaDepreciation.ts`)
+
+- The class regime. Classes from the CRA's "Classes of depreciable property" page, every rate
+  the page's own: 1 (4%) buildings; 8 (20%) furniture, appliances, tools costing $500 or more,
+  machinery, photocopiers, phone equipment; 10 (30%) motor vehicles and passenger vehicles
+  under the cap; 10.1 (30%) a passenger vehicle over the cap; 12 (100%) tools under $500 and
+  non-systems software; 14.1 (5%) goodwill and unlimited-period licences; 50 (55%) computers
+  and systems software acquired after 18 March 2007 (on or before it, class 10); 54 (30%) and
+  55 (40%) zero-emission vehicles acquired after 18 March 2019. `classFor` routes by a recorded
+  class first, then by `kind` and cost; an asset with no kind falls to class 8 unverified, and
+  a class not on the list comes back with `rate: null, verified: false`.
+- Class 10.1 prescribed amounts by year of acquisition, the page verbatim: $30,000 before 2022,
+  $34,000 in 2022, $36,000 in 2023, $37,000 in 2024, $38,000 in 2025. 2026 is NOT on the page
+  and resolves `{ cap: null, verified: false }`; a vehicle under the last listed cap is still
+  class 10 (the caps have only risen), one over it is class 10.1 unverified. Class 10.1 has no
+  recapture or terminal loss and gets the half-year rule on sale (Guide T4002, columns 7 and
+  19). Zero-emission passenger vehicle limits $55,000 / $59,000 (2022) / $61,000 (from 2023).
+- Half-year rule and the accelerated investment incentive. Property acquired after
+  20 November 2018 and available for use before 2028: before 2024 the rate applies to
+  one-and-a-half times the net addition with the half-year rule suspended; for 2024-2027 the
+  page's wording is "reduced to two times the normal first-year CCA deduction. The incentive
+  continues to effectively suspend the half-year rule" — so the whole net addition at the
+  class rate, nothing added. Not for non-arm's-length or rollover acquisitions, nor classes
+  54, 55, 56, 43.1, 43.2, 53. Class 12 small tools have no half-year rule; class 12 software
+  does. Claiming CCA is optional ("any amount you like, from zero to the maximum") and a
+  fiscal period under 365 days prorates by days over 365 — both from "Basic information about
+  CCA".
+- Zero-emission vehicles: the enacted enhanced first-year CCA of 100% before 2024, 75% in
+  2024-2025, 55% in 2026-2027 by the year the vehicle becomes available for use, as the class
+  54 uplift of 2 1/3, 1 1/2 and 5/6 times the net addition (1 1/2, 7/8, 3/8 for class 55).
+- Proposed changes ship as `verified: false` concessions, never as the rate: the reinstated
+  100% for zero-emission vehicles acquired after 2024; the 100% first-year deduction for class
+  50 computers acquired after 15 April 2024; the 10% rate for purpose-built rental buildings
+  and the class 8 separate-class election are notes on their class rows. No general instant
+  write-off: `instantAssetWriteOff()` is `{ limit: null, verified: false }` with a note.
+- `extraAssetFields()`: `ccaClass` (optional enum of the shipped classes — `classFor`
+  suggests), `isZeroEmissionVehicle`, `availableForUseDate`. Vocabulary: "Depreciable
+  property", "Capital cost allowance", "Undepreciated capital cost", "Class". `readMore`
+  links are canada.ca pages only.
+- `caPlugin.getDepreciationRules()` now returns these rules instead of the generic fallback.
 
 ### Added — New Zealand (`src/countries/newZealandDepreciation.ts`)
 
