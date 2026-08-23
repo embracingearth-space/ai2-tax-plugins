@@ -256,6 +256,20 @@ export {
 
 export type { UsPropertyClassRow } from './countries/unitedStatesDepreciation';
 
+// India — the CBDT's block-of-assets regime (Income-tax Act 2025 s.33, Income-tax Rules 2026 Appendix I).
+export {
+  IN_DEPRECIATION_RULES,
+  IN_BLOCKS,
+  IN_DEPRECIATION_AUTHORITY_URLS,
+  IN_HALF_RATE_UNDER_DAYS,
+  inBlockRow,
+  inBlockFor,
+  inHalfRate,
+  inAdditionalDepreciation,
+} from './countries/indiaDepreciation';
+
+export type { InBlockRow } from './countries/indiaDepreciation';
+
 
 // ─── Annual reports (lodged separately from the activity statement) ──────────
 export {
