@@ -9,7 +9,7 @@
  * - Factory: createAdaptiveGenericPlugin (for building new plugins)
  * - EU Factory: createEUPlugin (for adding EU member states)
  * - Treatments: GENERIC_TREATMENTS, getTreatmentsForPlugin (transaction → box mapping)
- * - Depreciation: GENERIC_DEPRECIATION_RULES, getDepreciationRules (capital allowances)
+ * - Depreciation: GENERIC_DEPRECIATION_RULES, getDepreciationRules, computePoolPeriod (capital allowances)
  * - Annual reports: AnnualReportDefinition (AU TPAR)
  */
 
@@ -61,6 +61,7 @@ export {
   getDepreciationRules,
   computeDeclineInValue,
   computeBalancingAdjustment,
+  computePoolPeriod,
   sortNewestFirst,
   resolveEffectiveDated,
   DV_RATE_MULTIPLIER,
@@ -72,6 +73,22 @@ export type {
   DepreciationRegime,
   DepreciationRules,
   RatePerAssetRules,
+  PooledAllowanceRules,
+  UkPool,
+  UkTaxpayerType,
+  UkPeriod,
+  UkAssetInput,
+  UkPoolAssignment,
+  UkWdaRateOutcome,
+  UkAiaOutcome,
+  UkSmallPoolsOutcome,
+  UkFirstYearAllowanceKind,
+  UkFirstYearAllowanceOutcome,
+  UkEligibilityOutcome,
+  PoolPeriodAddition,
+  PoolPeriodDisposal,
+  PoolPeriodInput,
+  PoolPeriodOutcome,
   PartYearInput,
   DepreciationExplainer,
   DepreciationVocabulary,
@@ -127,6 +144,36 @@ export type {
   NzInvestmentBoostInfo,
   NzInvestmentBoostSplit,
 } from './countries/newZealandDepreciation';
+
+// United Kingdom — HMRC's pooled capital allowances (pools, WDA, AIA, FYAs, CO₂ cars, cash basis).
+export {
+  UK_DEPRECIATION_RULES,
+  UK_AIA_ROWS,
+  UK_CAR_BAND_ROWS,
+  UK_CASH_BASIS_RESTRICTION,
+  UK_DEPRECIATION_AUTHORITY_URLS,
+  UK_MAIN_POOL_WDA_BEFORE_APRIL_2026,
+  UK_MAIN_POOL_WDA_FROM_APRIL_2026,
+  UK_SPECIAL_RATE_POOL_WDA,
+  UK_MAIN_POOL_WDA_CHANGE_YEAR,
+  UK_SMALL_POOLS_ANNUAL_LIMIT,
+  UK_FYA_40_START,
+  UK_FULL_EXPENSING_START,
+  UK_SUPER_DEDUCTION_START,
+  UK_SUPER_DEDUCTION_END,
+  ukPeriodYearFraction,
+  ukWdaRate,
+  ukAia,
+  ukAiaOnDate,
+  ukSmallPoolsAllowance,
+  ukCarBand,
+  ukPoolFor,
+  ukFirstYearAllowance,
+  ukCashBasisRestriction,
+  ukEligibility,
+} from './countries/unitedKingdomDepreciation';
+
+export type { UkAiaRow, UkCarBandRow } from './countries/unitedKingdomDepreciation';
 
 // ─── Annual reports (lodged separately from the activity statement) ──────────
 export {

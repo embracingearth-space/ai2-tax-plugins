@@ -97,8 +97,8 @@ export type DepreciationMethod =
  *   generic           — no country-specific rules are loaded.
  *
  * A host branches on this: AU/NZ print a per-asset schedule; UK/CA print a
- * pool/class statement. Only `effective_life`, `rate_per_asset` and `generic`
- * are implemented today.
+ * pool/class statement. `effective_life`, `rate_per_asset`, `pooled_allowance`
+ * and `generic` are implemented; `class_cca` is named and comes next.
  */
 export type DepreciationRegime =
   | 'effective_life'
@@ -346,6 +346,128 @@ export interface RatePerAssetRules extends DepreciationRules {
   investmentBoost(onDate: Date | string): { percent: number | null; verified: boolean; note: string };
 }
 
+// ─── Pooled allowances (United Kingdom) ─────────────────────────────────────
+
+/**
+ * HMRC's pools. `main` and `special` are the two rate pools; `single` is a
+ * single-asset pool (a short-life asset election, or an asset with private
+ * use), which takes the rate of the pool it would otherwise have joined and
+ * gets a balancing adjustment of its own on disposal.
+ */
+export type UkPool = 'main' | 'special' | 'single';
+
+/** Whether a period's WDA rate comes from the Corporation Tax or the Income Tax calendar. */
+export type UkTaxpayerType = 'income_tax' | 'corporation_tax';
+
+/** An accounting period (Corporation Tax) or basis period (Income Tax), both ends inclusive. */
+export interface UkPeriod {
+  periodStart: Date | string;
+  periodEnd: Date | string;
+}
+
+export interface UkWdaRateOutcome {
+  /** The rate to apply to the pool balance, as a fraction. Time-apportioned where hybrid. */
+  rate: number;
+  /** Present where the period straddles a rate change: the two rates and the days each applied. */
+  hybrid?: { before: number; after: number; daysBefore: number; daysAfter: number };
+  verified: boolean;
+  note: string;
+}
+
+export interface UkAiaOutcome {
+  /** The limit for THIS period — the annual figure, pro-rated where the period is not 12 months. */
+  limit: number | null;
+  /** The annual figure the limit was pro-rated from. */
+  annualLimit: number | null;
+  proRated: boolean;
+  verified: boolean;
+  note: string;
+}
+
+export interface UkSmallPoolsOutcome {
+  /** Write the whole pool off where its balance, before the allowance, is at or under this. */
+  limit: number | null;
+  annualLimit: number | null;
+  proRated: boolean;
+  verified: boolean;
+  note: string;
+}
+
+export type UkFirstYearAllowanceKind =
+  | 'full_expensing'
+  | 'fya_50_special_rate'
+  | 'fya_40'
+  | 'fya_100_zero_emission_car'
+  | 'super_deduction';
+
+export interface UkFirstYearAllowanceOutcome {
+  /** 0-100 (130 for the super-deduction). null where the answer depends on a fact not supplied. */
+  percent: number | null;
+  kind: UkFirstYearAllowanceKind | null;
+  /** The share of cost (0-100) that goes INTO the pool for writing-down allowances from the NEXT period. */
+  remainderToPool: number;
+  /** Which pool the remainder joins. */
+  pool: UkPool;
+  verified: boolean;
+  note: string;
+}
+
+export interface UkPoolAssignment {
+  pool: UkPool;
+  verified: boolean;
+  note: string;
+}
+
+/**
+ * What the UK rules need to know about an asset. Everything beyond `cost` is
+ * optional and tri-state: an unanswered question is never treated as a "yes".
+ */
+export interface UkAssetInput {
+  cost: number;
+  /** A car (not a van, lorry or motorcycle). Cars never qualify for AIA or the 40% FYA. */
+  isCar?: boolean | null;
+  /** Official CO₂ figure in g/km. Required to route a car; 0 for an electric car. */
+  co2GPerKm?: number | null;
+  /** Bought new and unused, not second-hand. */
+  isNew?: boolean | null;
+  taxpayerType?: UkTaxpayerType | null;
+  /** Integral features, long-life assets, solar panels, thermal insulation: the special rate pool. */
+  isSpecialRate?: boolean | null;
+  /** Short-life asset election, or private use: a single-asset pool. */
+  singleAssetPool?: boolean | null;
+  /** Sole trader or partnership using the cash basis. */
+  cashBasis?: boolean | null;
+}
+
+export interface UkEligibilityOutcome {
+  eligible: boolean;
+  note: string;
+}
+
+/**
+ * A jurisdiction where the POOL is the unit of allowance, not the asset —
+ * the United Kingdom. Assets are contributions to a pool; the allowance is a
+ * rate on the pool's written down value each period, after the annual
+ * investment allowance and first-year allowances have taken what they take.
+ */
+export interface PooledAllowanceRules extends DepreciationRules {
+  regime: 'pooled_allowance';
+  /** Which pool an asset joins, by the authority's table (cars: CO₂ and purchase date). */
+  poolFor(asset: UkAssetInput, onDate: Date | string): UkPoolAssignment;
+  /** The writing-down allowance rate for a pool over a period, hybrid where the period straddles a change. */
+  wdaRate(pool: UkPool, period: UkPeriod & { taxpayer: UkTaxpayerType }): UkWdaRateOutcome;
+  /** The annual investment allowance for a period, pro-rated for a period that is not 12 months. */
+  aia(period: UkPeriod): UkAiaOutcome;
+  /** The best first-year allowance an asset qualifies for on a date, or null. */
+  firstYearAllowance(asset: UkAssetInput, onDate: Date | string): UkFirstYearAllowanceOutcome | null;
+  /** Cash-basis sole traders and partnerships can claim capital allowances on business cars only. */
+  cashBasisRestriction(): { carsOnly: true; note: string };
+  /** Whether THIS asset can be claimed at all (the cash-basis gate). */
+  eligibility(asset: UkAssetInput): UkEligibilityOutcome;
+  /** The small pools allowance limit for a period, pro-rated like the AIA. */
+  smallPoolsAllowance(period: UkPeriod): UkSmallPoolsOutcome;
+}
+
 // ─── Effective-dated rows ───────────────────────────────────────────────────
 
 /** A row that applies from a calendar day until the next row starts. */
@@ -554,6 +676,181 @@ export function computeBalancingAdjustment(
   const gross = (Number(input.terminationValue) || 0) - (Number(input.adjustableValue) || 0);
   const amount = toCents(gross * taxableUse);
   return { amount, assessable: amount > 0 };
+}
+
+// ─── Pool period arithmetic (pooled_allowance regime) ───────────────────────
+
+export interface PoolPeriodAddition {
+  cost: number;
+  /**
+   * 0-130: the first-year allowance claimed on this addition. The rest of the
+   * cost joins the pool for writing-down allowances from the NEXT period — the
+   * 40% FYA's "remaining 60%" is not written down in the period it was bought.
+   */
+  fyaPercent?: number;
+  /**
+   * Whether the annual investment allowance may be claimed on this addition.
+   * Defaults to true. Cars, pre-owned items and gifts are not eligible. Ignored
+   * where `fyaPercent` is given — an addition takes one or the other.
+   */
+  aiaEligible?: boolean;
+}
+
+export interface PoolPeriodDisposal {
+  /** Consideration received. */
+  proceeds: number;
+  /** Original cost; where given, the amount taken out of the pool is capped at it. */
+  originalCost?: number;
+}
+
+export interface PoolPeriodInput {
+  pool: UkPool;
+  /** Written down value brought forward. */
+  openingWdv: number;
+  additions?: PoolPeriodAddition[];
+  disposals?: PoolPeriodDisposal[];
+  /** The writing-down allowance rate for this pool and period, as a fraction (0 allowed). */
+  wdaRate: number;
+  /**
+   * The AIA available to THIS pool this period, already pro-rated. A business
+   * has ONE AIA across all its pools; the host decides how much of it lands here.
+   */
+  aiaLimit: number;
+  /**
+   * The small pools allowance limit for this period, already pro-rated, or
+   * null/undefined to disable. Never applies to a single-asset pool.
+   */
+  smallPoolsLimit?: number | null;
+  /**
+   * The business has ceased, or (single-asset pool) the asset has been
+   * disposed of: whatever remains after disposals is a balancing allowance
+   * rather than carried forward.
+   */
+  closing?: boolean;
+}
+
+export interface PoolPeriodOutcome {
+  openingWdv: number;
+  additions: number;
+  aiaClaimed: number;
+  fyaClaimed: number;
+  /** What the FYA left over, carried into the pool for next period's WDA. */
+  fyaRemainderToPool: number;
+  disposals: number;
+  /** Positive where disposal proceeds exceed the pool balance; goes on the return as income. */
+  balancingCharge: number;
+  /** Positive where the pool is closed with a balance left; deductible. */
+  balancingAllowance: number;
+  smallPoolsAllowance: number;
+  wdaClaimed: number;
+  /** AIA + FYA + small pools + WDA + balancing allowance. */
+  totalAllowance: number;
+  closingWdv: number;
+}
+
+/**
+ * One period of one pool, in HMRC's order: additions in; AIA and first-year
+ * allowances against the additions that qualify; disposals out, capped at
+ * cost; a balancing charge where proceeds exceed the balance; the small pools
+ * allowance where the main or special pool is at or under the limit BEFORE
+ * the allowance is worked out (either that or WDA, never both); otherwise the
+ * writing-down allowance on what remains; and the FYA remainder joins the
+ * closing balance for next period.
+ *
+ * Per period only. Multi-year replay is the host's: it calls this once per
+ * period with last period's `closingWdv` as this period's `openingWdv`.
+ */
+export function computePoolPeriod(input: PoolPeriodInput): PoolPeriodOutcome {
+  const openingWdv = Math.max(0, Number(input.openingWdv) || 0);
+  const rate = Number(input.wdaRate);
+  if (!Number.isFinite(rate) || rate < 0 || rate > 1) {
+    throw new RangeError(`wdaRate must be a fraction in [0, 1] — 0.18 for 18% (received ${String(input.wdaRate)})`);
+  }
+  const aiaLimit = Math.max(0, Number(input.aiaLimit) || 0);
+
+  let additions = 0;
+  let aiaClaimed = 0;
+  let fyaClaimed = 0;
+  let fyaRemainderToPool = 0;
+  let aiaExcessToPool = 0;
+
+  for (const a of input.additions ?? []) {
+    const cost = Math.max(0, Number(a.cost) || 0);
+    additions += cost;
+    if (a.fyaPercent != null) {
+      const pct = Number(a.fyaPercent);
+      if (!Number.isFinite(pct) || pct < 0 || pct > 130) {
+        throw new RangeError(`fyaPercent must be 0-130 (received ${String(a.fyaPercent)})`);
+      }
+      const fya = toCents((cost * pct) / 100);
+      fyaClaimed += fya;
+      // The 130% super-deduction leaves nothing in the pool; a 40% FYA leaves 60%.
+      fyaRemainderToPool += toCents(cost - Math.min(cost, fya));
+    } else if (a.aiaEligible !== false) {
+      const room = Math.max(0, aiaLimit - aiaClaimed);
+      const claim = Math.min(cost, room);
+      aiaClaimed += claim;
+      aiaExcessToPool += cost - claim;
+    } else {
+      aiaExcessToPool += cost;
+    }
+  }
+
+  let disposals = 0;
+  for (const d of input.disposals ?? []) {
+    const proceeds = Math.max(0, Number(d.proceeds) || 0);
+    disposals +=
+      d.originalCost != null ? Math.min(proceeds, Math.max(0, Number(d.originalCost) || 0)) : proceeds;
+  }
+
+  // The balance the allowance is worked out on: brought forward, plus the
+  // additions AIA did not cover (they get WDA this period), less disposals.
+  let balance = toCents(openingWdv + aiaExcessToPool - disposals);
+  let balancingCharge = 0;
+  if (balance < 0) {
+    balancingCharge = toCents(-balance);
+    balance = 0;
+  }
+
+  let balancingAllowance = 0;
+  let smallPoolsAllowance = 0;
+  let wdaClaimed = 0;
+  if (input.closing) {
+    // A closing pool has nowhere to carry anything: the balance and the FYA
+    // remainder are both allowed now.
+    balancingAllowance = toCents(balance + fyaRemainderToPool);
+    balance = 0;
+  } else if (
+    input.pool !== 'single' &&
+    input.smallPoolsLimit != null &&
+    balance > 0 &&
+    balance <= Math.max(0, Number(input.smallPoolsLimit) || 0)
+  ) {
+    smallPoolsAllowance = balance;
+    balance = 0;
+  } else {
+    wdaClaimed = toCents(balance * rate);
+    balance = toCents(balance - wdaClaimed);
+  }
+
+  const closingWdv = input.closing ? 0 : toCents(balance + fyaRemainderToPool);
+
+  return {
+    openingWdv,
+    additions: toCents(additions),
+    aiaClaimed: toCents(aiaClaimed),
+    fyaClaimed: toCents(fyaClaimed),
+    fyaRemainderToPool: toCents(fyaRemainderToPool),
+    disposals: toCents(disposals),
+    balancingCharge,
+    balancingAllowance,
+    smallPoolsAllowance,
+    wdaClaimed,
+    totalAllowance: toCents(
+      aiaClaimed + fyaClaimed + smallPoolsAllowance + wdaClaimed + balancingAllowance,
+    ),
+    closingWdv,
+  };
 }
 
 // ─── Generic (jurisdiction-neutral) rules ───────────────────────────────────
