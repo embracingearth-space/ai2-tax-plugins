@@ -1,6 +1,6 @@
 # Changelog
 
-## 2.2.0 — 2026-08-24
+## 2.2.0 — Unreleased
 
 Depreciation regimes — New Zealand, the United Kingdom, Canada, the United States, India,
 Singapore, Ireland and South Africa. Additive: every new `DepreciationRules`
@@ -257,6 +257,7 @@ working untouched.
   of assets". `readMore` links are incometaxindia.gov.in pages only — section 33 and the
   Appendix I table.
 - `inPlugin.getDepreciationRules()` now returns these rules instead of the generic fallback.
+
 ### Added — Singapore (`src/countries/singaporeDepreciation.ts`)
 
 - The write-off elective regime — `WriteOffElectiveRules` with `SgAssetInput` and the
