@@ -187,6 +187,28 @@ export {
 
 export type { UkAiaRow, UkCarBandRow } from './countries/unitedKingdomDepreciation';
 
+// Canada — the CRA's class-based capital cost allowance regime.
+export {
+  CA_DEPRECIATION_RULES,
+  CA_CCA_CLASSES,
+  CA_PASSENGER_VEHICLE_CAP_ROWS,
+  CA_PASSENGER_VEHICLE_CAP_LAST_VERIFIED_YEAR,
+  CA_ZEV_CAP_ROWS,
+  CA_DEPRECIATION_AUTHORITY_URLS,
+  CA_AII_ACQUIRED_AFTER,
+  CA_AII_AVAILABLE_BEFORE_YEAR,
+  CA_AII_PHASE_OUT_FROM_YEAR,
+  CA_CLASS_50_ACQUIRED_AFTER,
+  CA_ZEV_ACQUIRED_AFTER,
+  caClassRow,
+  caClassFor,
+  caFirstYear,
+  caPassengerVehicleCap,
+  caZeroEmissionVehicleCap,
+} from './countries/canadaDepreciation';
+
+export type { CaCcaClassRow, CaVehicleCapRow } from './countries/canadaDepreciation';
+
 // ─── Annual reports (lodged separately from the activity statement) ──────────
 export {
   AU_TPAR,
