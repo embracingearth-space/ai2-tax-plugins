@@ -114,6 +114,8 @@ export type {
   IeAllowableCostOutcome,
   IeWearAndTearInput,
   IeWearAndTearOutcome,
+  WriteOffPeriodRules,
+  ZaWriteOffPeriodOutcome,
   PartYearInput,
   DepreciationExplainer,
   DepreciationVocabulary,
@@ -252,6 +254,20 @@ export {
   ieWearAndTear,
 } from './countries/irelandDepreciation';
 
+// South Africa — SARS's write-off period regime (IN47 schedule, SL/DV election, day apportionment).
+export {
+  ZA_DEPRECIATION_RULES,
+  ZA_DEPRECIATION_AUTHORITY_URLS,
+  ZA_WRITE_OFF_CATEGORIES,
+  ZA_WRITE_OFF_SOURCE,
+  ZA_SMALL_ITEM_ROWS,
+  ZA_SMALL_ITEM_LIMIT,
+  ZA_SMALL_ITEM_LIMIT_FROM,
+  zaWriteOffPeriod,
+  zaSmallItemThreshold,
+} from './countries/southAfricaDepreciation';
+
+export type { ZaSmallItemRow } from './countries/southAfricaDepreciation';
 
 // ─── Annual reports (lodged separately from the activity statement) ──────────
 export {
