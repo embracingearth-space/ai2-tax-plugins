@@ -29,6 +29,7 @@ import {
   type DepreciationRules,
   AU_DAY_FRACTION_DENOMINATOR,
   tparDueDateYmd,
+  auInstantAssetWriteOff,
   auTprsQualifies,
   resolveWriteOffRow,
   sortWriteOffRowsNewestFirst,
@@ -927,7 +928,8 @@ describe('AU TPAR — building and construction has its own 50% test', () => {
 
   it('50% of current-year income is in — the threshold is inclusive', () => {
     const r = auTprsQualifies({ service: bc, currentYearIncomePercent: 50 });
-    expect(r.mustLodge).toBe(true);
+    expect(r.thresholdMet).toBe(true);
+    expect(r.mustLodge).toBeNull(); // in the system — but did it pay contractors? unknown
     expect(r.test).toBe('primarily_in_industry');
     expect(r.thresholdPercent).toBe(50);
     expect(r.limbsMet).toEqual(['current_year_income']);
@@ -935,7 +937,8 @@ describe('AU TPAR — building and construction has its own 50% test', () => {
 
   it('49% of current-year income is out — it is not "always lodge"', () => {
     const r = auTprsQualifies({ service: bc, currentYearIncomePercent: 49 });
-    expect(r.mustLodge).toBe(false);
+    expect(r.thresholdMet).toBe(false);
+    expect(r.mustLodge).toBe(false); // below the line: a clean "no", whatever was paid
     expect(r.limbsMet).toEqual([]);
   });
 
@@ -945,7 +948,7 @@ describe('AU TPAR — building and construction has its own 50% test', () => {
       currentYearIncomePercent: 20,
       currentYearActivityPercent: 50,
     });
-    expect(r.mustLodge).toBe(true);
+    expect(r.thresholdMet).toBe(true);
     expect(r.limbsMet).toEqual(['current_year_activity']);
   });
 
@@ -958,7 +961,7 @@ describe('AU TPAR — building and construction has its own 50% test', () => {
       currentYearActivityPercent: 30,
       priorYearIncomePercent: 60,
     });
-    expect(r.mustLodge).toBe(true);
+    expect(r.thresholdMet).toBe(true);
     expect(r.limbsMet).toEqual(['prior_year_income']);
   });
 
@@ -990,10 +993,10 @@ describe('AU TPAR — building and construction has its own 50% test', () => {
 
 describe('AU TPAR — the other four services use the ordinary 10% test', () => {
   it('10% of business income is in, 9% is out', () => {
-    expect(auTprsQualifies({ service: 'cleaning', currentYearIncomePercent: 10 }).mustLodge).toBe(
+    expect(auTprsQualifies({ service: 'cleaning', currentYearIncomePercent: 10 }).thresholdMet).toBe(
       true,
     );
-    expect(auTprsQualifies({ service: 'cleaning', currentYearIncomePercent: 9 }).mustLodge).toBe(
+    expect(auTprsQualifies({ service: 'cleaning', currentYearIncomePercent: 9 }).thresholdMet).toBe(
       false,
     );
   });
@@ -1009,7 +1012,7 @@ describe('AU TPAR — the other four services use the ordinary 10% test', () => 
       service: 'courier_and_road_freight',
       currentYearIncomePercent: 10,
     });
-    expect(r.mustLodge).toBe(true);
+    expect(r.thresholdMet).toBe(true);
   });
 
   it('has no activity limb and no prior-year limb — those belong to the 50% test', () => {
@@ -1019,8 +1022,60 @@ describe('AU TPAR — the other four services use the ordinary 10% test', () => 
       currentYearActivityPercent: 90,
       priorYearIncomePercent: 90,
     });
-    expect(r.mustLodge).toBe(false);
+    // 90% on limbs this service does not have is not evidence; only the 5%
+    // income share counts, and 5% is out.
+    expect(r.thresholdMet).toBe(false);
     expect(r.limbsMet).toEqual([]);
+  });
+
+  it('evidence for a limb the service does not have is no evidence at all', () => {
+    // A cleaning business offering ONLY an activity share has given the 10%
+    // income test nothing to work with. Returning false here would be a
+    // confident "no" on zero applicable evidence — so it throws instead.
+    expect(() =>
+      auTprsQualifies({ service: 'cleaning', currentYearActivityPercent: 100 }),
+    ).toThrow(/currentYearIncomePercent/);
+  });
+});
+
+describe('AU TPAR — lodgment needs BOTH the threshold and contractor payments', () => {
+  // The threshold puts a business inside the reporting system. Contractor
+  // payments are what there is to report. A TPAR is owed only when both hold.
+  it('above the threshold but no contractors paid: nothing to report', () => {
+    const r = auTprsQualifies({
+      service: 'cleaning',
+      currentYearIncomePercent: 40,
+      paidContractorsForService: false,
+    });
+    expect(r.thresholdMet).toBe(true);
+    expect(r.mustLodge).toBe(false);
+    expect(r.note).toMatch(/no contractors were paid/);
+  });
+
+  it('above the threshold and contractors paid: a TPAR is due', () => {
+    const r = auTprsQualifies({
+      service: 'cleaning',
+      currentYearIncomePercent: 40,
+      paidContractorsForService: true,
+    });
+    expect(r.mustLodge).toBe(true);
+  });
+
+  it('above the threshold with the payment fact unknown: the answer is unknown, not "no"', () => {
+    const r = auTprsQualifies({ service: 'cleaning', currentYearIncomePercent: 40 });
+    expect(r.thresholdMet).toBe(true);
+    expect(r.mustLodge).toBeNull();
+    expect(r.note).toMatch(/confirm/i);
+  });
+
+  it('below the threshold: "no" regardless of payments — the business is outside the system', () => {
+    const r = auTprsQualifies({
+      service: 'cleaning',
+      currentYearIncomePercent: 5,
+      paidContractorsForService: true,
+    });
+    expect(r.thresholdMet).toBe(false);
+    expect(r.mustLodge).toBe(false);
   });
 });
 
@@ -1033,6 +1088,37 @@ describe('AU TPAR — the qualification test refuses to guess', () => {
 
   it('no figures at all throws rather than returning a confident false', () => {
     expect(() => auTprsQualifies({ service: 'cleaning' })).toThrow(/at least one/i);
+  });
+});
+
+describe('the write-off resolver keys a Date by its LOCAL calendar day', () => {
+  // new Date(2023, 6, 1) is "1 July 2023" on the caller's calendar. Under
+  // toISOString() it is 2023-06-30T14:00Z in Sydney — keyed as 30 June, the
+  // wrong side of the boundary the $20,000 row starts on. The resolver must
+  // read the day the caller meant. This is the same bug class already fixed
+  // in the client, the due date, and the schedule formatter.
+  it('1 July 2023, built from local parts, selects the row that STARTS that day', () => {
+    const r = auInstantAssetWriteOff(new Date(2023, 6, 1));
+    expect(r.verified).toBe(true);
+    expect(r.limit).toBe(20000);
+  });
+
+  it('30 June 2023, built from local parts, is still the previous regime', () => {
+    const r = auInstantAssetWriteOff(new Date(2023, 5, 30));
+    expect(r.verified).toBe(false);
+  });
+
+  it('the canary: toISOString would have keyed 1 July as the wrong day in this zone', () => {
+    // Keeps this suite honest in any non-UTC runner. If the zone offset is
+    // zero the two agree and the above tests prove nothing about the class —
+    // so this case documents that and skips rather than claiming coverage.
+    const d = new Date(2023, 6, 1);
+    const isoDay = d.toISOString().slice(0, 10);
+    if (d.getTimezoneOffset() === 0) {
+      expect(isoDay).toBe('2023-07-01'); // UTC runner: no discrimination possible here
+      return;
+    }
+    expect(isoDay).not.toBe('2023-07-01'); // any other zone: the old code was wrong
   });
 });
 

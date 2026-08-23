@@ -139,11 +139,27 @@ export interface TprsQualificationInput {
    * Only the primarily-in-industry test has this limb; it is ignored elsewhere.
    */
   priorYearIncomePercent?: number;
+  /**
+   * Whether the business paid contractors for this service during the year.
+   * The threshold test says whether the business is IN the reporting system;
+   * this says whether there is anything to report. A TPAR is owed only when
+   * both hold — a cleaning business above 10% that paid no contractors owes
+   * nothing. Omit it and `mustLodge` is `null`: the question is unanswered,
+   * not answered "no".
+   */
+  paidContractorsForService?: boolean;
 }
 
 export interface TprsQualificationOutcome {
-  /** True where any limb of the applicable test is met. */
-  mustLodge: boolean;
+  /**
+   * Whether a TPAR is owed. `true` / `false` only when BOTH conditions are
+   * known; `null` when the threshold test is met but it is not known whether
+   * contractors were paid — the question is unanswered, and a host must not
+   * collapse that to "no".
+   */
+  mustLodge: boolean | null;
+  /** The threshold test on its own: is the business inside the reporting system? */
+  thresholdMet: boolean;
   test: AnnualReportQualificationTest;
   thresholdPercent: number;
   /** The limbs that were met. Empty when the test is not satisfied. */
@@ -172,33 +188,61 @@ export function auTprsQualifies(input: TprsQualificationInput): TprsQualificatio
   }
 
   const currentIncome = toPercentOrNull(input.currentYearIncomePercent);
-  const currentActivity = toPercentOrNull(input.currentYearActivityPercent);
-  const priorIncome = toPercentOrNull(input.priorYearIncomePercent);
+  // Limbs the selected service does not have are not evidence for it. A
+  // cleaning business handing over `currentYearActivityPercent: 100` has told
+  // us nothing the 10% income test can use, and treating that as "tested, not
+  // met" would return a confident "no" on zero applicable evidence.
+  const currentActivity = service.activityLimb
+    ? toPercentOrNull(input.currentYearActivityPercent)
+    : null;
+  const priorIncome = service.priorYearLimb ? toPercentOrNull(input.priorYearIncomePercent) : null;
   if (currentIncome === null && currentActivity === null && priorIncome === null) {
+    const applicable = ['currentYearIncomePercent'];
+    if (service.activityLimb) applicable.push('currentYearActivityPercent');
+    if (service.priorYearLimb) applicable.push('priorYearIncomePercent');
     throw new RangeError(
-      'auTprsQualifies needs at least one of currentYearIncomePercent, ' +
-        'currentYearActivityPercent or priorYearIncomePercent — with none of them there is ' +
-        'nothing to test, and answering "no" would be a guess.',
+      `auTprsQualifies(${service.key}) needs at least one of ${applicable.join(', ')} — ` +
+        'with none of them there is nothing to test, and answering "no" would be a guess.',
     );
   }
 
   const threshold = service.thresholdPercent;
   const limbsMet: TprsQualificationLimb[] = [];
   if (currentIncome !== null && currentIncome >= threshold) limbsMet.push('current_year_income');
-  if (service.activityLimb && currentActivity !== null && currentActivity >= threshold) {
-    limbsMet.push('current_year_activity');
-  }
-  if (service.priorYearLimb && priorIncome !== null && priorIncome >= threshold) {
-    limbsMet.push('prior_year_income');
-  }
+  if (currentActivity !== null && currentActivity >= threshold) limbsMet.push('current_year_activity');
+  if (priorIncome !== null && priorIncome >= threshold) limbsMet.push('prior_year_income');
 
-  const mustLodge = limbsMet.length > 0;
-  const note = mustLodge
-    ? `${service.label}: the ${threshold}% test is met, so a TPAR is due for this year.`
-    : `${service.label}: no limb of the ${threshold}% test is met on the figures given, so no ` +
+  const thresholdMet = limbsMet.length > 0;
+  const paid = input.paidContractorsForService;
+
+  // Two conditions, both required. The threshold puts a business inside the
+  // reporting system; contractor payments are what there is to report. Below
+  // the threshold the answer is a clean "no" whatever was paid. Above it, the
+  // answer is "yes" only once we know contractors were paid — and "unknown"
+  // until then, never a default.
+  let mustLodge: boolean | null;
+  let note: string;
+  if (!thresholdMet) {
+    mustLodge = false;
+    note =
+      `${service.label}: no limb of the ${threshold}% test is met on the figures given, so no ` +
       'TPAR is due for this service. Check the other reportable services separately.';
+  } else if (paid === true) {
+    mustLodge = true;
+    note = `${service.label}: the ${threshold}% test is met and contractors were paid, so a TPAR is due for this year.`;
+  } else if (paid === false) {
+    mustLodge = false;
+    note =
+      `${service.label}: the ${threshold}% test is met, but no contractors were paid for this ` +
+      'service this year, so there is nothing to report.';
+  } else {
+    mustLodge = null;
+    note =
+      `${service.label}: the ${threshold}% test is met. Whether a TPAR is due depends on whether ` +
+      'contractors were paid for this service this year — confirm that before lodging or skipping.';
+  }
 
-  return { mustLodge, test: service.test, thresholdPercent: threshold, limbsMet, note };
+  return { mustLodge, thresholdMet, test: service.test, thresholdPercent: threshold, limbsMet, note };
 }
 
 function toPercentOrNull(value: number | undefined): number | null {

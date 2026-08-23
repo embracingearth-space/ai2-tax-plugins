@@ -6,6 +6,16 @@ Depreciation schedules and annual reports. Additive: every new plugin method is
 optional, no existing field, id or aggregate key changed, and a host on 2.0.0
 keeps working untouched.
 
+- **`toYmd` reads a `Date` by its LOCAL calendar day, not `toISOString()`.** `new Date(2023, 6, 1)`
+  — 1 July on the caller's calendar — serialised as `2023-06-30` in Sydney and selected the
+  wrong side of every 1-July boundary: the rate row, the write-off limit, the financial year.
+  This keyed the whole effective-dated ledger, not only the write-off resolver.
+- **TPAR lodgment is two conditions, not one.** `auTprsQualifies` now separates `thresholdMet`
+  (is the business inside the reporting system?) from `mustLodge` (is a report owed?). The
+  latter also needs `paidContractorsForService`; without it the answer is `null` — unknown,
+  never a default "no". Evidence for a limb the selected service does not have (an activity
+  share offered to the 10% test) is no longer counted as "tested, not met"; it throws.
+
 ### Added — depreciation (capital allowances)
 
 - `DepreciationRules` on `src/depreciation.ts`, reached with
