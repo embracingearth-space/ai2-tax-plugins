@@ -292,6 +292,14 @@ export const AU_DEPRECIATION_RULES: DepreciationRules = {
   // business claiming under the general rules usually chooses.
   defaultMethod: 'diminishing_value',
 
+  /**
+   * 365 in every income year, leap or not — see AU_DAY_FRACTION_DENOMINATOR.
+   * The argument is accepted and deliberately ignored.
+   */
+  dayFractionDenominator(): number {
+    return AU_DAY_FRACTION_DENOMINATOR;
+  },
+
   declineInValue(input: DeclineInValueInput): DeclineInValueOutcome {
     return computeDeclineInValue(input, AU_SMALL_BUSINESS_POOL_RATES);
   },

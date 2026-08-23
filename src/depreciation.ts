@@ -132,6 +132,16 @@ export interface DepreciationRules {
   defaultMethod: DepreciationMethod;
   /** Decline in value for ONE income year. Pure; no dates beyond those passed in. */
   declineInValue(input: DeclineInValueInput): DeclineInValueOutcome;
+  /**
+   * The denominator this jurisdiction prescribes for the day fraction, given
+   * the actual number of days in the income year.
+   *
+   * It is NOT always the length of the year: Australia fixes it at 365 even in
+   * a leap year, so a full 366-day hold claims 366/365 of a year's decline.
+   * Callers must ask here rather than counting days themselves — keeping that
+   * rule inside the plugin is the whole point.
+   */
+  dayFractionDenominator(daysInIncomeYear: number): number;
   /** Commissioner's effective life in years for a category key. null = self-assess. */
   effectiveLife(categoryKey: string): number | null;
   effectiveLifeCategories(): EffectiveLifeCategory[];
@@ -260,6 +270,11 @@ const GENERIC_WRITE_OFF_NOTE =
  * worse than leaving the field blank for you to fill in.
  */
 export const GENERIC_DEPRECIATION_RULES: DepreciationRules = {
+  /** No special convention: the fraction is over the real length of the year. */
+  dayFractionDenominator(daysInIncomeYear: number): number {
+    return requirePositive(daysInIncomeYear, 'daysInIncomeYear');
+  },
+
   countryCode: '*',
   methods: ['prime_cost', 'diminishing_value'],
   defaultMethod: 'prime_cost',

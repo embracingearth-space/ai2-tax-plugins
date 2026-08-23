@@ -145,8 +145,16 @@ describe('AU depreciation — the denominator is 365 in EVERY year, leap or not'
     effectiveLifeYears: 5,
   };
 
-  it('publishes 365 as the day-fraction denominator', () => {
+  it('publishes 365 as the day-fraction denominator, leap year or not', () => {
     expect(AU_DAY_FRACTION_DENOMINATOR).toBe(365);
+    // The rules answer the same whatever the real length of the income year —
+    // a caller must ask rather than counting days for itself.
+    expect(au.dayFractionDenominator(365)).toBe(365);
+    expect(au.dayFractionDenominator(366)).toBe(365);
+  });
+
+  it('the generic rules use the real length of the year instead', () => {
+    expect(GENERIC_DEPRECIATION_RULES.dayFractionDenominator(366)).toBe(366);
   });
 
   it('182 days claims the same whether or not the income year is a leap year', () => {
