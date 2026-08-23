@@ -361,7 +361,8 @@ describe('Fields declared excl. tax auto-populate from *_excl_tax aggregates', (
     expect(salesKey(mexicoPlugin, 'purchases_16')).toBe('expenses_standard_excl_tax');
     expect(salesKey(saudiArabiaPlugin, 'standard_sales')).toBe('income_standard_excl_tax');
     expect(salesKey(saudiArabiaPlugin, 'standard_purchases')).toBe('expenses_standard_excl_tax');
-    expect(salesKey(uaePlugin, 'total_standard_supplies')).toBe('income_standard_excl_tax');
+    // AE sales are reported BY EMIRATE, so only the purchases side is mapped
+    // (see the auto-populate contract suite for why the total must not be).
     expect(salesKey(uaePlugin, 'standard_rated_expenses')).toBe('expenses_standard_excl_tax');
     expect(salesKey(indonesiaPlugin, 'domestic_delivery')).toBe('income_standard_excl_tax');
     expect(salesKey(indonesiaPlugin, 'domestic_acquisition')).toBe('expenses_taxable_excl_tax');
@@ -374,6 +375,62 @@ describe('Fields declared excl. tax auto-populate from *_excl_tax aggregates', (
   it('JP: sales_standard (excl. tax) only — purchases_standard is declared tax-inclusive', () => {
     expect(mappingOf(japanPlugin).sales_standard).toBe('income_standard_excl_tax');
     expect(mappingOf(japanPlugin).purchases_standard).toBe('expenses_standard');
+  });
+});
+
+// ─── Auto-populate contract — a mapped field must survive recalculation ─────
+
+describe('Auto-populate contract', () => {
+  // A field a host auto-fills is worthless if calculateFields then overwrites
+  // it: the client merges calculatedFields OVER user values on save, so the
+  // filled number is discarded and the return is computed from something the
+  // user never saw. This bit UAE (total_standard_supplies, a by-Emirate sum)
+  // and South Korea (input_vat, editable but always returned as *_calc).
+  // Generic so the whole class stays fixed. embracingearth.space
+  const SENTINEL = 987654;
+
+  const everyPlugin: Array<[string, TaxFilingPlugin]> = [
+    ['AU', australiaPlugin], ['NZ', newZealandPlugin], ['CA', canadaPlugin],
+    ['GB', unitedKingdomPlugin], ['SG', singaporePlugin], ['JP', japanPlugin],
+    ['US', usaPlugin], ['MX', mexicoPlugin], ['SA', saudiArabiaPlugin],
+    ['AE', uaePlugin], ['ID', indonesiaPlugin], ['TH', thailandPlugin],
+    ['KR', southKoreaPlugin], ['PH', philippinesPlugin],
+    ['EU(DE)', createEUPlugin('DE')],
+  ];
+
+  it.each(everyPlugin)('%s: every auto-populated field survives calculateFields', (_code, plugin) => {
+    const mapped = new Set(plugin.getAutoPopulateMapping().map((m) => m.fieldId));
+    for (const section of plugin.getFormSchema()) {
+      for (const field of section.fields) {
+        if (!mapped.has(field.id)) continue;
+        const out = plugin.calculateFields({ [field.id]: SENTINEL }) as Record<string, unknown>;
+        if (!Object.prototype.hasOwnProperty.call(out, field.id)) continue; // not recalculated
+        expect({ field: field.id, value: Number(out[field.id]) }).toEqual({
+          field: field.id,
+          value: SENTINEL,
+        });
+      }
+    }
+  });
+
+  it('KR: an overridden input_vat is returned and drives the net (not input_vat_calc)', () => {
+    const r = southKoreaPlugin.calculateFields({
+      taxable_sales: 1000000,
+      taxable_purchases: 500000,
+      input_vat: 12345,
+    });
+    expect(r.input_vat).toBe(12345); // calc would be 50000
+    expect(r.net_vat).toBe(100000 - 12345);
+  });
+
+  it('AE: the by-Emirate total is not auto-populated (recalculation would zero it)', () => {
+    const mapping = uaePlugin.getAutoPopulateMapping().map((m) => m.fieldId);
+    expect(mapping).not.toContain('total_standard_supplies');
+    const field = uaePlugin
+      .getFormSchema()
+      .flatMap((s) => s.fields)
+      .find((f) => f.id === 'total_standard_supplies');
+    expect(field?.autoPopulateFrom).toBeUndefined();
   });
 });
 

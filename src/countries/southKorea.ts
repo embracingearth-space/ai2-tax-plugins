@@ -92,13 +92,22 @@ const krPlugin: TaxFilingPlugin = {
 
     const output_vat = Math.round(taxableSales * KR_RATE);
     const input_vat_calc = Math.round(taxablePurch * KR_RATE);
-    const deductible_input = input_vat_calc - inputDenied;
+    // input_vat is editable AND auto-populated from `input_tax`. Returning
+    // input_vat_calc discarded both the host's auto-filled figure and a manual
+    // edit on save (the client merges calculatedFields OVER user values), and
+    // the net was then computed from a number the user never saw.
+    // embracingearth.space
+    const input_vat =
+      v.input_vat !== '' && v.input_vat !== undefined && v.input_vat !== null
+        ? Math.round(Number(v.input_vat))
+        : input_vat_calc;
+    const deductible_input = input_vat - inputDenied;
     const adjustments = creditCard + eInvoiceCredit + otherAdj;
 
     const net_vat = output_vat - deductible_input - adjustments;
     const balance_due = net_vat - prelimPaid;
 
-    return { output_vat, input_vat: input_vat_calc, net_vat, balance_due };
+    return { output_vat, input_vat, net_vat, balance_due };
   },
 
   getAutoPopulateMapping: (): AggregationMapping[] => [

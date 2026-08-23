@@ -41,6 +41,14 @@ canonical tax-treatment catalogue. **Major** because the host contract changed
   clamped to zero (folded in from #22).
 - EU template: rate percentages keep their decimals (FI 25.5 %, CH 8.1 %).
 
+- **Auto-populate contract** — a field a host auto-fills is no longer allowed to
+  be silently overwritten by `calculateFields`. Two cases fixed: UAE
+  `total_standard_supplies` (a by-Emirate sum; the mapping is removed, since a
+  host with no Emirate attribution has nothing correct to put there) and South
+  Korea `input_vat` (editable and auto-filled, but always returned as the
+  recomputed figure — both the auto-fill and a manual edit were discarded).
+  A generic test now asserts this across every plugin.
+
 ### Added
 - `src/treatments.ts`: `CanonicalTreatmentCode`, `TaxTreatmentDefinition`,
   `GENERIC_TREATMENTS`, `getTreatmentsForPlugin`, `getTreatmentDefinition`,
