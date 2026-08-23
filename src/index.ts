@@ -8,6 +8,7 @@
  * - Validation: validatePlugin, validateCalculatedOutput
  * - Factory: createAdaptiveGenericPlugin (for building new plugins)
  * - EU Factory: createEUPlugin (for adding EU member states)
+ * - Treatments: GENERIC_TREATMENTS, getTreatmentsForPlugin (transaction → box mapping)
  */
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -32,7 +33,20 @@ export type {
   PortalInfo,
   SubJurisdiction,
   CustomFieldDefinition,
+  CanonicalTreatmentCode,
+  TreatmentSide,
+  TaxTreatmentDefinition,
 } from './types';
+
+// ─── Tax treatments (transaction → box mapping catalogue) ────────────────────
+export {
+  CANONICAL_TREATMENT_CODES,
+  GENERIC_TREATMENTS,
+  isCanonicalTreatmentCode,
+  getTreatmentsForPlugin,
+  getTreatmentDefinition,
+  resolveTreatmentRate,
+} from './treatments';
 
 // ─── Registry ────────────────────────────────────────────────────────────────
 export {

@@ -146,6 +146,63 @@ export interface CustomFieldDefinition {
   optional?: boolean;
 }
 
+// ─── Tax treatments (transaction → box mapping contract) ─────────────────────
+
+/**
+ * Canonical, jurisdiction-neutral tax treatment codes.
+ * A host app stores ONE of these on each category / transaction; the country
+ * plugin's `getTaxTreatments()` says which official boxes that code feeds.
+ * See src/treatments.ts for the catalogue and README "Tax treatments".
+ */
+export type CanonicalTreatmentCode =
+  // Sales side
+  | 'SALE_STANDARD'
+  | 'SALE_REDUCED'
+  | 'SALE_ZERO_RATED'
+  | 'SALE_EXEMPT'
+  | 'SALE_INPUT_TAXED'
+  // Purchase side
+  | 'PURCHASE_STANDARD'
+  | 'PURCHASE_CAPITAL'
+  | 'PURCHASE_REDUCED'
+  | 'PURCHASE_NO_TAX'
+  | 'PURCHASE_CAPITAL_NO_TAX'
+  | 'PURCHASE_INPUT_TAXED'
+  | 'PURCHASE_PRIVATE'
+  | 'PURCHASE_REVERSE_CHARGE'
+  | 'PURCHASE_IMPORT'
+  // Payroll / other
+  | 'WAGES'
+  | 'WITHHOLDING'
+  | 'OUT_OF_SCOPE';
+
+export type TreatmentSide = 'sale' | 'purchase' | 'payroll' | 'excluded';
+
+export interface TaxTreatmentDefinition {
+  code: CanonicalTreatmentCode;
+  /** Country vocabulary, e.g. AU "GST on Income", NZ "Zero-rated supplies". */
+  label: string;
+  shortLabel?: string;
+  side: TreatmentSide;
+  /**
+   * Tax rate applied to the net amount. `null` = the jurisdiction's standard
+   * rate at the transaction date (resolve via the rate ledger); `0` = no tax.
+   */
+  rate: number | null;
+  /** Tax is in the price. */
+  taxApplies: boolean;
+  /** Purchase side: the input tax credit is claimable. */
+  creditable: boolean;
+  /** Official labels (officialLabel or field id of this plugin's schema) the treatment feeds. */
+  boxes: string[];
+  /** One-liner in the authority's wording. */
+  help: string;
+  /** URL of the authority page defining the treatment. */
+  authorityRef?: string;
+  /** Category hints a host app may use as defaults: 'interest_income', 'bank_fees', 'wages', ... */
+  defaultFor?: string[];
+}
+
 // ─── Main Plugin Interface ──────────────────────────────────────────────────
 
 export interface TaxFilingPlugin {
@@ -177,4 +234,10 @@ export interface TaxFilingPlugin {
 
   supportsCustomFields(): boolean;
   getCustomFieldSchema?(): CustomFieldDefinition[];
+
+  /**
+   * Country-specific tax treatment catalogue (labels, rates, boxes). Optional:
+   * plugins without one fall back to GENERIC_TREATMENTS via getTreatmentsForPlugin().
+   */
+  getTaxTreatments?(): TaxTreatmentDefinition[];
 }
