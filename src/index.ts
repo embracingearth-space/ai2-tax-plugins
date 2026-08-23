@@ -234,6 +234,27 @@ export {
 } from './countries/canadaDepreciation';
 
 export type { CaCcaClassRow, CaVehicleCapRow } from './countries/canadaDepreciation';
+// United States — the IRS's MACRS table regime (Pub 946 tables, §179, bonus, §280F caps, de minimis).
+export {
+  US_DEPRECIATION_RULES,
+  US_PROPERTY_CLASSES,
+  US_MACRS_TABLE_A1,
+  US_MACRS_MID_QUARTER_TABLES,
+  US_SECTION_179_ROWS,
+  US_AUTO_CAP_ROWS,
+  US_DEPRECIATION_AUTHORITY_URLS,
+  US_BONUS_100_ACQUIRED_AFTER,
+  usPropertyClassRow,
+  usPropertyClass,
+  usTablePercent,
+  usConvention,
+  usSection179,
+  usBonusPercent,
+  usAutoCap,
+  usDeMinimis,
+} from './countries/unitedStatesDepreciation';
+
+export type { UsPropertyClassRow } from './countries/unitedStatesDepreciation';
 
 
 // ─── Annual reports (lodged separately from the activity statement) ──────────
