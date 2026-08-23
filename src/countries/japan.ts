@@ -50,7 +50,8 @@ const jpPlugin: TaxFilingPlugin = {
         title: 'Taxable Sales (課税売上)',
         description: 'Report taxable sales at standard and reduced rates.',
         fields: [
-          { id: 'sales_standard', label: 'Standard-rated sales (10%)', officialLabel: '課税標準額(10%)', type: 'currency', editable: true, required: true, autoPopulateFrom: 'income_standard', helpText: 'Sales of goods/services at 10% (excl. tax)' },
+          // NET figure (課税標準額 is excl. tax) — `income_standard` is gross, so the *_excl_tax aggregate is used.
+          { id: 'sales_standard', label: 'Standard-rated sales (10%)', officialLabel: '課税標準額(10%)', type: 'currency', editable: true, required: true, autoPopulateFrom: 'income_standard_excl_tax', helpText: 'Sales of goods/services at 10% (excl. tax)' },
           { id: 'sales_reduced', label: 'Reduced-rated sales (8%)', officialLabel: '課税標準額(8%)', type: 'currency', editable: true, required: false, helpText: 'Food, beverages (excl. dining out), newspapers (2x/week+)' },
           { id: 'sales_exempt', label: 'Exempt sales', officialLabel: '免税売上高', type: 'currency', editable: true, required: false, helpText: 'Exports, international transport, etc.' },
           { id: 'sales_non_taxable', label: 'Non-taxable sales', type: 'currency', editable: true, required: false, helpText: 'Land sales, financial transactions, medical services' },
@@ -147,8 +148,8 @@ const jpPlugin: TaxFilingPlugin = {
   },
 
   getAutoPopulateMapping: (): AggregationMapping[] => [
-    { fieldId: 'sales_standard', aggregateKey: 'income_standard' },
-    { fieldId: 'purchases_standard', aggregateKey: 'expenses_standard' },
+    { fieldId: 'sales_standard', aggregateKey: 'income_standard_excl_tax' }, // excl. tax
+    { fieldId: 'purchases_standard', aggregateKey: 'expenses_standard' }, // incl. tax (see field help)
   ],
   getRoundingRules: (): RoundingConfig => ({ method: 'truncate', decimals: 0, wholeOnly: true }),
 
