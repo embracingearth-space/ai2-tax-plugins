@@ -84,8 +84,12 @@ export {
   AU_DEPRECIATION_AUTHORITY_URLS,
   auInstantAssetWriteOff,
   auSmallBusinessPoolWriteOff,
+  resolveWriteOffRow,
+  sortWriteOffRowsNewestFirst,
   AU_DAY_FRACTION_DENOMINATOR,
 } from './countries/australiaDepreciation';
+
+export type { AuWriteOffRow } from './countries/australiaDepreciation';
 
 // ─── Annual reports (lodged separately from the activity statement) ──────────
 export {

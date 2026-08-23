@@ -29,6 +29,9 @@ import {
   type DepreciationRules,
   AU_DAY_FRACTION_DENOMINATOR,
   tparDueDateYmd,
+  resolveWriteOffRow,
+  sortWriteOffRowsNewestFirst,
+  type AuWriteOffRow,
 } from '../src';
 
 const au: DepreciationRules = AU_DEPRECIATION_RULES;
@@ -196,6 +199,199 @@ describe('AU depreciation — the denominator is 365 in EVERY year, leap or not'
       daysInYear: AU_DAY_FRACTION_DENOMINATOR,
     });
     expect(r.declineInValue).toBeCloseTo(16043.84, 2);
+  });
+});
+
+// ─── The AU rules ENFORCE their own denominator ─────────────────────────────
+
+describe('AU depreciation — the plugin applies the 365 denominator, it does not just document it', () => {
+  // Documenting "pass 365" and then forwarding whatever the caller passed is not
+  // enforcement: a host that counts the real length of a leap income year and
+  // passes 366 would silently underclaim by 366/365. The rule lives in the
+  // plugin, so the plugin applies it.
+  const base = {
+    method: 'prime_cost' as const,
+    cost: 80000,
+    openingAdjustableValue: 80000,
+    effectiveLifeYears: 5,
+  };
+
+  it('passing 366 gives exactly the same answer as passing 365', () => {
+    const asked = au.declineInValue({ ...base, daysHeld: 366, daysInYear: 365 });
+    const wrong = au.declineInValue({ ...base, daysHeld: 366, daysInYear: 366 });
+    expect(wrong).toEqual(asked);
+    // Both are 366/365 of a year, NOT one flat year.
+    expect(wrong.declineInValue).toBeCloseTo(16043.84, 2);
+    expect(wrong.declineInValue).toBeGreaterThan(16000);
+  });
+
+  it('holds for a part-year hold too — the caller cannot move the denominator', () => {
+    const over365 = au.declineInValue({ ...base, daysHeld: 182, daysInYear: 365 });
+    const over366 = au.declineInValue({ ...base, daysHeld: 182, daysInYear: 366 });
+    expect(over366.declineInValue).toBe(over365.declineInValue);
+    expect(over366.declineInValue).toBeCloseTo(7978.08, 2);
+  });
+
+  it('holds for diminishing value as well as prime cost', () => {
+    const dvBase = { ...base, method: 'diminishing_value' as const };
+    expect(au.declineInValue({ ...dvBase, daysHeld: 366, daysInYear: 366 })).toEqual(
+      au.declineInValue({ ...dvBase, daysHeld: 366, daysInYear: 365 }),
+    );
+  });
+
+  it('a nonsense denominator cannot break the AU rules either', () => {
+    // 1 would otherwise multiply the claim 365-fold.
+    const r = au.declineInValue({ ...base, daysHeld: 365, daysInYear: 1 });
+    expect(r.declineInValue).toBe(16000);
+  });
+
+  it('but the GENERIC rules still honour whatever the caller passes', () => {
+    const over365 = GENERIC_DEPRECIATION_RULES.declineInValue({
+      ...base,
+      daysHeld: 366,
+      daysInYear: 365,
+    });
+    const over366 = GENERIC_DEPRECIATION_RULES.declineInValue({
+      ...base,
+      daysHeld: 366,
+      daysInYear: 366,
+    });
+    expect(over365.declineInValue).toBeCloseTo(16043.84, 2);
+    expect(over366.declineInValue).toBe(16000);
+    expect(over366.declineInValue).not.toBe(over365.declineInValue);
+  });
+});
+
+// ─── Second element of cost (an improvement made during the year) ───────────
+
+describe('AU depreciation — the diminishing-value base value includes this year\'s improvement', () => {
+  // The ATO: base value is the asset's cost in the year it is first used, and in
+  // a later year the opening adjustable value PLUS second-element costs incurred
+  // that year. So $5,000 opening improved by $1,000 depreciates from $6,000.
+  it('a $5,000 opening value with a $1,000 improvement declines from $6,000, not $5,000', () => {
+    const improved = au.declineInValue({
+      method: 'diminishing_value',
+      cost: 10000,
+      openingAdjustableValue: 5000,
+      secondElementCostThisYear: 1000,
+      effectiveLifeYears: 5,
+      ...FULL_YEAR,
+    });
+    // 6,000 × 40% = 2,400 (not 5,000 × 40% = 2,000).
+    expect(improved.rate).toBeCloseTo(0.4, 10);
+    expect(improved.declineInValue).toBe(2400);
+    // The closing value comes off the base value, so the improvement is carried
+    // forward rather than vanishing.
+    expect(improved.closingAdjustableValue).toBe(3600);
+  });
+
+  it('omitting the improvement is the ordinary case and changes nothing', () => {
+    const plain = au.declineInValue({
+      method: 'diminishing_value',
+      cost: 10000,
+      openingAdjustableValue: 5000,
+      effectiveLifeYears: 5,
+      ...FULL_YEAR,
+    });
+    expect(plain.declineInValue).toBe(2000);
+    expect(plain.closingAdjustableValue).toBe(3000);
+    expect(
+      au.declineInValue({
+        method: 'diminishing_value',
+        cost: 10000,
+        openingAdjustableValue: 5000,
+        secondElementCostThisYear: 0,
+        effectiveLifeYears: 5,
+        ...FULL_YEAR,
+      }),
+    ).toEqual(plain);
+  });
+
+  it('year one is right without it, because the host seeds the opening value from cost', () => {
+    const yearOne = au.declineInValue({
+      method: 'diminishing_value',
+      cost: 80000,
+      openingAdjustableValue: 80000,
+      effectiveLifeYears: 5,
+      ...FULL_YEAR,
+    });
+    expect(yearOne.declineInValue).toBe(32000);
+  });
+
+  it('the improvement is apportioned by days held like the rest of the base', () => {
+    const r = au.declineInValue({
+      method: 'diminishing_value',
+      cost: 10000,
+      openingAdjustableValue: 5000,
+      secondElementCostThisYear: 1000,
+      effectiveLifeYears: 5,
+      daysHeld: 182,
+      daysInYear: 365,
+    });
+    // 6,000 × (182 ÷ 365) × 40% = 1,196.71
+    expect(r.declineInValue).toBeCloseTo(1196.71, 2);
+  });
+
+  it('the decline is still clamped at the base value, improvement included', () => {
+    const r = au.declineInValue({
+      method: 'diminishing_value',
+      cost: 600,
+      openingAdjustableValue: 500,
+      secondElementCostThisYear: 100,
+      effectiveLifeYears: 1, // 200% would take more than the whole base
+      ...FULL_YEAR,
+    });
+    expect(r.declineInValue).toBe(600);
+    expect(r.closingAdjustableValue).toBe(0);
+  });
+
+  it('the other three methods REFUSE an improvement rather than ignoring it', () => {
+    // Each needs a treatment this module is not given enough to perform, and a
+    // silently-ignored input is the same defect as a silently-wrong denominator.
+    const base = {
+      cost: 5000,
+      openingAdjustableValue: 5000,
+      secondElementCostThisYear: 1000,
+      effectiveLifeYears: 5,
+      ...FULL_YEAR,
+    };
+    expect(() => au.declineInValue({ ...base, method: 'prime_cost' })).toThrow(
+      /diminishing value method only/i,
+    );
+    expect(() => au.declineInValue({ ...base, method: 'prime_cost' })).toThrow(/remaining/i);
+    expect(() => au.declineInValue({ ...base, method: 'immediate_writeoff' })).toThrow(
+      /diminishing value method only/i,
+    );
+    expect(() =>
+      au.declineInValue({ ...base, method: 'pool', effectiveLifeYears: 0 }),
+    ).toThrow(/diminishing value method only/i);
+  });
+
+  it('the ATO prime-cost recalculation is reachable by passing the recalculated figures', () => {
+    // The message tells the caller what to pass: opening + improvement as the
+    // cost, over the REMAINING effective life. Three years left on a five-year
+    // life: 6,000 × (100% ÷ 3) = 2,000.
+    const r = au.declineInValue({
+      method: 'prime_cost',
+      cost: 5000 + 1000,
+      openingAdjustableValue: 5000,
+      effectiveLifeYears: 3,
+      ...FULL_YEAR,
+    });
+    expect(r.declineInValue).toBe(2000);
+  });
+
+  it('the generic rules model it the same way', () => {
+    const r = GENERIC_DEPRECIATION_RULES.declineInValue({
+      method: 'diminishing_value',
+      cost: 10000,
+      openingAdjustableValue: 5000,
+      secondElementCostThisYear: 1000,
+      effectiveLifeYears: 5,
+      ...FULL_YEAR,
+    });
+    expect(r.declineInValue).toBe(2400);
+    expect(r.closingAdjustableValue).toBe(3600);
   });
 });
 
@@ -369,6 +565,68 @@ describe('AU instant asset write-off — effective-dated, and null where the ATO
   it('rows are ordered newest-first so the first match is the one in force', () => {
     const dates = AU_INSTANT_ASSET_WRITE_OFF_ROWS.map((r) => r.effectiveFrom);
     expect([...dates].sort().reverse()).toEqual(dates);
+  });
+});
+
+describe('AU instant asset write-off — the resolver derives the order, it does not trust it', () => {
+  // The literal is written newest-first, but nothing stops an editor inserting a
+  // new row at the bottom. If the resolver relied on literal order it would then
+  // return a STALE limit with verified: true, and no test on an existing date
+  // would fail — the worst kind of regression for a tax figure.
+  const OUT_OF_ORDER: AuWriteOffRow[] = [
+    {
+      effectiveFrom: '2000-07-01',
+      limit: null,
+      verified: false,
+      note: 'Oldest row, deliberately placed first.',
+    },
+    {
+      effectiveFrom: '2023-07-01',
+      limit: 20000,
+      verified: true,
+      note: 'The $20,000 window, deliberately placed in the middle.',
+    },
+    {
+      effectiveFrom: '2028-07-01',
+      limit: 12345,
+      verified: true,
+      note: 'A future row, deliberately appended last.',
+    },
+  ];
+
+  it('an out-of-order literal still resolves to the row in force', () => {
+    expect(resolveWriteOffRow(OUT_OF_ORDER, '2024-11-15').limit).toBe(20000);
+    expect(resolveWriteOffRow(OUT_OF_ORDER, '2029-01-01').limit).toBe(12345);
+    expect(resolveWriteOffRow(OUT_OF_ORDER, '2001-01-01').limit).toBeNull();
+  });
+
+  it('a future row appended at the bottom does not leak into an earlier date', () => {
+    // The bug this guards: taking the FIRST literal element that has started.
+    expect(resolveWriteOffRow(OUT_OF_ORDER, '2024-11-15').limit).not.toBe(12345);
+    expect(resolveWriteOffRow(OUT_OF_ORDER, '2024-11-15').verified).toBe(true);
+  });
+
+  it('a date before every row falls back to the OLDEST row, not the last literal one', () => {
+    const r = resolveWriteOffRow(OUT_OF_ORDER, '1995-01-01');
+    expect(r.note).toMatch(/Oldest row/);
+    expect(r.limit).toBeNull();
+  });
+
+  it('sorting is newest-first and does not mutate the caller\'s array', () => {
+    const before = OUT_OF_ORDER.map((r) => r.effectiveFrom);
+    expect(sortWriteOffRowsNewestFirst(OUT_OF_ORDER).map((r) => r.effectiveFrom)).toEqual([
+      '2028-07-01',
+      '2023-07-01',
+      '2000-07-01',
+    ]);
+    expect(OUT_OF_ORDER.map((r) => r.effectiveFrom)).toEqual(before);
+  });
+
+  it('the shipped rows resolve identically whatever order they are handed over in', () => {
+    const shuffled = [...AU_INSTANT_ASSET_WRITE_OFF_ROWS].reverse();
+    for (const date of ['1995-01-01', '2022-01-01', '2024-11-15', '2026-06-30', '2027-03-01']) {
+      expect(resolveWriteOffRow(shuffled, date)).toEqual(au.instantAssetWriteOff(new Date(date)));
+    }
   });
 });
 
@@ -608,6 +866,7 @@ describe('AU annual reports — Taxable payments annual report (TPAR)', () => {
     expect(AU_TPAR.thresholdNote).toMatch(/courier and road freight are combined/i);
     expect(AU_TPAR.thresholdNote).toMatch(/building and construction/i);
   });
+
 
   it('says plainly that the report is prepared here and lodged through the ATO', () => {
     expect(AU_TPAR.lodgmentNote).toMatch(/prepared here/i);

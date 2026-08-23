@@ -12,23 +12,28 @@
  * The formulas below are the ATO's own, from "Prime cost (straight line) and
  * diminishing value methods" (last updated 27 June 2025):
  *
- *   Prime cost        = cost       x (days held / days in year) x (100% / effective life)
- *   Diminishing value = base value x (days held / days in year) x (200% / effective life)
+ *   Prime cost        = cost       x (days held / denominator) x (100% / effective life)
+ *   Diminishing value = base value x (days held / denominator) x (200% / effective life)
  *
  * with 150% instead of 200% where the asset started to be held before
  * 10 May 2006. `base value` is the opening adjustable value for the income
  * year: cost plus second-element costs, less the decline in value up to the
  * end of the prior year.
  *
- * TWO THINGS THAT ARE EASY TO GET WRONG, SO THEY ARE PARAMETERS, NOT CONSTANTS:
+ * THREE THINGS THAT ARE EASY TO GET WRONG, SO THEY ARE PARAMETERS, NOT CONSTANTS:
  *
  * 1. `daysInYear` is the DENOMINATOR the jurisdiction prescribes, passed in and
  *    never assumed — and it is NOT always the number of days in the income year.
  *    The ATO's published formula fixes the denominator at 365 while stating that
  *    "days held can be 366 for a leap year", so in a leap year a full-year hold
  *    legitimately yields 366/365 of a year's decline. Callers pass what their
- *    authority prescribes; nothing here clamps the fraction to 1. (The old text
- *    a quarter of a percent — small per asset, systematic across a register.
+ *    authority prescribes; nothing here clamps the fraction to 1. Dividing by
+ *    366 in a leap year instead shortens every leap-year claim by about a
+ *    quarter of a percent — small per asset, systematic across a register.
+ *    A jurisdiction whose denominator is fixed does not merely document it: it
+ *    APPLIES it inside its own `declineInValue` and overrides whatever the
+ *    caller passed, because trusting every caller to have read a comment is not
+ *    enforcement. See `AU_DEPRECIATION_RULES.declineInValue`.
  * 2. Private use does NOT reduce the base value carried forward. The decline in
  *    value is computed on the full base and only the taxable-use portion is
  *    deductible, which is why a schedule carries separate "decline in value"
@@ -36,8 +41,31 @@
  *    taxable-use percentage is the caller's job (and `balancingAdjustment` is
  *    the one place the percentage is applied here, because the ATO applies it
  *    to the disposal amount itself).
+ * 3. `secondElementCostThisYear` is the improvement (second element of cost)
+ *    incurred DURING this income year. The ATO's base value is the asset's cost
+ *    in the year it is first used, and in every later year the opening
+ *    adjustable value PLUS second-element costs incurred that year — so a
+ *    $5,000 opening value improved by $1,000 declines from $6,000, not $5,000.
+ *    A host that seeds year one from cost gets year one right without it.
  *
- * The decline is clamped at the opening adjustable value: an asset cannot
+ *    IT IS MODELLED FOR DIMINISHING VALUE ONLY, AND THE OTHER METHODS REFUSE IT
+ *    RATHER THAN QUIETLY IGNORING IT, because each needs something this module
+ *    is not told:
+ *      • PRIME COST — the ATO recalculates from the opening adjustable value
+ *        plus the second-element cost over the asset's REMAINING effective
+ *        life, and nothing here can tell a remaining life from a full one.
+ *        Do that recalculation in the host and call this with
+ *        `cost: openingAdjustableValue + secondElementCostThisYear` and
+ *        `effectiveLifeYears: <remaining life>`; the arithmetic here is then
+ *        exactly the ATO's.
+ *      • POOL — a second-element cost is allocated to the pool in its own
+ *        right and attracts the allocation-year rate while the rest of the
+ *        balance attracts the ongoing rate. That is two rates in one year, so
+ *        it is two calls, not one.
+ *      • IMMEDIATE WRITE-OFF — a later improvement is its own write-off
+ *        decision, tested against the threshold for the year it was incurred.
+ *
+ * The decline is clamped at the base value: an asset cannot
  * depreciate below zero, and an uncapped diminishing-value or immediate
  * write-off calculation on a nearly-written-off asset otherwise produces a
  * negative closing value that quietly becomes income next year.
@@ -59,6 +87,18 @@ export interface DeclineInValueInput {
   cost: number;
   /** Base value at the start of this income year (cost less prior-year declines). */
   openingAdjustableValue: number;
+  /**
+   * Second element of cost — an improvement — incurred DURING this income year.
+   * The ATO's base value in a year after the first is the opening adjustable
+   * value PLUS this, so a $5,000 opening value improved by $1,000 declines from
+   * $6,000. Optional and defaulting to 0, which is the ordinary case.
+   *
+   * Diminishing value only. The other three methods THROW rather than ignore a
+   * non-zero value, because each of them needs a different treatment this module
+   * is not given enough to perform — see item 3 in the header of this module for
+   * what to pass instead.
+   */
+  secondElementCostThisYear?: number;
   /** Commissioner's or self-assessed effective life. Ignored by write-off and pool. */
   effectiveLifeYears: number;
   /**
@@ -72,6 +112,10 @@ export interface DeclineInValueInput {
    * necessarily the number of days in the income year. Australia fixes it at
    * 365 in every year, leap or not (see AU_DAY_FRACTION_DENOMINATOR). Pass what
    * your authority publishes; never assume.
+   *
+   * A jurisdiction whose denominator is fixed OVERRIDES this inside its own
+   * `declineInValue`, so passing 366 to `AU_DEPRECIATION_RULES` gives the same
+   * answer as passing 365. The generic rules honour whatever you pass.
    */
   daysInYear: number;
   /** Diminishing value at 150% rather than 200%. */
@@ -86,9 +130,13 @@ export interface DeclineInValueInput {
 }
 
 export interface DeclineInValueOutcome {
-  /** Decline in value for the income year, in currency units, clamped at the opening value. */
+  /** Decline in value for the income year, in currency units, clamped at the base value. */
   declineInValue: number;
-  /** Opening adjustable value less the decline. Never negative. */
+  /**
+   * Base value less the decline — where base value is the opening adjustable
+   * value plus any `secondElementCostThisYear`, so an improvement made this year
+   * is carried into the next one. Never negative.
+   */
   closingAdjustableValue: number;
   /** The annual rate applied, as a fraction (0.2 = 20%), before the day fraction. */
   rate: number;
@@ -169,23 +217,41 @@ function requirePositive(value: number, label: string): number {
 }
 
 /**
- * The ATO formulas, shared by every implementation. `poolRates` is supplied
- * only by a jurisdiction that offers the pool method; without it, asking for
- * `pool` is an error rather than a silently-invented rate.
- */
-/**
  * The longest a depreciating asset can be held within one income year. Days
  * beyond this are a caller bug (an unclosed date range, a disposal before
  * acquisition), so they are capped rather than turned into a larger deduction.
  */
 const MAX_DAYS_HELD = 366;
 
+/**
+ * The ATO formulas, shared by every implementation. `poolRates` is supplied
+ * only by a jurisdiction that offers the pool method; without it, asking for
+ * `pool` is an error rather than a silently-invented rate.
+ */
 export function computeDeclineInValue(
   input: DeclineInValueInput,
   poolRates?: { allocationYear: number; ongoing: number },
 ): DeclineInValueOutcome {
   const opening = Math.max(0, Number(input.openingAdjustableValue) || 0);
   const cost = Math.max(0, Number(input.cost) || 0);
+  const secondElement = Math.max(0, Number(input.secondElementCostThisYear) || 0);
+  if (secondElement > 0 && input.method !== 'diminishing_value') {
+    throw new RangeError(
+      'secondElementCostThisYear is modelled for the diminishing value method only, not ' +
+        `"${String(input.method)}". Prime cost needs the asset's REMAINING effective life, ` +
+        'which this module cannot tell from a full one — recalculate in the caller and pass ' +
+        '`cost: openingAdjustableValue + secondElementCostThisYear` with the remaining life. ' +
+        'A pooled improvement takes the allocation-year rate while the rest of the pool takes ' +
+        'the ongoing rate, so it is two calls. An improvement to a written-off asset is its ' +
+        'own write-off decision.',
+    );
+  }
+  /**
+   * The ATO's `base value`: the opening adjustable value plus any second-element
+   * cost incurred this year. Equal to the opening value whenever there is no
+   * improvement, which is every case the other three methods allow.
+   */
+  const baseValue = opening + secondElement;
   const daysInYear = requirePositive(input.daysInYear, 'daysInYear');
   // NOT clamped to `daysInYear`. The ATO fixes the denominator at 365 and says
   // in the same breath that "days held can be 366 for a leap year", so the
@@ -211,14 +277,16 @@ export function computeDeclineInValue(
         ? DV_RATE_MULTIPLIER_PRE_10_MAY_2006
         : DV_RATE_MULTIPLIER;
       rate = multiplier / life;
-      raw = opening * dayFraction * rate;
+      // Base value, not the opening value: an improvement made this year
+      // depreciates from the year it was incurred.
+      raw = baseValue * dayFraction * rate;
       break;
     }
     case 'immediate_writeoff': {
       // The whole opening value declines in the year the asset is written off;
       // there is no day apportionment on an immediate deduction.
       rate = 1;
-      raw = opening;
+      raw = baseValue;
       break;
     }
     case 'pool': {
@@ -227,18 +295,20 @@ export function computeDeclineInValue(
       }
       // Pool deductions are a rate on the pool balance, not apportioned by days held.
       rate = input.poolAllocationYear ? poolRates.allocationYear : poolRates.ongoing;
-      raw = opening * rate;
+      raw = baseValue * rate;
       break;
     }
     default:
       throw new RangeError(`Unknown depreciation method: ${String(input.method)}`);
   }
 
-  // An asset cannot depreciate below zero.
-  const declineInValue = toCents(Math.min(Math.max(raw, 0), opening));
+  // An asset cannot depreciate below zero — and the ceiling is the base value,
+  // so this year's improvement is depreciable this year rather than being
+  // stranded above a cap set by the opening value alone.
+  const declineInValue = toCents(Math.min(Math.max(raw, 0), baseValue));
   return {
     declineInValue,
-    closingAdjustableValue: toCents(opening - declineInValue),
+    closingAdjustableValue: toCents(baseValue - declineInValue),
     rate,
   };
 }
@@ -279,6 +349,11 @@ export const GENERIC_DEPRECIATION_RULES: DepreciationRules = {
   methods: ['prime_cost', 'diminishing_value'],
   defaultMethod: 'prime_cost',
 
+  /**
+   * The caller's `daysInYear` is used as given. With no jurisdiction there is no
+   * published convention to override it with, so the honest denominator is
+   * whatever the caller's own authority prescribes.
+   */
   declineInValue(input: DeclineInValueInput): DeclineInValueOutcome {
     if (input.method !== 'prime_cost' && input.method !== 'diminishing_value') {
       throw new RangeError(
