@@ -34,7 +34,14 @@ const BARE_URL_RE = /https?:\/\/[^\s'"`,\]]+/g;
 const SOFT_404 =
   /page not found|not be found|couldn't find|cannot be found|no longer available|doesn't exist|does not exist|não encontrada|nicht gefunden|no encontrad|introuvable|^404\b|something went wrong/i;
 const LOGIN_WALL = /require_login|\/login|\/signin|auth\/realms|came_from=/i;
-const TIMEOUT_MS = Number(process.env.TIMEOUT_MS || 25000);
+const DEFAULT_TIMEOUT_MS = 25000;
+// A non-numeric TIMEOUT_MS yields NaN, and setTimeout(fn, NaN) fires almost
+// immediately — every request would abort and the whole run would report
+// "inconclusive", the one verdict a human is told not to act on. Fall back
+// rather than fail quietly. embracingearth.space
+const RAW_TIMEOUT = Number(process.env.TIMEOUT_MS);
+const TIMEOUT_MS =
+  Number.isFinite(RAW_TIMEOUT) && RAW_TIMEOUT > 0 ? RAW_TIMEOUT : DEFAULT_TIMEOUT_MS;
 
 /**
  * Trim trailing sentence punctuation without breaking URLs that legitimately end

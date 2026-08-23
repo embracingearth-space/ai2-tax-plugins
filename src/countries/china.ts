@@ -25,7 +25,8 @@ const cnPlugin: TaxFilingPlugin = {
     // China files VAT through PROVINCIAL e-tax portals (see getSubJurisdictions),
     // not one national one — etax.chinatax.gov.cn returns 404 (checked in a
     // real browser, not just a script). The STA site is the authoritative entry
-    // point that routes to the right province. Verified 2026-08-22. embracingearth.space
+    // point that routes to the right province. Verified 2026-08-21 (UTC).
+    // embracingearth.space
     portalUrl: 'https://www.chinatax.gov.cn',
     helpUrl: 'https://www.chinatax.gov.cn',
   },

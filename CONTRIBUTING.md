@@ -99,6 +99,10 @@ navigate the site to the successor rather than settling for a parent index — t
 labels these links by what they should contain ("GSTN guidance on GSTR-3B"), and a
 generic landing page makes that label a lie.
 
+Date-stamp any "verified/checked" comment in **UTC** and say so — contributors and CI
+read timestamps in UTC, so a local-timezone stamp can look like a future date to a
+reviewer.
+
 Known **unverifiable from outside the country** (leave them alone unless you can check
 locally): `nra.bg` (Bulgaria), `cfr.gov.mt` (Malta, Cloudflare), `sat.gob.mx` (Mexico).
 
