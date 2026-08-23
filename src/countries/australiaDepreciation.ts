@@ -395,10 +395,26 @@ export const AU_DEPRECIATION_RULES: DepreciationRules = {
    *
    * `daysHeld` is untouched and may still be 366: the ATO says so explicitly, so
    * a full leap-year hold claims 366/365 of a year's decline.
+   *
+   * BOTH INPUT FORMS ARE OVERRIDDEN. The engine reads the denominator from
+   * `partYear.daysInYear` when the caller uses the days form of `partYear`, and
+   * from the legacy `input.daysInYear` otherwise, so overriding only the legacy
+   * field would leave the newer form free to pass 366 and underclaim — the two
+   * forms would then disagree for the same jurisdiction. The `partYear`
+   * PRECEDENCE is untouched: the days form still wins over the legacy fields,
+   * it just wins with the ATO's denominator in it. A months-form `partYear`
+   * carries no denominator and is forwarded as it stands.
    */
   declineInValue(input: DeclineInValueInput): DeclineInValueOutcome {
     return computeDeclineInValue(
-      { ...input, daysInYear: AU_DAY_FRACTION_DENOMINATOR },
+      {
+        ...input,
+        daysInYear: AU_DAY_FRACTION_DENOMINATOR,
+        partYear:
+          input.partYear?.kind === 'days'
+            ? { ...input.partYear, daysInYear: AU_DAY_FRACTION_DENOMINATOR }
+            : input.partYear,
+      },
       AU_SMALL_BUSINESS_POOL_RATES,
     );
   },
