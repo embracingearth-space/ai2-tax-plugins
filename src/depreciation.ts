@@ -101,10 +101,17 @@ export type DepreciationMethod =
  *   block_wdv         — the BLOCK is the unit (IN: a fixed rate on the written
  *                       down value of each block of assets, half the rate for
  *                       an asset put to use under 180 days in its first year).
+ *   write_off_elective — the METHOD is elected per asset (SG: one, two or
+ *                       three years, or the working life, under ss.19/19A).
+ *   straight_line_fixed — one statutory rate for everything (IE: 12.5% over
+ *                       8 years, with a car cost cap by CO₂ band).
+ *   write_off_period  — the authority publishes a period per asset and the
+ *                       taxpayer picks SL or DV (ZA: the IN47 schedule).
  *   generic           — no country-specific rules are loaded.
  *
- * A host branches on this: AU/NZ/US print a per-asset schedule; UK/CA/IN print
- * a pool/class/block statement. All seven are implemented.
+ * A host branches on this: AU/NZ/US/SG/IE/ZA print a per-asset schedule, each
+ * with its own arithmetic; UK/CA/IN print a pool/class/block statement. All of
+ * these are implemented.
  */
 export type DepreciationRegime =
   | 'effective_life'
@@ -113,6 +120,9 @@ export type DepreciationRegime =
   | 'class_cca'
   | 'macrs'
   | 'block_wdv'
+  | 'write_off_elective'
+  | 'straight_line_fixed'
+  | 'write_off_period'
   | 'generic';
 
 /**
@@ -828,6 +838,193 @@ export interface BlockWdvRules extends DepreciationRules {
   halfRate(putToUseDays: number): InHalfRateOutcome;
   /** Section 33(8)-(9): 20% additional depreciation for a manufacturer's new plant and machinery. */
   additionalDepreciation(asset: InAssetInput): InAdditionalDepreciationOutcome;
+}
+
+// ─── Write-off elective (Singapore) ─────────────────────────────────────────
+
+/**
+ * IRAS's capital allowance methods under sections 19 and 19A of the Income Tax
+ * Act 1947. Book depreciation is not deductible in Singapore; capital
+ * allowances replace it, and the METHOD IS ELECTED PER ASSET — the same laptop
+ * may be written off in one year under s.19A(2), in three under s.19A(1), or
+ * over its working life under s.19. `methodsFor` says which elections an asset
+ * may make in a year of assessment; `allowanceForYear` is the IRAS arithmetic
+ * for one year of one method.
+ */
+export type SgWriteOffMethod =
+  | 'one_year_s19a2'
+  | 'one_year_low_value_s19a10a'
+  | 'three_year_s19a1'
+  | 'two_year_s19a1e'
+  | 'working_life_s19';
+
+/**
+ * The streamlined Sixth Schedule election available from YA 2023: an
+ * irrevocable 6 or 12 years (16 also, for assets with a 16-year working life).
+ * A motor vehicle's working life is 6 years.
+ */
+export type SgWorkingLifeYears = 6 | 12 | 16;
+
+/**
+ * What the Singapore rules need to know about an asset. Everything beyond
+ * `cost` is optional and tri-state: an unanswered question is never a "yes".
+ */
+export interface SgAssetInput {
+  cost: number;
+  /** A computer or prescribed automation equipment (laptops, printers, software): s.19A(2) one-year write-off. */
+  isComputerOrAutomation?: boolean | null;
+  /** An S-plated private passenger car: no capital allowance at all. */
+  isSPlatedPrivateCar?: boolean | null;
+  /** The irrevocable s.19 working-life election: 6, 12 or 16 years. */
+  workingLifeYears?: SgWorkingLifeYears | null;
+}
+
+export interface SgEligibilityOutcome {
+  eligible: boolean;
+  note: string;
+}
+
+export interface SgAllowanceOutcome {
+  /** Initial allowance for this year — s.19's 20% of cost, in year one only. Zero everywhere else. */
+  initialAllowance: number;
+  /** Annual allowance for this year. */
+  annualAllowance: number;
+  /** IA + AA: the year's capital allowance. Zero after the method's final year. */
+  allowance: number;
+  /** How many years the method runs. */
+  totalYears: number;
+  verified: boolean;
+  note: string;
+}
+
+export interface SgLowValueCapOutcome {
+  /** The most one asset may cost to qualify, or null where the year's limits are not recorded. */
+  perItemLimit: number | null;
+  /** The most that may be claimed under s.19A(10A) across ALL assets in the YA — the HOST enforces this. */
+  totalPerYa: number | null;
+  verified: boolean;
+  note: string;
+}
+
+/**
+ * A jurisdiction where the write-off METHOD is elected per asset — Singapore.
+ * There is no day or month apportionment: allowances are claimed per year of
+ * assessment, and unclaimed ones may be deferred.
+ */
+export interface WriteOffElectiveRules extends DepreciationRules {
+  regime: 'write_off_elective';
+  /** The elections this asset may make for a year of assessment. Empty where the asset cannot claim at all. */
+  methodsFor(asset: SgAssetInput, yearOfAssessment: number): SgWriteOffMethod[];
+  /** One year of one method, IRAS's arithmetic. `yearIndex` is 1-based. */
+  allowanceForYear(
+    asset: SgAssetInput,
+    method: SgWriteOffMethod,
+    yearIndex: number,
+  ): SgAllowanceOutcome;
+  /** The s.19A(10A) low-value limits for a YA: per item, and in total across the YA. */
+  lowValueCap(yearOfAssessment: number): SgLowValueCapOutcome;
+  /** Whether this asset can claim capital allowances at all (the S-plate gate). */
+  eligibility(asset: SgAssetInput): SgEligibilityOutcome;
+}
+
+// ─── Straight line, fixed rate (Ireland) ────────────────────────────────────
+
+/**
+ * Revenue's CO₂ bands for the car cost cap, VRT-category style: A–C is at or
+ * under 155 g/km, D–E is 156–190, F–G is over 190 — and a car with no CO₂
+ * figure on record is treated as Category G.
+ */
+export type IeCo2Band = 'A-C' | 'D-E' | 'F-G';
+
+/**
+ * What the Irish rules need to know about an asset. Everything beyond `cost`
+ * is optional and tri-state: an unanswered question is never a "yes".
+ */
+export interface IeAssetInput {
+  /** Net cost: after grants and any VAT you can reclaim. */
+  cost: number;
+  /** A passenger car — the specified-limit cap by CO₂ band applies. */
+  isCar?: boolean | null;
+  /** Official CO₂ figure in g/km. Without it a car falls into Category G and gets nothing. */
+  co2GPerKm?: number | null;
+  /** A van, lorry or other commercial vehicle: no cost cap. */
+  isCommercialVehicle?: boolean | null;
+  /** On the SEAI Triple E register: 100% accelerated capital allowance in year one. */
+  isEnergyEfficientSeai?: boolean | null;
+}
+
+export interface IeAllowableCostOutcome {
+  /** What the 12.5% is applied to — the deemed cost for a banded car, the net cost otherwise. */
+  allowableCost: number;
+  /** The CO₂ band a car fell into, or null for a non-car. */
+  band: IeCo2Band | null;
+  /** Whether the specified limit changed the figure (in either direction — A–C deems €24,000 even for a cheaper car). */
+  capApplied: boolean;
+  verified: boolean;
+  note: string;
+}
+
+export interface IeWearAndTearInput {
+  /** The allowable cost from `allowableCost()`. */
+  allowableCost: number;
+  /**
+   * REQUIRED, and required to be true for any allowance: wear and tear runs
+   * only where the asset is in use for the trade at the END of the accounting
+   * period. Not optional and not defaulted, because a field nobody filled in
+   * must never claim a year's allowance.
+   */
+  inUseAtPeriodEnd: boolean;
+  /** Length of the accounting period in whole months, 1-12. Defaults to 12; a shorter period pro-rates the allowance. */
+  periodMonths?: number;
+}
+
+export interface IeWearAndTearOutcome {
+  allowance: number;
+  /** The statutory rate, as a fraction. */
+  rate: number;
+  proRated: boolean;
+  verified: boolean;
+  note: string;
+}
+
+/**
+ * A jurisdiction with ONE statutory rate for all plant and machinery —
+ * Ireland: wear and tear at 12.5% of allowable cost a year, straight line,
+ * over 8 years, with a car cost cap by CO₂ band.
+ */
+export interface StraightLineFixedRules extends DepreciationRules {
+  regime: 'straight_line_fixed';
+  /** The statutory rate as a fraction — 0.125. */
+  rate: number;
+  /** The write-off period the rate implies — 8 years. */
+  writeOffYears: number;
+  /** What the rate is applied to: the net cost, capped for cars by CO₂ band. */
+  allowableCost(asset: IeAssetInput): IeAllowableCostOutcome;
+  /** One accounting period's wear and tear allowance, with the in-use-at-period-end gate. */
+  wearAndTear(input: IeWearAndTearInput): IeWearAndTearOutcome;
+}
+
+// ─── Write-off period (South Africa) ────────────────────────────────────────
+
+export interface ZaWriteOffPeriodOutcome {
+  years: number;
+  /** The schedule the period was read from. */
+  source: string;
+  verified: boolean;
+}
+
+/**
+ * A jurisdiction where the authority publishes a WRITE-OFF PERIOD per asset
+ * and the taxpayer elects straight line or diminishing value over it — South
+ * Africa's s.11(e) wear-and-tear allowance, with the periods from the
+ * Interpretation Note 47 schedule. Part years are apportioned by days.
+ */
+export interface WriteOffPeriodRules extends DepreciationRules {
+  regime: 'write_off_period';
+  /** The IN47 schedule write-off period for a category, or null where the category is not shipped. */
+  writeOffPeriod(categoryKey: string): ZaWriteOffPeriodOutcome | null;
+  /** Items costing less than the limit are written off in full: R7,000 from 1 March 2009. */
+  smallItemThreshold(onDate: Date | string): InstantAssetWriteOffInfo;
 }
 
 // ─── Effective-dated rows ───────────────────────────────────────────────────

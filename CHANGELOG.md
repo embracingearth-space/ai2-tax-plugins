@@ -2,7 +2,8 @@
 
 ## 2.2.0 — 2026-08-24
 
-Depreciation regimes — New Zealand, the United Kingdom, Canada, the United States and India. Additive: every new `DepreciationRules`
+Depreciation regimes — New Zealand, the United Kingdom, Canada, the United States, India,
+Singapore, Ireland and South Africa. Additive: every new `DepreciationRules`
 member has a value on every rules object that ships, `declineInValue` still
 accepts `daysHeld` / `daysInYear` exactly as before, and a host on 2.1.0 keeps
 working untouched.
@@ -10,10 +11,12 @@ working untouched.
 ### Added — regime machinery (`src/depreciation.ts`)
 
 - `DepreciationRules.regime` — `'effective_life' | 'rate_per_asset' | 'pooled_allowance' |
-  'class_cca' | 'macrs' | 'block_wdv' | 'generic'`. The countries do not share a model, and a
-  host branches on this rather than printing one country's schedule for every country.
-  Australia is `effective_life`, New Zealand `rate_per_asset`, the United Kingdom
-  `pooled_allowance`, Canada `class_cca`, the United States `macrs`, India `block_wdv`, the
+  'class_cca' | 'macrs' | 'block_wdv' | 'write_off_elective' | 'straight_line_fixed' |
+  'write_off_period' | 'generic'`. The countries do not share a model, and a host branches
+  on this rather than printing one country's schedule for every country. Australia is
+  `effective_life`, New Zealand `rate_per_asset`, the United Kingdom `pooled_allowance`,
+  Canada `class_cca`, the United States `macrs`, India `block_wdv`, Singapore
+  `write_off_elective`, Ireland `straight_line_fixed`, South Africa `write_off_period`, the
   fallback `generic`.
 - `explainer()` on every rules object — `whatItIs`, `whenItApplies`, `howItWorks[]`,
   `readMore[]` (official pages only) and a `vocabulary` that drives column labels, so a
@@ -82,6 +85,13 @@ working untouched.
   written down value. Proceeds exceeding the balance, or a block left with nothing in it,
   raise `shortTermCapitalGainReview: true` and depreciate nothing: the short-term capital
   gain or loss is a return item this module flags and never computes.
+- `WriteOffElectiveRules` — `regime: 'write_off_elective'`, `methodsFor(asset, ya)`,
+  `allowanceForYear(asset, method, yearIndex)`, `lowValueCap(ya)`, `eligibility(asset)`,
+  with the `Sg*` input and outcome types.
+- `StraightLineFixedRules` — `regime: 'straight_line_fixed'`, `rate`, `writeOffYears`,
+  `allowableCost(asset)`, `wearAndTear(period)`, with the `Ie*` input and outcome types.
+- `WriteOffPeriodRules` — `regime: 'write_off_period'`, `writeOffPeriod(categoryKey)`,
+  `smallItemThreshold(onDate)`, with `ZaWriteOffPeriodOutcome`.
 
 ### Added — United Kingdom (`src/countries/unitedKingdomDepreciation.ts`)
 
@@ -247,6 +257,99 @@ working untouched.
   of assets". `readMore` links are incometaxindia.gov.in pages only — section 33 and the
   Appendix I table.
 - `inPlugin.getDepreciationRules()` now returns these rules instead of the generic fallback.
+### Added — Singapore (`src/countries/singaporeDepreciation.ts`)
+
+- The write-off elective regime — `WriteOffElectiveRules` with `SgAssetInput` and the
+  `Sg*` outcome types. Book depreciation is not deductible in Singapore; capital allowances
+  replace it, and the method is ELECTED PER ASSET under ss.19/19A of the Income Tax Act 1947.
+  `methodsFor(asset, ya)` lists the elections open to an asset in a year of assessment;
+  `allowanceForYear(asset, method, yearIndex)` is the IRAS arithmetic for one year of one
+  method, and where a division leaves a stranded cent the FINAL year absorbs it so the
+  allowances always sum to the cost.
+- The methods, each from the IRAS Capital Allowances page: s.19A(1) three-year write-off at
+  one-third of cost a year (deferrable); s.19A(2) 100% in one year for computers and
+  prescribed automation equipment; s.19A(10A) 100% in one year for low-value assets costing
+  no more than $5,000 each, capped at $30,000 of such claims per YA — the total runs ACROSS
+  assets, so `lowValueCap(ya)` publishes both limits and the HOST enforces the $30,000
+  (IRAS's own illustration: seven $4,400 assets are $30,800, so six fit and the seventh is
+  written off another way); s.19A(1E) two-year 75%/25%, offered only for the basis periods
+  of YAs 2021, 2022 and 2024; and s.19 working life — initial allowance of 20% of cost plus
+  an annual allowance of 80% over the streamlined Sixth Schedule election of 6 or 12 years
+  (16 for a 16-year asset), offered from YA 2023 because the earlier Sixth Schedule lives
+  are not recorded here. A motor vehicle's working life of 6 years is the one Sixth
+  Schedule figure shipped.
+- There is NO day or month apportionment — an allowance belongs to a year of assessment
+  whole — so `declineInValue` forces a full year whatever part-year the caller passed, and
+  requires `annualRate` for `prime_cost` rather than deriving a rate from a life.
+- `eligibility(asset)`: an S-plated private passenger car gets nothing, with the IRAS
+  wording; goods and commercial vehicles qualify. `methodsFor` returns an empty list and
+  `allowanceForYear` refuses the asset. Low-value limits for years of assessment before
+  2023 come back null and unverified rather than today's numbers backdated.
+- `extraAssetFields()`: `isComputerOrAutomation`, `isSPlatedPrivateCar`, `workingLifeYears`
+  (enum 6/12/16). Vocabulary: "Qualifying fixed asset", "Capital allowance", "Tax written
+  down value (TWDV)", "Write-off method". `readMore` links to iras.gov.sg only.
+- `singaporePlugin.getDepreciationRules()` now returns these rules instead of the generic
+  fallback.
+
+### Added — Ireland (`src/countries/irelandDepreciation.ts`)
+
+- The straight-line fixed-rate regime — `StraightLineFixedRules` with `IeAssetInput` and the
+  `Ie*` outcome types: ONE statutory rate for all plant and machinery, wear and tear at
+  12.5% of the allowable cost a year over 8 years (s.284 TCA 1997, the rate since
+  4 December 2002), on the net cost after grants and reclaimable VAT. `declineInValue`
+  APPLIES the 12.5% whatever `annualRate` or `effectiveLifeYears` the caller passed,
+  because the statute leaves no rate to choose.
+- `wearAndTear(period)` gates the year's allowance on s.284's own condition: the asset must
+  be IN USE for the trade at the END of the accounting period — `inUseAtPeriodEnd` is a
+  required input and a required register field, never defaulted, because a field nobody
+  filled in must not claim a year's allowance — and a period shorter than 12 months
+  pro-rates by months (nine months of a €25,000 machine is €2,343.75). A days-based input
+  is refused: Ireland shortens the PERIOD, not the hold.
+- `allowableCost(asset)` — the car cost cap from Tax and Duty Manual Part 11-00-01, against
+  the €24,000 specified limit by CO₂ band: up to 155 g/km (categories A–C) the car is
+  DEEMED to cost €24,000 whatever it actually cost, in both directions; 156–190 g/km (D–E)
+  gets the lower of half the limit and half the cost; over 190 g/km (F–G) gets nothing; and
+  a car with no CO₂ figure on record is treated as Category G. Commercial vehicles are
+  uncapped.
+- The accelerated capital allowance — 100% in year one for energy-efficient equipment on
+  the SEAI Triple E register — ships as the one concession, gated on the
+  `isEnergyEfficientSeai` field, and `immediate_writeoff` carries its arithmetic. No
+  write-off cost threshold is invented.
+- Disposals are flagged, not fully modelled: the exact Irish balancing mechanics (TDM
+  Part 09-02-03) were not read for this release, so `IE_DISPOSAL_BALANCING` ships
+  `verified: false` with the note to render, and `balancingAdjustment` is the generic
+  proceeds-less-written-down-value comparison.
+- Vocabulary: "Plant and machinery", "Wear and tear allowance", "Tax written down value".
+  `readMore` links to revenue.ie only. No country plugin wires these rules yet — Ireland
+  has no filing plugin — so hosts reach them as `IE_DEPRECIATION_RULES` directly.
+
+### Added — South Africa (`src/countries/southAfricaDepreciation.ts`)
+
+- The write-off period regime — `WriteOffPeriodRules`: SARS publishes a period in years per
+  asset in the schedule to Interpretation Note 47 (Issue 5, 9 February 2021 — Binding
+  General Ruling 7 makes it binding), and the taxpayer elects straight line or diminishing
+  value over it (IN47 4.3.2) on the cash cost excluding finance charges.
+  `writeOffPeriod(categoryKey)` returns the schedule years; twenty rows ship, each read
+  from the schedule — personal computers 3, tablets and cellphones and PC software 2,
+  furniture 6, passenger cars 5, delivery vehicles 4, heavy trucks 3, standby generators
+  15 among them — and an asset not on the list is null, not a guess.
+- Straight line runs at 1 ÷ years through `prime_cost`, APPORTIONED BY DAYS for a part year
+  (IN47 4.1.6): a R10,000 personal computer claims R3,333.33 in a full year and
+  R913.24 over 100 days. Diminishing value is allowed on the income tax value but SARS
+  publishes NO DV rate, so `declineInValue` demands the taxpayer's own `annualRate` rather
+  than inventing one with the ATO's 200% multiplier.
+- `smallItemThreshold(onDate)` — an item costing LESS than R7,000 is written off in full in
+  the year acquired and brought into use, for acquisitions on or after 1 March 2009; a set
+  bought together is one item. Effective-dated: an earlier date resolves to an unverified
+  null rather than R7,000 backdated.
+- s.12C (manufacturing plant, 40/20/20/20 new or 20% × 5 used) and s.12E (small business
+  corporations, 100% manufacturing or 50/30/20) replace s.11(e) for the assets they cover
+  and were NOT read this session, so they ship as `verified: false` notes in
+  `firstYearConcessions`, never as rates.
+- Vocabulary: "Qualifying asset", "Wear-and-tear allowance", "Income tax value",
+  "Write-off period". `readMore` links to sars.gov.za only.
+- `southAfricaPlugin.getDepreciationRules()` now returns these rules instead of the generic
+  fallback.
 
 ## 2.1.0 — 2026-08-23
 

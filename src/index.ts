@@ -127,6 +127,21 @@ export type {
   BlockPeriodAddition,
   BlockPeriodInput,
   BlockPeriodOutcome,
+  WriteOffElectiveRules,
+  SgWriteOffMethod,
+  SgWorkingLifeYears,
+  SgAssetInput,
+  SgEligibilityOutcome,
+  SgAllowanceOutcome,
+  SgLowValueCapOutcome,
+  StraightLineFixedRules,
+  IeCo2Band,
+  IeAssetInput,
+  IeAllowableCostOutcome,
+  IeWearAndTearInput,
+  IeWearAndTearOutcome,
+  WriteOffPeriodRules,
+  ZaWriteOffPeriodOutcome,
   PartYearInput,
   DepreciationExplainer,
   DepreciationVocabulary,
@@ -270,6 +285,51 @@ export {
 
 export type { InBlockRow } from './countries/indiaDepreciation';
 
+
+// Singapore — IRAS's write-off elective capital allowances (ss.19/19A elections per asset).
+export {
+  SG_DEPRECIATION_RULES,
+  SG_DEPRECIATION_AUTHORITY_URLS,
+  SG_LOW_VALUE_PER_ITEM_LIMIT,
+  SG_LOW_VALUE_TOTAL_PER_YA,
+  SG_TWO_YEAR_YAS,
+  SG_WORKING_LIFE_ELECTION_FROM_YA,
+  SG_INITIAL_ALLOWANCE_RATE,
+  SG_MOTOR_VEHICLE_WORKING_LIFE,
+  sgEligibility,
+  sgMethodsFor,
+  sgAllowanceForYear,
+  sgLowValueCap,
+} from './countries/singaporeDepreciation';
+
+// Ireland — Revenue's fixed 12.5% straight-line wear and tear (car cost cap by CO₂ band).
+export {
+  IE_DEPRECIATION_RULES,
+  IE_DEPRECIATION_AUTHORITY_URLS,
+  IE_DISPOSAL_BALANCING,
+  IE_WEAR_AND_TEAR_RATE,
+  IE_WEAR_AND_TEAR_YEARS,
+  IE_CAR_SPECIFIED_LIMIT,
+  IE_CAR_CO2_BAND_AC_MAX,
+  IE_CAR_CO2_BAND_DE_MAX,
+  ieAllowableCost,
+  ieWearAndTear,
+} from './countries/irelandDepreciation';
+
+// South Africa — SARS's write-off period regime (IN47 schedule, SL/DV election, day apportionment).
+export {
+  ZA_DEPRECIATION_RULES,
+  ZA_DEPRECIATION_AUTHORITY_URLS,
+  ZA_WRITE_OFF_CATEGORIES,
+  ZA_WRITE_OFF_SOURCE,
+  ZA_SMALL_ITEM_ROWS,
+  ZA_SMALL_ITEM_LIMIT,
+  ZA_SMALL_ITEM_LIMIT_FROM,
+  zaWriteOffPeriod,
+  zaSmallItemThreshold,
+} from './countries/southAfricaDepreciation';
+
+export type { ZaSmallItemRow } from './countries/southAfricaDepreciation';
 
 // ─── Annual reports (lodged separately from the activity statement) ──────────
 export {
