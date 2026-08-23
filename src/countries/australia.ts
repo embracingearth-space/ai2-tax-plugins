@@ -3,7 +3,7 @@
  * Full scope: GST (G1-G11, 1A, 1B) + PAYG Withholding (W1-W5)
  *   + PAYG Instalments (T1-T9) + FBT (F1-F4) + Summary (8A, 8B, 9)
  * Authority: Australian Taxation Office (ATO)
- * Reference: https://www.ato.gov.au/businesses-and-organisations/preparing-lodging-and-paying/activity-statements
+ * Reference: https://www.ato.gov.au/businesses-and-organisations/preparing-lodging-and-paying/business-activity-statements-bas
  * ARCHITECTURE: ATO rounds all dollar amounts DOWN to whole dollars (no cents).
  *   Financial year: 1 Jul - 30 Jun. Default quarterly filing.
  */
@@ -44,7 +44,7 @@ const australiaPlugin: TaxFilingPlugin = {
     fullName: 'Australian Taxation Office',
     portalUrl: 'https://www.ato.gov.au',
     helpUrl:
-      'https://www.ato.gov.au/businesses-and-organisations/preparing-lodging-and-paying/activity-statements',
+      'https://www.ato.gov.au/businesses-and-organisations/preparing-lodging-and-paying/business-activity-statements-bas',
   },
   taxFamily: 'GST',
   isFullPlugin: true,

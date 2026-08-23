@@ -1,7 +1,7 @@
 /**
  * New Zealand GST Return (GST-101A) - ai2fin.com
  * NZ Inland Revenue Department - 15% GST
- * Reference: https://www.ird.govt.nz/gst/filing-and-paying-gst-and-provisional-tax
+ * Reference: https://www.ird.govt.nz/gst/filing-and-paying-gst-and-refunds
  * ARCHITECTURE: NZ rounds to nearest dollar (whole). Financial year: 1 Apr - 31 Mar.
  *   Filing: 2-monthly (default), monthly (voluntary), 6-monthly (small).
  */
@@ -35,7 +35,7 @@ const nzPlugin: TaxFilingPlugin = {
     fullName: 'Inland Revenue Department',
     portalUrl: 'https://www.ird.govt.nz',
     helpUrl:
-      'https://www.ird.govt.nz/gst/filing-and-paying-gst-and-provisional-tax/filing-gst-returns',
+      'https://www.ird.govt.nz/gst/filing-and-paying-gst-and-refunds',
   },
   taxFamily: 'GST',
   isFullPlugin: true,

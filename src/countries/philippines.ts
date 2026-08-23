@@ -25,7 +25,12 @@ const phPlugin: TaxFilingPlugin = {
     name: 'BIR',
     fullName: 'Bureau of Internal Revenue',
     portalUrl: 'https://efps.bir.gov.ph',
-    helpUrl: 'https://www.bir.gov.ph/index.php/tax-information/value-added-tax.html',
+    // BIR's rebuilt site has no general VAT guidance page: the old path 404s and
+    // every unmigrated path (incl. /value-added-tax, /vat, /tax-information) answers
+    // 200 with a BLANK body. A blank page is worse than no link, and the homepage is
+    // not guidance, so no helpUrl is shipped until BIR publishes one.
+    // Checked 2026-08-22 (UTC).
+    // embracingearth.space
   },
   taxFamily: 'VAT',
   isFullPlugin: true,

@@ -24,7 +24,7 @@ const myPlugin: TaxFilingPlugin = {
     name: 'RMCD',
     fullName: 'Royal Malaysian Customs Department (Jabatan Kastam Diraja Malaysia)',
     portalUrl: 'https://mysst.customs.gov.my',
-    helpUrl: 'https://mysst.customs.gov.my/SSTInfo',
+    helpUrl: 'https://mysst.customs.gov.my/filing-text-returns/',
   },
   taxFamily: 'SST',
   isFullPlugin: true,

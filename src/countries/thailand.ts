@@ -23,7 +23,7 @@ const thPlugin: TaxFilingPlugin = {
   authority: {
     name: 'Revenue Department',
     fullName: 'Revenue Department (กรมสรรพากร)',
-    portalUrl: 'https://rdserver.rd.go.th',
+    portalUrl: 'https://efiling.rd.go.th/rd-cms/',
     helpUrl: 'https://www.rd.go.th/english/',
   },
   taxFamily: 'VAT',
@@ -117,7 +117,7 @@ const thPlugin: TaxFilingPlugin = {
       mimeType: 'application/json',
     };
   },
-  getPortalSubmissionInfo: () => ({ portalUrl: 'https://rdserver.rd.go.th', submissionMethod: 'manual_upload' as const, apiReady: false }),
+  getPortalSubmissionInfo: () => ({ portalUrl: 'https://efiling.rd.go.th/rd-cms/', submissionMethod: 'manual_upload' as const, apiReady: false }),
   hasSubJurisdictions: () => false,
   supportsCustomFields: () => false,
 };
