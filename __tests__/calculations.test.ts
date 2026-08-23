@@ -59,8 +59,9 @@ describe('@ai2/tax-plugins — Calculations', () => {
 
     it('should accept $0 PAYG variation (T8=0 means zero instalment)', () => {
       const result = plugin.calculateFields({ G1: 0, G10: 0, G11: 0, T1: 50000, T2: 0.05, T8: '0' });
-      // T8 explicitly set to 0 → eightA should be 0, not fall through to T3 (2500)
-      expect(result['8A']).toBe(0);
+      // T8 explicitly set to 0 → 5A (PAYG instalment) should be 0, not fall through to T3 (2500)
+      expect(result['5A']).toBe(0);
+      expect(result['8A']).toBe(0); // total amounts owed: nothing else is set
     });
 
     it('should guard against NaN in 1A/1B override', () => {
