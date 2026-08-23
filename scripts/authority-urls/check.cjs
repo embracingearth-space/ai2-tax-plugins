@@ -35,13 +35,19 @@ const SOFT_404 =
   /page not found|not be found|couldn't find|cannot be found|no longer available|doesn't exist|does not exist|não encontrada|nicht gefunden|no encontrad|introuvable|^404\b|something went wrong/i;
 const LOGIN_WALL = /require_login|\/login|\/signin|auth\/realms|came_from=/i;
 const DEFAULT_TIMEOUT_MS = 25000;
-// A non-numeric TIMEOUT_MS yields NaN, and setTimeout(fn, NaN) fires almost
-// immediately — every request would abort and the whole run would report
-// "inconclusive", the one verdict a human is told not to act on. Fall back
-// rather than fail quietly. embracingearth.space
-const RAW_TIMEOUT = Number(process.env.TIMEOUT_MS);
+// Node's setTimeout ceiling; anything larger silently wraps to ~1ms.
+const MAX_TIMER_MS = 2147483647;
+// Every value outside [1, MAX_TIMER_MS] makes setTimeout fire in ~1ms, which
+// aborts every request and reports the whole run as "inconclusive" — the one
+// verdict a human is told NOT to act on, so the script would fail silently and
+// merely look unlucky. NaN ('abc'), 0.5 and 2**31 all do this (the last two
+// verified: both fired after 2ms). Floor first so '2500.7' still means 2500,
+// then fall back for anything out of range. embracingearth.space
+const RAW_TIMEOUT = Math.floor(Number(process.env.TIMEOUT_MS));
 const TIMEOUT_MS =
-  Number.isFinite(RAW_TIMEOUT) && RAW_TIMEOUT > 0 ? RAW_TIMEOUT : DEFAULT_TIMEOUT_MS;
+  Number.isFinite(RAW_TIMEOUT) && RAW_TIMEOUT >= 1 && RAW_TIMEOUT <= MAX_TIMER_MS
+    ? RAW_TIMEOUT
+    : DEFAULT_TIMEOUT_MS;
 
 /**
  * Trim trailing sentence punctuation without breaking URLs that legitimately end
