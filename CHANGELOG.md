@@ -12,8 +12,8 @@ working untouched.
 - `DepreciationRules.regime` — `'effective_life' | 'rate_per_asset' | 'pooled_allowance' |
   'class_cca' | 'generic'`. The countries do not share a model, and a host branches on this
   rather than printing one country's schedule for every country. Australia is
-  `effective_life`, New Zealand `rate_per_asset`, the fallback `generic`; the two pooled
-  regimes (UK pools, Canadian CCA classes) are named so the type is complete, and are not
+  `effective_life`, New Zealand `rate_per_asset`, the United Kingdom `pooled_allowance`, the
+  fallback `generic`; Canada's `class_cca` is named so the type is complete, and is not
   implemented.
 - `explainer()` on every rules object — `whatItIs`, `whenItApplies`, `howItWorks[]`,
   `readMore[]` (official pages only) and a `vocabulary` that drives column labels, so a
@@ -35,6 +35,50 @@ working untouched.
   ignored when it is given and required when it is not.
 - `sortNewestFirst` / `resolveEffectiveDated` — the effective-dated resolver, generic over any
   `{ effectiveFrom }` row.
+- `PooledAllowanceRules` — `regime: 'pooled_allowance'`, `poolFor(asset, onDate)`,
+  `wdaRate(pool, { periodStart, periodEnd, taxpayer })`, `aia(period)`,
+  `firstYearAllowance(asset, onDate)`, `cashBasisRestriction()`, `eligibility(asset)`,
+  `smallPoolsAllowance(period)`, with the `Uk*` input and outcome types.
+- `computePoolPeriod(input)` — one pool for one period in HMRC's order: additions in; AIA
+  (capped at the pro-rated limit, the excess written down this period) and first-year
+  allowances against the additions that qualify, the FYA remainder joining the pool for WDA
+  from the NEXT period; disposals out, capped at original cost; a balancing charge where
+  proceeds exceed the balance; a balancing allowance where the pool is closing; the small
+  pools allowance where a main or special rate pool is at or under the limit before the
+  allowance is worked out (never a single-asset pool, and either that or WDA, not both);
+  otherwise the writing-down allowance; closing written down value. Per period only — the
+  host replays.
+
+### Added — United Kingdom (`src/countries/unitedKingdomDepreciation.ts`)
+
+- The first pooled regime. Main pool WDA 18%, 14% from 1 April 2026 (Corporation Tax) or
+  6 April 2026 (Income Tax); a period straddling the change gets a day-weighted hybrid rate
+  (a calendar-2026 income-tax period is 95 days at 18% and 270 at 14%). Special rate pool 6%.
+- Annual investment allowance £1,000,000 from 1 January 2019, £200,000 for 2016-2018, £500,000
+  for April 2014 to December 2015, all verified; earlier dates resolve to an unverified null.
+  Pro-rated by period length — whole months over twelve where the period runs from the first
+  of a month to the last of a month, days over 365 otherwise — so nine months is £750,000. A
+  period that straddles a change in the annual limit comes back `verified: false` because
+  HMRC's transitional rules for that case are not modelled.
+- Small pools allowance: a main or special rate pool at £1,000 or less before the allowance
+  is worked out is claimed in full instead of WDA; pro-rated like the AIA (nine months,
+  £750); not for single-asset pools.
+- First-year allowances, effective-dated: full expensing (100%) and the 50% special-rate FYA
+  for companies from 1 April 2023; the super-deduction (130%) for companies 1 April 2021 to
+  31 March 2023; the 40% FYA on new and unused main-rate plant, not a car, bought on or after
+  1 January 2026 with the remaining 60% written down from the next period; 100% for a new
+  zero-emission car. Where the answer turns on the taxpayer type and it is not recorded, the
+  result is `{ percent: null, verified: false }` with a note, not a guess.
+- Business cars by CO₂ and purchase date, gov.uk's table: from April 2021 new 0 g/km → 100%
+  FYA, ≤50 → main, >50 → special; April 2018-2021 new ≤50 → 100%, ≤110 → main; April
+  2015-2018 new ≤75 → 100%, ≤130 → main. The income-tax calendar starts each band on
+  6 April. Before April 2015 the pool comes back unverified.
+- Cash basis: a sole trader or partnership on the cash basis can claim capital allowances on
+  business cars only. `cashBasisRestriction()` and `eligibility(asset)` say so per asset, and
+  the explainer's `whenItApplies` leads with it.
+- `extraAssetFields()`: `taxpayerType`, `isCar`, `co2GPerKm`, `isNew`. Vocabulary: "Written
+  down value", "Writing-down allowance", "Pool". `readMore` links are gov.uk pages only.
+- `ukPlugin.getDepreciationRules()` now returns these rules instead of the generic fallback.
 
 ### Added — New Zealand (`src/countries/newZealandDepreciation.ts`)
 
