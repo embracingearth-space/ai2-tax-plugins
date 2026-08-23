@@ -1224,7 +1224,18 @@ export function computeDeclineInValue(
         throw new RangeError('The pool method is not available in these depreciation rules');
       }
       // Pool deductions are a rate on the pool balance, not apportioned by days held.
-      rate = input.poolAllocationYear ? poolRates.allocationYear : poolRates.ongoing;
+      //
+      // THE POOL RATE IS GUARDED LIKE ANY OTHER. The pooled adapters build
+      // `poolRates` from the caller's `annualRate` (UK's `wdaRate`, CA's class
+      // rate), so a percentage passed where a fraction was meant reaches here
+      // unchecked. Without this, `annualRate: 18` makes `raw` eighteen times the
+      // balance and the clamp below quietly writes the whole pool off in one
+      // period — the same mistake `requireRate` catches on the prime cost and
+      // diminishing value paths, only silent. Every rate any adapter feeds this
+      // path is above 0, so the (0, 1] range holds; a jurisdiction that must
+      // represent a genuine zero pool rate wants a `requireRateOrZero` variant
+      // rather than a loosened guard here.
+      rate = requireRate(input.poolAllocationYear ? poolRates.allocationYear : poolRates.ongoing);
       raw = baseValue * rate;
       break;
     }
