@@ -101,6 +101,13 @@ export type {
   ClassPeriodDisposal,
   ClassPeriodInput,
   ClassPeriodOutcome,
+  WriteOffElectiveRules,
+  SgWriteOffMethod,
+  SgWorkingLifeYears,
+  SgAssetInput,
+  SgEligibilityOutcome,
+  SgAllowanceOutcome,
+  SgLowValueCapOutcome,
   PartYearInput,
   DepreciationExplainer,
   DepreciationVocabulary,
@@ -208,6 +215,23 @@ export {
 } from './countries/canadaDepreciation';
 
 export type { CaCcaClassRow, CaVehicleCapRow } from './countries/canadaDepreciation';
+
+// Singapore — IRAS's write-off elective capital allowances (ss.19/19A elections per asset).
+export {
+  SG_DEPRECIATION_RULES,
+  SG_DEPRECIATION_AUTHORITY_URLS,
+  SG_LOW_VALUE_PER_ITEM_LIMIT,
+  SG_LOW_VALUE_TOTAL_PER_YA,
+  SG_TWO_YEAR_YAS,
+  SG_WORKING_LIFE_ELECTION_FROM_YA,
+  SG_INITIAL_ALLOWANCE_RATE,
+  SG_MOTOR_VEHICLE_WORKING_LIFE,
+  sgEligibility,
+  sgMethodsFor,
+  sgAllowanceForYear,
+  sgLowValueCap,
+} from './countries/singaporeDepreciation';
+
 
 // ─── Annual reports (lodged separately from the activity statement) ──────────
 export {

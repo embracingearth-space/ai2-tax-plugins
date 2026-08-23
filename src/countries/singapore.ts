@@ -8,6 +8,8 @@
  */
 
 import { toCsv } from '../exportUtils';
+import { SG_DEPRECIATION_RULES } from './singaporeDepreciation';
+import type { DepreciationRules } from '../depreciation';
 
 import type {
   TaxFilingPlugin,
@@ -487,6 +489,11 @@ const sgPlugin: TaxFilingPlugin = {
         defaultFor: ['transfers', 'loan_principal', 'owner_drawings', 'dividends', 'tax_payments'],
       },
     ];
+  },
+
+  /** IRAS's write-off elective capital allowances — see ./singaporeDepreciation. */
+  getDepreciationRules(): DepreciationRules {
+    return SG_DEPRECIATION_RULES;
   },
 };
 
