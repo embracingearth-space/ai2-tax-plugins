@@ -240,7 +240,14 @@ describe('NZ GST101A — official box numbering and formulas', () => {
     for (const id of ['box7', 'box8', 'box10', 'box12', 'box14', 'box15']) expect(byId[id].calculated).toBe(true);
     expect(byId.box11.label).toMatch(/tax invoicing requirements/);
     const mapping = Object.fromEntries(newZealandPlugin.getAutoPopulateMapping().map((m) => [m.fieldId, m.aggregateKey]));
-    expect(mapping).toEqual({ box5: 'income_total', box6: 'income_zero_rated', box11: 'expenses_total' });
+    // Box 5 excludes exempt supplies; Box 11 is only purchases with GST in the price.
+    expect(mapping).toEqual({
+      box5: 'income_total_excl_input_taxed',
+      box6: 'income_zero_rated',
+      box11: 'expenses_taxable_gross',
+    });
+    expect(byId.box5.autoPopulateFrom).toBe('income_total_excl_input_taxed');
+    expect(byId.box11.autoPopulateFrom).toBe('expenses_taxable_gross');
   });
 });
 
@@ -313,10 +320,30 @@ describe('Fields declared excl. tax auto-populate from *_excl_tax aggregates', (
       expect(autoOf(p).domestic_purchases).toBe('expenses_domestic_excl_tax');
     }
   });
-  it('SG: box 1 and box 5', () => {
+  it('SG: box 1 (net standard-rated supplies) and box 5 (net taxable purchases incl. zero-rated and imports)', () => {
     expect(mappingOf(singaporePlugin).box1).toBe('income_standard_excl_tax');
-    expect(mappingOf(singaporePlugin).box5).toBe('expenses_standard_excl_tax');
+    expect(mappingOf(singaporePlugin).box5).toBe('expenses_taxable_excl_tax');
     expect(autoOf(singaporePlugin).box1).toBe('income_standard_excl_tax');
+    expect(autoOf(singaporePlugin).box5).toBe('expenses_taxable_excl_tax');
+  });
+
+  it('the aggregate keys a host must emit are exactly these (contract with the core app)', () => {
+    const keysOf = (p: TaxFilingPlugin) => new Set(p.getAutoPopulateMapping().map((m) => m.aggregateKey));
+    expect([...keysOf(australiaPlugin)].sort()).toEqual([
+      'expenses_capital', 'expenses_input_taxed_related', 'expenses_no_tax', 'expenses_non_capital', 'expenses_private',
+      'income_export', 'income_gst_free', 'income_input_taxed', 'income_total', 'input_tax', 'output_tax',
+      'payroll_gross', 'payroll_withheld',
+    ]);
+    expect([...keysOf(newZealandPlugin)].sort()).toEqual([
+      'expenses_taxable_gross', 'income_total_excl_input_taxed', 'income_zero_rated',
+    ]);
+    expect([...keysOf(singaporePlugin)].sort()).toEqual([
+      'expenses_taxable_excl_tax', 'income_standard_excl_tax', 'income_zero_rated', 'input_tax', 'revenue_total',
+    ]);
+    expect([...keysOf(createEUPlugin('DE'))].sort()).toEqual([
+      'expenses_domestic_excl_tax', 'income_standard_excl_tax', 'input_vat',
+    ]);
+    expect([...keysOf(japanPlugin)].sort()).toEqual(['expenses_standard', 'income_standard_excl_tax']);
   });
   it('JP: sales_standard (excl. tax) only — purchases_standard is declared tax-inclusive', () => {
     expect(mappingOf(japanPlugin).sales_standard).toBe('income_standard_excl_tax');

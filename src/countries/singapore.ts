@@ -98,8 +98,11 @@ const sgPlugin: TaxFilingPlugin = {
             type: 'currency',
             editable: true,
             required: true,
-            autoPopulateFrom: 'expenses_standard_excl_tax',
-            helpText: 'Business purchases on which you paid GST (excluding GST amount)',
+            // GST-exclusive value of standard-rated + zero-rated purchases and
+            // imports; excludes exempt, out-of-scope and non-registered suppliers.
+            autoPopulateFrom: 'expenses_taxable_excl_tax',
+            helpText:
+              'GST-exclusive value of your standard-rated and zero-rated purchases and imports. Exclude exempt purchases, purchases from non-GST-registered suppliers and wages.',
           },
         ],
       },
@@ -274,7 +277,7 @@ const sgPlugin: TaxFilingPlugin = {
     // *_excl_tax keys are NET aggregates (boxes 1 and 5 exclude GST).
     { fieldId: 'box1', aggregateKey: 'income_standard_excl_tax' },
     { fieldId: 'box2', aggregateKey: 'income_zero_rated' },
-    { fieldId: 'box5', aggregateKey: 'expenses_standard_excl_tax' },
+    { fieldId: 'box5', aggregateKey: 'expenses_taxable_excl_tax' },
     { fieldId: 'box7', aggregateKey: 'input_tax' },
     { fieldId: 'box13', aggregateKey: 'revenue_total' },
   ],
@@ -400,8 +403,8 @@ const sgPlugin: TaxFilingPlugin = {
         rate: 0,
         taxApplies: false,
         creditable: false,
-        boxes: ['Box 5'],
-        help: 'Purchases from non-GST-registered suppliers, zero-rated and exempt purchases (bank charges, insurance). Reported in Box 5 only; no input tax.',
+        boxes: [],
+        help: 'Exempt purchases (bank charges, insurance) and purchases from non-GST-registered suppliers are not reported. Zero-rated purchases (e.g. international services) are the exception and belong in Box 5.',
         authorityRef: ref,
         defaultFor: ['bank_fees', 'government_fees'],
       },

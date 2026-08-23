@@ -59,7 +59,9 @@ const nzPlugin: TaxFilingPlugin = {
             type: 'currency',
             editable: true,
             required: true,
-            autoPopulateFrom: 'income_total',
+            // income_total minus exempt (SALE_INPUT_TAXED) supplies: Box 5
+            // includes zero-rated supplies but NOT exempt ones.
+            autoPopulateFrom: 'income_total_excl_input_taxed',
             helpText:
               'All sales and income including GST and including any zero-rated supplies. Do not include exempt supplies.',
           },
@@ -128,7 +130,9 @@ const nzPlugin: TaxFilingPlugin = {
             type: 'currency',
             editable: true,
             required: true,
-            autoPopulateFrom: 'expenses_total',
+            // Gross of purchases that carry GST (business-use weighted) — NOT
+            // all expenses: Box 11 excludes wages, exempt and no-GST purchases.
+            autoPopulateFrom: 'expenses_taxable_gross',
             helpText:
               'Purchases and expenses with GST in the price for which you hold taxable supply information (tax invoices). Exclude wages, exempt purchases and purchases with no GST.',
           },
@@ -228,9 +232,10 @@ const nzPlugin: TaxFilingPlugin = {
   },
 
   getAutoPopulateMapping: (): AggregationMapping[] => [
-    { fieldId: 'box5', aggregateKey: 'income_total' },
+    // Box 5 excludes exempt supplies; Box 11 is only purchases with GST in the price.
+    { fieldId: 'box5', aggregateKey: 'income_total_excl_input_taxed' },
     { fieldId: 'box6', aggregateKey: 'income_zero_rated' },
-    { fieldId: 'box11', aggregateKey: 'expenses_total' },
+    { fieldId: 'box11', aggregateKey: 'expenses_taxable_gross' },
   ],
 
   getRoundingRules: (): RoundingConfig => ({ method: 'nearest', decimals: 0, wholeOnly: true }),

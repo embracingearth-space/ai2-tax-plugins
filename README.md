@@ -96,7 +96,28 @@ const treatment = getTreatmentDefinition(plugin, 'PURCHASE_STANDARD')!;
 const rate = resolveTreatmentRate(treatment, getStandardRateAsOf('AU', '2026-03-01') || 0.1);
 ```
 
-The host is expected to sum each treatment into the aggregate keys the plugins auto-populate from. The AU plugin reads `income_total`, `income_export`, `income_gst_free`, `income_input_taxed`, `expenses_capital`, `expenses_non_capital`, `expenses_input_taxed_related`, `expenses_no_tax`, `expenses_private`, `output_tax`, `input_tax`, `payroll_gross` and `payroll_withheld`; `1A`/`1B` use the accounts method (the GST recorded on each transaction) and fall back to the calculation-worksheet figures `G9`/`G20` when blank, with `1A_worksheet`/`1B_worksheet` returned alongside so the two methods can be cross-checked. Fields declared *excluding* tax (EU `standard_sales`, SG box 1, JP 課税標準額) read the net aggregates `income_standard_excl_tax` / `expenses_standard_excl_tax` / `expenses_domestic_excl_tax`; a gross figure in those boxes overstates the tax by the rate, so they stay blank until the host emits the net key.
+The host is expected to sum each treatment into the aggregate keys the plugins auto-populate from (`getAutoPopulateMapping()`). AU `1A`/`1B` use the accounts method (the GST recorded on each transaction) and fall back to the calculation-worksheet figures `G9`/`G20` when blank, with `1A_worksheet`/`1B_worksheet` returned alongside so the two methods can be cross-checked. Fields declared *excluding* tax read net (`*_excl_tax`) aggregates; a gross figure in those boxes overstates the tax by the rate, so they stay blank until the host emits the net key. The keys in use, with the treatments that feed them (gross = tax-inclusive; purchases business-use weighted):
+
+| Aggregate key | Definition | Used by |
+| --- | --- | --- |
+| `income_total` | Gross of all sale treatments | AU G1 |
+| `income_total_excl_input_taxed` | `income_total` minus `SALE_INPUT_TAXED` gross (Box 5 includes zero-rated but not exempt supplies) | NZ Box 5 |
+| `income_export` | `SALE_ZERO_RATED` gross | AU G2 |
+| `income_gst_free` | `SALE_EXEMPT` gross | AU G3 |
+| `income_input_taxed` | `SALE_INPUT_TAXED` gross | AU G4 |
+| `income_zero_rated` | `SALE_ZERO_RATED` gross | NZ Box 6, SG Box 2 |
+| `income_standard_excl_tax` | `SALE_STANDARD` net (gross minus tax) | EU `standard_sales`, SG Box 1, JP 課税標準額 |
+| `expenses_capital` | `PURCHASE_CAPITAL` + `PURCHASE_CAPITAL_NO_TAX` gross | AU G10, ZA Field 14 |
+| `expenses_non_capital` | All other purchase treatments gross except `WAGES` / `OUT_OF_SCOPE` | AU G11 |
+| `expenses_input_taxed_related` | `PURCHASE_INPUT_TAXED` gross | AU G13 |
+| `expenses_no_tax` | `PURCHASE_NO_TAX` + `PURCHASE_CAPITAL_NO_TAX` gross | AU G14 |
+| `expenses_private` | `PURCHASE_PRIVATE` gross + sum of (1 minus business %) x gross of partially-business rows | AU G15 |
+| `expenses_taxable_gross` | Gross of purchase treatments where `taxApplies` (tax-invoice purchases only; excludes wages, exempt and no-tax purchases) | NZ Box 11 |
+| `expenses_taxable_excl_tax` | Net (gross minus tax) of standard-rated and zero-rated purchases and imports; excludes exempt, out-of-scope and non-registered suppliers | SG Box 5 |
+| `expenses_domestic_excl_tax` | Net of domestic purchase treatments where `taxApplies` | EU `domestic_purchases` |
+| `expenses_standard` | `PURCHASE_STANDARD` gross (field declared tax-inclusive) | JP purchases |
+| `output_tax` / `input_tax` | Sum of tax on sales / sum of claimable tax on purchases (accounts method) | AU 1A/1B, CA 103/106, SG Box 7, ZA Field 17 |
+| `payroll_gross` / `payroll_withheld` | `WAGES` gross / `WITHHOLDING` gross | AU W1 / W2 |
 
 ## Development
 
