@@ -59,8 +59,9 @@ describe('@ai2/tax-plugins — Calculations', () => {
 
     it('should accept $0 PAYG variation (T8=0 means zero instalment)', () => {
       const result = plugin.calculateFields({ G1: 0, G10: 0, G11: 0, T1: 50000, T2: 0.05, T8: '0' });
-      // T8 explicitly set to 0 → eightA should be 0, not fall through to T3 (2500)
-      expect(result['8A']).toBe(0);
+      // T8 explicitly set to 0 → 5A (PAYG instalment) should be 0, not fall through to T3 (2500)
+      expect(result['5A']).toBe(0);
+      expect(result['8A']).toBe(0); // total amounts owed: nothing else is set
     });
 
     it('should guard against NaN in 1A/1B override', () => {
@@ -95,19 +96,20 @@ describe('@ai2/tax-plugins — Calculations', () => {
   describe('New Zealand (GST)', () => {
     const plugin = newZealandPlugin;
 
-    it('should use NZ tax fraction 3/23 for 15% GST', () => {
-      // box7 = box5 - box6, then box9 = (box7 * 3/23) + box8
-      // Total sales 23000, zero-rated 0 → box7 = 23000, box9 = 23000 * 3/23 = 3000
-      const result = plugin.calculateFields({ box5: 23000, box6: 0, box8: 0, box11: 0, box12: 0, box14: 0 });
+    it('should use NZ tax fraction 3/23 for 15% GST (GST101A Box 8)', () => {
+      // box7 = box5 - box6, then box8 = box7 * 3/23 (Box 9 adjustments are added at Box 10)
+      // Total sales 23000, zero-rated 0 -> box7 = 23000, box8 = 23000 * 3/23 = 3000
+      const result = plugin.calculateFields({ box5: 23000, box6: 0, box9: 0, box11: 0, box13: 0 });
       expect(result.box7).toBe(23000); // box5 - box6
-      expect(result.box9).toBeCloseTo(3000, 0); // NZ GST fraction
+      expect(result.box8).toBe(3000); // NZ GST fraction
+      expect(result.box10).toBe(3000); // box8 + box9
     });
 
-    it('should calculate net GST payable (box16)', () => {
-      const result = plugin.calculateFields({ box5: 23000, box6: 0, box8: 0, box11: 11500, box12: 0, box14: 0 });
-      expect(typeof result.box16).toBe('number');
-      // box16 = box9 - box15
-      expect(result.box16).toBeGreaterThan(0);
+    it('should calculate net GST payable (GST101A Box 15 = Box 10 - Box 14)', () => {
+      const result = plugin.calculateFields({ box5: 23000, box6: 0, box9: 0, box11: 11500, box13: 0 });
+      expect(result.box12).toBe(1500); // 11500 * 3/23
+      expect(result.box14).toBe(1500);
+      expect(result.box15).toBe(1500); // 3000 - 1500
     });
   });
 

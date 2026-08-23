@@ -42,7 +42,7 @@ const phPlugin: TaxFilingPlugin = {
         title: 'Output VAT',
         description: 'VAT on sales and receipts.',
         fields: [
-          { id: 'vatable_sales', label: 'Vatable sales/receipts', type: 'currency', editable: true, required: true, autoPopulateFrom: 'income_taxable', helpText: 'Sales of goods/services subject to 12% VAT (net of VAT)' },
+          { id: 'vatable_sales', label: 'Vatable sales/receipts', type: 'currency', editable: true, required: true, autoPopulateFrom: 'income_standard_excl_tax', helpText: 'Sales of goods/services subject to 12% VAT (net of VAT)' },
           { id: 'zero_rated_sales', label: 'Zero-rated sales', type: 'currency', editable: true, required: false, helpText: 'Export sales, BOI-registered, PEZA, ecozones' },
           { id: 'exempt_sales', label: 'VAT-exempt sales', type: 'currency', editable: true, required: false, helpText: 'Agricultural, educational, senior citizen/PWD discounts' },
           { id: 'output_vat', label: 'Output VAT (12%)', type: 'currency', calculated: true, editable: true, required: true },
@@ -118,11 +118,15 @@ const phPlugin: TaxFilingPlugin = {
     const compromise = Number(v.compromise) || 0;
     const total_due = Math.round((Math.max(0, net_vat) + surcharge + interest + compromise) * 100) / 100;
 
-    return { output_vat: output_vat_calc, input_vat: input_vat_calc, net_vat, total_due };
+    // embracingearth.space: return override-aware values so manual edits survive save (client merges calculatedFields over user input)
+    return { output_vat, input_vat, net_vat, total_due };
   },
 
   getAutoPopulateMapping: (): AggregationMapping[] => [
-    { fieldId: 'vatable_sales', aggregateKey: 'income_taxable' },
+    // Output/input tax here is field × rate, so these fields are the TAX-EXCLUSIVE
+    // base: auto-fill from the *_excl_tax aggregates, never the gross totals
+    // (gross × rate overstated the tax by the rate). embracingearth.space
+    { fieldId: 'vatable_sales', aggregateKey: 'income_standard_excl_tax' },
     { fieldId: 'domestic_purchases_goods', aggregateKey: 'expenses_goods' },
     { fieldId: 'domestic_purchases_services', aggregateKey: 'expenses_services' },
     { fieldId: 'input_vat', aggregateKey: 'input_tax' },

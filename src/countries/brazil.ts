@@ -103,28 +103,40 @@ const brPlugin: TaxFilingPlugin = {
 
     const pis_output_calc = Math.round(revNC * PIS_RATE * 100) / 100;
     const cofins_output_calc = Math.round(revNC * COFINS_RATE * 100) / 100;
-    const total_output = Math.round((pis_output_calc + cofins_output_calc) * 100) / 100;
-
     const pis_credits_calc = Math.round(totalInputBase * PIS_RATE * 100) / 100;
     const cofins_credits_calc = Math.round(totalInputBase * COFINS_RATE * 100) / 100;
-    const total_credits = Math.round((pis_credits_calc + cofins_credits_calc) * 100) / 100;
 
+    // Overrides are normalised to 2 dp like every calculated figure, so a saved
+    // statement never carries 100.123 beside a 100.12 total. embracingearth.space
     const pis_output = (v.pis_output !== '' && v.pis_output !== undefined && v.pis_output !== null)
-      ? Number(v.pis_output) : pis_output_calc;
+      ? Math.round(Number(v.pis_output) * 100) / 100 : pis_output_calc;
     const cofins_output = (v.cofins_output !== '' && v.cofins_output !== undefined && v.cofins_output !== null)
-      ? Number(v.cofins_output) : cofins_output_calc;
+      ? Math.round(Number(v.cofins_output) * 100) / 100 : cofins_output_calc;
     const pis_credits = (v.pis_credits !== '' && v.pis_credits !== undefined && v.pis_credits !== null)
-      ? Number(v.pis_credits) : pis_credits_calc;
+      ? Math.round(Number(v.pis_credits) * 100) / 100 : pis_credits_calc;
     const cofins_credits = (v.cofins_credits !== '' && v.cofins_credits !== undefined && v.cofins_credits !== null)
-      ? Number(v.cofins_credits) : cofins_credits_calc;
+      ? Math.round(Number(v.cofins_credits) * 100) / 100 : cofins_credits_calc;
 
-    const net_pis = Math.round(Math.max(0, pis_output - pis_credits) * 100) / 100;
-    const net_cofins = Math.round(Math.max(0, cofins_output - cofins_credits) * 100) / 100;
+    // Totals from the override-aware figures so they stay consistent with the
+    // per-tax lines a user may have edited. embracingearth.space
+    const total_output = Math.round((pis_output + cofins_output) * 100) / 100;
+    const total_credits = Math.round((pis_credits + cofins_credits) * 100) / 100;
+
+    // Do NOT clamp to 0: under the non-cumulative regime, credits exceeding
+    // output tax are a credit balance the taxpayer carries forward — clamping
+    // silently discarded it. A negative net surfaces the credit instead of
+    // hiding it. (Credit-carryforward representation flagged for tax review.)
+    // embracingearth.space
+    const net_pis = Math.round((pis_output - pis_credits) * 100) / 100;
+    const net_cofins = Math.round((cofins_output - cofins_credits) * 100) / 100;
     const total_payable = Math.round((net_pis + net_cofins) * 100) / 100;
 
     return {
-      pis_output: pis_output_calc, cofins_output: cofins_output_calc, total_output,
-      pis_credits: pis_credits_calc, cofins_credits: cofins_credits_calc, total_credits,
+      // Return override-aware output/credit figures (these fields are editable):
+      // net_* were computed from the overrides, so returning the pre-override
+      // *_calc discarded a manual edit on save. embracingearth.space
+      pis_output, cofins_output, total_output,
+      pis_credits, cofins_credits, total_credits,
       net_pis, net_cofins, total_payable,
     };
   },

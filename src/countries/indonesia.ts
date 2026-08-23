@@ -35,7 +35,7 @@ const idPlugin: TaxFilingPlugin = {
         id: 'output',
         title: 'Output VAT (Pajak Keluaran)',
         fields: [
-          { id: 'domestic_delivery', label: 'Domestic delivery of taxable goods/services (Penyerahan Dalam Negeri)', type: 'currency', editable: true, required: true, autoPopulateFrom: 'income_taxable', helpText: 'Sales of goods/services at 11% (excl. VAT)' },
+          { id: 'domestic_delivery', label: 'Domestic delivery of taxable goods/services (Penyerahan Dalam Negeri)', type: 'currency', editable: true, required: true, autoPopulateFrom: 'income_standard_excl_tax', helpText: 'Sales of goods/services at 11% (excl. VAT)' },
           { id: 'export_goods', label: 'Export of taxable goods', type: 'currency', editable: true, required: false },
           { id: 'export_services', label: 'Export of taxable services', type: 'currency', editable: true, required: false },
           { id: 'exempt_delivery', label: 'Non-taxable / exempt delivery', type: 'currency', editable: true, required: false, helpText: 'Basic necessities, healthcare, education, financial services' },
@@ -46,7 +46,7 @@ const idPlugin: TaxFilingPlugin = {
         id: 'input',
         title: 'Input VAT (Pajak Masukan)',
         fields: [
-          { id: 'domestic_acquisition', label: 'Domestic acquisition of goods/services', type: 'currency', editable: true, required: true, autoPopulateFrom: 'expenses_taxable', helpText: 'Business purchases with valid e-Faktur' },
+          { id: 'domestic_acquisition', label: 'Domestic acquisition of goods/services', type: 'currency', editable: true, required: true, autoPopulateFrom: 'expenses_taxable_excl_tax', helpText: 'Business purchases with valid e-Faktur' },
           { id: 'import_goods', label: 'Import of taxable goods', type: 'currency', editable: true, required: false },
           { id: 'input_vat', label: 'Input VAT (PPN Masukan)', type: 'currency', calculated: true, editable: true, required: true, autoPopulateFrom: 'input_tax' },
           { id: 'input_vat_non_creditable', label: 'Non-creditable input VAT', type: 'currency', editable: true, required: false, helpText: 'Input VAT related to exempt deliveries, entertainment, company car for directors' },
@@ -92,12 +92,16 @@ const idPlugin: TaxFilingPlugin = {
     const net_vat = output_vat - creditable_input;
     const balance_due = net_vat - prior;
 
-    return { output_vat: output_vat_calc, input_vat: input_vat_calc, net_vat, balance_due };
+    // embracingearth.space: return override-aware values so manual edits survive save (client merges calculatedFields over user input)
+    return { output_vat, input_vat, net_vat, balance_due };
   },
 
   getAutoPopulateMapping: (): AggregationMapping[] => [
-    { fieldId: 'domestic_delivery', aggregateKey: 'income_taxable' },
-    { fieldId: 'domestic_acquisition', aggregateKey: 'expenses_taxable' },
+    // Output/input tax here is field × rate, so these fields are the TAX-EXCLUSIVE
+    // base: auto-fill from the *_excl_tax aggregates, never the gross totals
+    // (gross × rate overstated the tax by the rate). embracingearth.space
+    { fieldId: 'domestic_delivery', aggregateKey: 'income_standard_excl_tax' },
+    { fieldId: 'domestic_acquisition', aggregateKey: 'expenses_taxable_excl_tax' },
     { fieldId: 'input_vat', aggregateKey: 'input_tax' },
   ],
   getRoundingRules: (): RoundingConfig => ({ method: 'nearest', decimals: 0, wholeOnly: true }),

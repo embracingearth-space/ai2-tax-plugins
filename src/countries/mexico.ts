@@ -35,7 +35,7 @@ const mxPlugin: TaxFilingPlugin = {
         id: 'sales',
         title: 'IVA Causado (Output IVA)',
         fields: [
-          { id: 'sales_16', label: 'Sales at 16%', type: 'currency', editable: true, required: true, autoPopulateFrom: 'income_standard', helpText: 'Most goods and services' },
+          { id: 'sales_16', label: 'Sales at 16%', type: 'currency', editable: true, required: true, autoPopulateFrom: 'income_standard_excl_tax', helpText: 'Most goods and services' },
           { id: 'sales_0', label: 'Sales at 0%', type: 'currency', editable: true, required: false, helpText: 'Food, medicine, agricultural, exports' },
           { id: 'sales_exempt', label: 'Exempt sales', type: 'currency', editable: true, required: false, helpText: 'Housing rent, medical, education, cultural events' },
           { id: 'iva_causado', label: 'IVA caused (trasladado)', type: 'currency', calculated: true, editable: true, required: true },
@@ -45,7 +45,7 @@ const mxPlugin: TaxFilingPlugin = {
         id: 'purchases',
         title: 'IVA Acreditable (Input IVA)',
         fields: [
-          { id: 'purchases_16', label: 'Purchases at 16%', type: 'currency', editable: true, required: true, autoPopulateFrom: 'expenses_standard' },
+          { id: 'purchases_16', label: 'Purchases at 16%', type: 'currency', editable: true, required: true, autoPopulateFrom: 'expenses_standard_excl_tax' },
           { id: 'purchases_0', label: 'Purchases at 0%', type: 'currency', editable: true, required: false },
           { id: 'imports', label: 'Imports (IVA paid at customs)', type: 'currency', editable: true, required: false },
           { id: 'iva_acreditable', label: 'IVA creditable (acreditable)', type: 'currency', calculated: true, editable: true, required: true, autoPopulateFrom: 'input_tax' },
@@ -97,14 +97,19 @@ const mxPlugin: TaxFilingPlugin = {
       ? Math.round(Number(v.iva_acreditable) * 100) / 100 : iva_acreditable_calc;
 
     const net_iva = Math.round((iva_causado - iva_acreditable - retReceived) * 100) / 100;
-    const balance_due = Math.round(Math.max(0, net_iva - prior) * 100) / 100;
+    // TAX REVIEW: net IVA may be negative (saldo a favor / in favor) — do not clamp to zero. embracingearth.space
+    const balance_due = Math.round((net_iva - prior) * 100) / 100;
 
-    return { iva_causado: iva_causado_calc, iva_acreditable: iva_acreditable_calc, net_iva, balance_due };
+    // embracingearth.space: return override-aware values so manual edits survive save (client merges calculatedFields over user input)
+    return { iva_causado, iva_acreditable, net_iva, balance_due };
   },
 
   getAutoPopulateMapping: (): AggregationMapping[] => [
-    { fieldId: 'sales_16', aggregateKey: 'income_standard' },
-    { fieldId: 'purchases_16', aggregateKey: 'expenses_standard' },
+    // Output/input tax here is field × rate, so these fields are the TAX-EXCLUSIVE
+    // base: auto-fill from the *_excl_tax aggregates, never the gross totals
+    // (gross × rate overstated the tax by the rate). embracingearth.space
+    { fieldId: 'sales_16', aggregateKey: 'income_standard_excl_tax' },
+    { fieldId: 'purchases_16', aggregateKey: 'expenses_standard_excl_tax' },
     { fieldId: 'iva_acreditable', aggregateKey: 'input_tax' },
   ],
   getRoundingRules: (): RoundingConfig => ({ method: 'nearest', decimals: 2 }),

@@ -35,7 +35,7 @@ const thPlugin: TaxFilingPlugin = {
         id: 'output',
         title: 'Output Tax (ภาษีขาย)',
         fields: [
-          { id: 'taxable_sales', label: 'Total taxable sales (ยอดขาย)', type: 'currency', editable: true, required: true, autoPopulateFrom: 'income_taxable', helpText: 'Total value of taxable sales excl. VAT' },
+          { id: 'taxable_sales', label: 'Total taxable sales (ยอดขาย)', type: 'currency', editable: true, required: true, autoPopulateFrom: 'income_standard_excl_tax', helpText: 'Total value of taxable sales excl. VAT' },
           { id: 'zero_rated_sales', label: 'Zero-rated sales (exports)', type: 'currency', editable: true, required: false },
           { id: 'exempt_sales', label: 'Exempt sales', type: 'currency', editable: true, required: false, helpText: 'Unprocessed agricultural, healthcare, education, domestic transport' },
           { id: 'output_vat', label: 'Output VAT (7%)', type: 'currency', calculated: true, editable: true, required: true },
@@ -45,7 +45,7 @@ const thPlugin: TaxFilingPlugin = {
         id: 'input',
         title: 'Input Tax (ภาษีซื้อ)',
         fields: [
-          { id: 'taxable_purchases', label: 'Total taxable purchases', type: 'currency', editable: true, required: true, autoPopulateFrom: 'expenses_taxable' },
+          { id: 'taxable_purchases', label: 'Total taxable purchases', type: 'currency', editable: true, required: true, autoPopulateFrom: 'expenses_taxable_excl_tax' },
           { id: 'input_vat', label: 'Input VAT claimable', type: 'currency', calculated: true, editable: true, required: true, autoPopulateFrom: 'input_tax', helpText: 'VAT on business purchases with valid tax invoices' },
           { id: 'input_vat_denied', label: 'Non-deductible input VAT', type: 'currency', editable: true, required: false, helpText: 'Entertainment, personal use, passenger vehicles (not for business)' },
         ],
@@ -88,12 +88,16 @@ const thPlugin: TaxFilingPlugin = {
     const net_vat = Math.round((output_vat - (input_vat - denied)) * 100) / 100;
     const balance_due = Math.round((net_vat - priorCredit) * 100) / 100;
 
-    return { output_vat: output_vat_calc, input_vat: input_vat_calc, net_vat, balance_due };
+    // embracingearth.space: return override-aware values so manual edits survive save (client merges calculatedFields over user input)
+    return { output_vat, input_vat, net_vat, balance_due };
   },
 
   getAutoPopulateMapping: (): AggregationMapping[] => [
-    { fieldId: 'taxable_sales', aggregateKey: 'income_taxable' },
-    { fieldId: 'taxable_purchases', aggregateKey: 'expenses_taxable' },
+    // Output/input tax here is field × rate, so these fields are the TAX-EXCLUSIVE
+    // base: auto-fill from the *_excl_tax aggregates, never the gross totals
+    // (gross × rate overstated the tax by the rate). embracingearth.space
+    { fieldId: 'taxable_sales', aggregateKey: 'income_standard_excl_tax' },
+    { fieldId: 'taxable_purchases', aggregateKey: 'expenses_taxable_excl_tax' },
     { fieldId: 'input_vat', aggregateKey: 'input_tax' },
   ],
   getRoundingRules: (): RoundingConfig => ({ method: 'nearest', decimals: 2 }),

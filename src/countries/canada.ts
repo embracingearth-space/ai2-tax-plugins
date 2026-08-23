@@ -20,6 +20,7 @@ import type {
   ExportFormat,
   ExportOutput,
   SubJurisdiction,
+  TaxTreatmentDefinition,
 } from '../types';
 
 const PROVINCES: SubJurisdiction[] = [
@@ -80,12 +81,13 @@ const caPlugin: TaxFilingPlugin = {
           },
           {
             id: 'line104',
-            label: 'Adjustments (add GST/HST previously overclaimed)',
+            label: 'Adjustments to be added to the net tax',
             officialLabel: 'Line 104',
             type: 'currency',
             editable: true,
             required: false,
-            helpText: 'Add back any GST/HST ITCs you previously overclaimed',
+            helpText:
+              'Amounts that increase your net tax for the period (e.g. GST/HST on bad debts recovered, ITCs you must repay or recapture)',
           },
           {
             id: 'line105',
@@ -93,6 +95,7 @@ const caPlugin: TaxFilingPlugin = {
             officialLabel: 'Line 105',
             type: 'currency',
             calculated: true,
+            dependsOn: ['line103', 'line104'],
             editable: false,
             required: true,
           },
@@ -115,19 +118,21 @@ const caPlugin: TaxFilingPlugin = {
           },
           {
             id: 'line107',
-            label: 'Adjustments (subtract ITCs you overclaimed)',
+            label: 'Adjustments to be deducted when determining the net tax',
             officialLabel: 'Line 107',
             type: 'currency',
             editable: true,
             required: false,
-            helpText: 'Subtract any ITCs you need to repay',
+            helpText:
+              'Amounts that reduce your net tax for the period (e.g. GST/HST on bad debts written off, rebates paid or credited to customers). These are ADDED to your ITCs at line 108.',
           },
           {
             id: 'line108',
-            label: 'Total ITCs and adjustments (106 - 107)',
+            label: 'Total ITCs and adjustments (106 + 107)',
             officialLabel: 'Line 108',
             type: 'currency',
             calculated: true,
+            dependsOn: ['line106', 'line107'],
             editable: false,
             required: true,
           },
@@ -218,7 +223,8 @@ const caPlugin: TaxFilingPlugin = {
     const l111 = Number(v.line111) || 0;
 
     const line105 = Math.round((l103 + l104) * 100) / 100;
-    const line108 = Math.round((l106 - l107) * 100) / 100;
+    // GST34: line 107 adjustments are DEDUCTED from net tax, i.e. ADDED to ITCs.
+    const line108 = Math.round((l106 + l107) * 100) / 100;
     const line109 = Math.round((line105 - line108) * 100) / 100;
     const line112 = Math.round((l110 + l111) * 100) / 100;
     const line113 = Math.round((line109 - line112) * 100) / 100;
@@ -253,7 +259,9 @@ const caPlugin: TaxFilingPlugin = {
     const help: Record<string, string> = {
       line101: 'Total revenue from taxable supplies. Exclude GST/HST charged.',
       line103: 'GST/HST you charged customers. From sales journal or accounting system.',
+      line104: 'Adjustments that increase net tax: bad debts recovered, ITCs to repay or recapture.',
       line106: 'GST/HST paid on eligible business purchases. Keep receipts for audit.',
+      line107: 'Adjustments that reduce net tax (added to your ITCs): bad debts written off, rebates paid to customers.',
       line109: 'Positive = you owe CRA. Negative = CRA owes you a refund.',
     };
     return help[fieldId] ?? null;
@@ -283,6 +291,166 @@ const caPlugin: TaxFilingPlugin = {
   hasSubJurisdictions: () => true,
   getSubJurisdictions: () => PROVINCES,
   supportsCustomFields: () => false,
+
+  /**
+   * CA treatment catalogue mapped to GST34 lines. `rate: null` because the
+   * rate depends on the province of supply (5% GST or 13-15% HST).
+   */
+  getTaxTreatments(): TaxTreatmentDefinition[] {
+    const ref =
+      'https://www.canada.ca/en/revenue-agency/services/forms-publications/publications/rc4022/general-information-gst-hst-registrants.html';
+    return [
+      {
+        code: 'SALE_STANDARD',
+        label: 'Taxable supplies (GST 5% / HST by province)',
+        side: 'sale',
+        rate: null,
+        taxApplies: true,
+        creditable: true,
+        boxes: ['Line 101', 'Line 103'],
+        help: 'Sales taxed at 5% GST or the HST rate of the province of supply. Revenue at line 101 (excluding tax); the tax collected at line 103.',
+        authorityRef: ref,
+        defaultFor: ['sales', 'services_income'],
+      },
+      {
+        code: 'SALE_ZERO_RATED',
+        label: 'Zero-rated supplies',
+        side: 'sale',
+        rate: 0,
+        taxApplies: false,
+        creditable: true,
+        boxes: ['Line 101'],
+        help: 'Exports, basic groceries, prescription drugs and other zero-rated supplies. Included in line 101; ITCs on related purchases are claimable.',
+        authorityRef: ref,
+        defaultFor: ['export_sales'],
+      },
+      {
+        code: 'SALE_INPUT_TAXED',
+        label: 'Exempt supplies',
+        side: 'sale',
+        rate: 0,
+        taxApplies: false,
+        creditable: false,
+        boxes: ['Line 101'],
+        help: 'Exempt supplies (most financial services, long-term residential rent, certain health and education). Included in line 101; no ITCs on related purchases.',
+        authorityRef: ref,
+        defaultFor: ['interest_income', 'residential_rent'],
+      },
+      {
+        code: 'PURCHASE_STANDARD',
+        label: 'Purchases with GST/HST (ITC)',
+        side: 'purchase',
+        rate: null,
+        taxApplies: true,
+        creditable: true,
+        boxes: ['Line 106'],
+        help: 'Business purchases with GST/HST in the price; the tax paid is claimed as an input tax credit at line 106.',
+        authorityRef: ref,
+      },
+      {
+        code: 'PURCHASE_CAPITAL',
+        label: 'Capital property with GST/HST (ITC)',
+        side: 'purchase',
+        rate: null,
+        taxApplies: true,
+        creditable: true,
+        boxes: ['Line 106'],
+        help: 'Capital property used primarily in commercial activities; GST/HST paid is claimed at line 106.',
+        authorityRef: ref,
+        defaultFor: ['equipment', 'vehicles'],
+      },
+      {
+        code: 'PURCHASE_NO_TAX',
+        label: 'Purchases with no GST/HST',
+        side: 'purchase',
+        rate: 0,
+        taxApplies: false,
+        creditable: false,
+        boxes: [],
+        help: 'Purchases with no GST/HST in the price (zero-rated or exempt goods and services, small suppliers, bank charges, insurance). No ITC.',
+        authorityRef: ref,
+        defaultFor: ['bank_fees', 'government_fees'],
+      },
+      {
+        code: 'PURCHASE_INPUT_TAXED',
+        label: 'Purchases for making exempt supplies',
+        side: 'purchase',
+        rate: null,
+        taxApplies: true,
+        creditable: false,
+        boxes: [],
+        help: 'GST/HST paid on purchases used to make exempt supplies is not claimable as an ITC.',
+        authorityRef: ref,
+      },
+      {
+        code: 'PURCHASE_PRIVATE',
+        label: 'Personal use / non-deductible',
+        side: 'purchase',
+        rate: null,
+        taxApplies: true,
+        creditable: false,
+        boxes: [],
+        help: 'Personal-use portion and restricted expenses (e.g. 50% of meals and entertainment, club memberships). No ITC for this portion.',
+        authorityRef: ref,
+        defaultFor: ['entertainment', 'fines_penalties'],
+      },
+      {
+        code: 'PURCHASE_REVERSE_CHARGE',
+        label: 'Imported taxable supplies (self-assessed)',
+        side: 'purchase',
+        rate: null,
+        taxApplies: true,
+        creditable: true,
+        boxes: [],
+        help: 'Services and intangibles imported for use in exempt activities are self-assessed at line 405 of the GST34; fully commercial use generally needs no self-assessment.',
+        authorityRef: ref,
+      },
+      {
+        code: 'PURCHASE_IMPORT',
+        label: 'Imported goods (GST paid at the border)',
+        side: 'purchase',
+        rate: null,
+        taxApplies: true,
+        creditable: true,
+        boxes: ['Line 106'],
+        help: 'GST paid to the CBSA on commercial imports is claimable as an ITC at line 106.',
+        authorityRef: ref,
+      },
+      {
+        code: 'WAGES',
+        label: 'Salaries and wages',
+        side: 'payroll',
+        rate: 0,
+        taxApplies: false,
+        creditable: false,
+        boxes: [],
+        help: 'Salaries and wages are not subject to GST/HST and are not reported on the GST34.',
+        defaultFor: ['wages', 'salaries'],
+      },
+      {
+        code: 'WITHHOLDING',
+        label: 'Payroll source deductions',
+        side: 'payroll',
+        rate: 0,
+        taxApplies: false,
+        creditable: false,
+        boxes: [],
+        help: 'Income tax, CPP and EI withheld are remitted on the payroll remittance (PD7A), not the GST34.',
+        defaultFor: ['payg_withholding'],
+      },
+      {
+        code: 'OUT_OF_SCOPE',
+        label: 'Not a supply',
+        side: 'excluded',
+        rate: 0,
+        taxApplies: false,
+        creditable: false,
+        boxes: [],
+        help: 'Transfers, loan principal, owner draws, dividends, tax payments, depreciation. Not reported.',
+        defaultFor: ['transfers', 'loan_principal', 'owner_drawings', 'dividends', 'tax_payments'],
+      },
+    ];
+  },
 };
 
 export default caPlugin;

@@ -18,6 +18,7 @@ import type {
   RoundingConfig,
   ExportFormat,
   ExportOutput,
+  TaxTreatmentDefinition,
 } from '../types';
 import { getStandardRateAsOf } from '../data/rateLedger';
 import { toCsv } from '../exportUtils';
@@ -26,6 +27,12 @@ import { toCsv } from '../exportUtils';
 // effective-dated standard rate is resolved from the single-source rate ledger
 // (getStandardRateAsOf); these rates are only used when a country has no ledger
 // row yet.
+
+/** 0.255 → "25.5", 0.19 → "19", 0.081 → "8.1" — never a rounded-away fraction. */
+function formatRatePercent(rate: number): string {
+  return String(Math.round(rate * 10000) / 100);
+}
+
 const EU_CONFIG: Record<
   string,
   {
@@ -258,7 +265,9 @@ function createEUPlugin(code: string): TaxFilingPlugin {
   // Single source of truth: resolve the current standard rate from the dated
   // ledger, falling back to the EU_CONFIG value if a country has no ledger row.
   const currentRate = getStandardRateAsOf(code) || rate;
-  const ratePercent = (currentRate * 100).toFixed(0);
+  // Statutory rates are not all whole numbers (FI 25.5 %, CH 8.1 %): keep the
+  // decimals the rate actually has so labels never disagree with `rate`.
+  const ratePercent = formatRatePercent(currentRate);
 
   return {
     countryCode: code,
@@ -286,7 +295,9 @@ function createEUPlugin(code: string): TaxFilingPlugin {
               type: 'currency',
               editable: true,
               required: true,
-              autoPopulateFrom: 'income_standard',
+              // NET figure: `income_standard` is emitted gross (tax-inclusive)
+              // by the host app, which overstated output VAT by the rate.
+              autoPopulateFrom: 'income_standard_excl_tax',
               helpText: `Sales at the standard ${ratePercent}% rate`,
             },
             {
@@ -320,7 +331,11 @@ function createEUPlugin(code: string): TaxFilingPlugin {
               calculated: true,
               editable: true,
               required: true,
-              helpText: `Standard sales × ${ratePercent}% + reduced rate amounts. Override if needed.`,
+              // embracingearth.space — caption matched to code: calculateFields
+              // computes standard sales × rate only; reduced-rate VAT is entered
+              // manually and is NOT added here, so the phantom "+ reduced rate
+              // amounts" term is removed.
+              helpText: `Standard sales × ${ratePercent}%. Override if needed (e.g. to add reduced-rate VAT).`,
             },
           ],
         },
@@ -334,7 +349,8 @@ function createEUPlugin(code: string): TaxFilingPlugin {
               type: 'currency',
               editable: true,
               required: true,
-              helpText: 'Business purchases from within the country',
+              autoPopulateFrom: 'expenses_domestic_excl_tax',
+              helpText: 'Business purchases from within the country, net of VAT',
             },
             {
               id: 'intra_community_purchases',
@@ -414,13 +430,18 @@ function createEUPlugin(code: string): TaxFilingPlugin {
 
       const net_vat = Math.round((output_vat - inputVat) * 100) / 100;
 
-      return { output_vat: output_vat_calc, net_vat };
+      // embracingearth.space — return the override-aware output_vat, not the
+      // pre-override output_vat_calc. The client merges calculatedFields over the
+      // user's values on save, so returning output_vat_calc would silently discard
+      // a manual output_vat override (the field is editable).
+      return { output_vat, net_vat };
     },
 
     getAutoPopulateMapping: (): AggregationMapping[] => [
-      { fieldId: 'standard_sales', aggregateKey: 'income_standard' },
+      // *_excl_tax keys are NET aggregates (the fields are declared excl. VAT).
+      { fieldId: 'standard_sales', aggregateKey: 'income_standard_excl_tax' },
       { fieldId: 'input_vat', aggregateKey: 'input_vat' },
-      { fieldId: 'domestic_purchases', aggregateKey: 'expenses_domestic' },
+      { fieldId: 'domestic_purchases', aggregateKey: 'expenses_domestic_excl_tax' },
     ],
 
     getRoundingRules: (): RoundingConfig => ({ method: 'nearest', decimals: 2 }),
@@ -461,6 +482,189 @@ function createEUPlugin(code: string): TaxFilingPlugin {
 
     hasSubJurisdictions: () => false,
     supportsCustomFields: () => false,
+
+    /**
+     * EU-template treatment catalogue. The standard rate is the country's
+     * configured (ledger-resolved) rate; reduced rates vary by member state and
+     * are left `null` for the host to resolve.
+     */
+    getTaxTreatments(): TaxTreatmentDefinition[] {
+      const ref = 'https://europa.eu/youreurope/business/taxation/vat/index_en.htm';
+      const std = `${ratePercent}%`;
+      return [
+        {
+          code: 'SALE_STANDARD',
+          label: `Standard-rated sales (${std})`,
+          side: 'sale',
+          rate: currentRate,
+          taxApplies: true,
+          creditable: true,
+          boxes: ['standard_sales', 'output_vat'],
+          help: `Domestic sales at the ${std} standard rate. Net value in standard-rated sales; ${taxName} in ${taxName} on sales.`,
+          authorityRef: ref,
+          defaultFor: ['sales', 'services_income'],
+        },
+        {
+          code: 'SALE_REDUCED',
+          label: 'Reduced-rate sales',
+          side: 'sale',
+          rate: null,
+          taxApplies: true,
+          creditable: true,
+          boxes: ['reduced_sales', 'output_vat'],
+          help: `Sales at a national reduced rate (the rate varies by member state and item). Net value in reduced-rate sales; add the ${taxName} to ${taxName} on sales.`,
+          authorityRef: ref,
+        },
+        {
+          code: 'SALE_ZERO_RATED',
+          label: 'Exports / zero-rated sales',
+          side: 'sale',
+          rate: 0,
+          taxApplies: false,
+          creditable: true,
+          boxes: ['zero_rated_sales'],
+          help: 'Exports outside the EU and other zero-rated supplies; input VAT remains deductible.',
+          authorityRef: ref,
+          defaultFor: ['export_sales'],
+        },
+        {
+          code: 'SALE_INPUT_TAXED',
+          label: 'Exempt sales',
+          side: 'sale',
+          rate: 0,
+          taxApplies: false,
+          creditable: false,
+          boxes: ['zero_rated_sales'],
+          help: 'Exempt supplies (financial and insurance services, most letting, health, education); related input VAT is not deductible.',
+          authorityRef: ref,
+          defaultFor: ['interest_income', 'residential_rent'],
+        },
+        {
+          code: 'PURCHASE_STANDARD',
+          label: `Domestic purchases (${std})`,
+          side: 'purchase',
+          rate: currentRate,
+          taxApplies: true,
+          creditable: true,
+          boxes: ['domestic_purchases', 'input_vat'],
+          help: `Purchases with ${std} ${taxName} in the price. Net value in domestic purchases; the ${taxName} is deductible.`,
+          authorityRef: ref,
+        },
+        {
+          code: 'PURCHASE_CAPITAL',
+          label: `Capital purchases (${std})`,
+          side: 'purchase',
+          rate: currentRate,
+          taxApplies: true,
+          creditable: true,
+          boxes: ['domestic_purchases', 'input_vat'],
+          help: `Capital assets bought with ${taxName} in the price; deductible (subject to national capital-goods adjustment rules).`,
+          authorityRef: ref,
+          defaultFor: ['equipment', 'vehicles'],
+        },
+        {
+          code: 'PURCHASE_REDUCED',
+          label: 'Reduced-rate purchases',
+          side: 'purchase',
+          rate: null,
+          taxApplies: true,
+          creditable: true,
+          boxes: ['domestic_purchases', 'input_vat'],
+          help: 'Purchases at a national reduced rate; the VAT is deductible.',
+          authorityRef: ref,
+        },
+        {
+          code: 'PURCHASE_NO_TAX',
+          label: `Purchases without ${taxName}`,
+          side: 'purchase',
+          rate: 0,
+          taxApplies: false,
+          creditable: false,
+          boxes: ['domestic_purchases'],
+          help: 'Purchases with no VAT in the price (exempt services such as bank charges and insurance, non-registered suppliers).',
+          authorityRef: ref,
+          defaultFor: ['bank_fees', 'insurance_stamp_duty', 'government_fees'],
+        },
+        {
+          code: 'PURCHASE_INPUT_TAXED',
+          label: 'Purchases for exempt activities',
+          side: 'purchase',
+          rate: currentRate,
+          taxApplies: true,
+          creditable: false,
+          boxes: ['domestic_purchases'],
+          help: 'Purchases used for exempt supplies; the VAT is not deductible (pro-rata rules apply to mixed use).',
+          authorityRef: ref,
+        },
+        {
+          code: 'PURCHASE_PRIVATE',
+          label: 'Private use / non-deductible',
+          side: 'purchase',
+          rate: currentRate,
+          taxApplies: true,
+          creditable: false,
+          boxes: ['domestic_purchases'],
+          help: 'Private-use portion and nationally blocked items (entertainment, certain vehicles); no deduction.',
+          authorityRef: ref,
+          defaultFor: ['entertainment', 'fines_penalties'],
+        },
+        {
+          code: 'PURCHASE_REVERSE_CHARGE',
+          label: 'Intra-community acquisitions / reverse charge',
+          side: 'purchase',
+          rate: currentRate,
+          taxApplies: true,
+          creditable: true,
+          boxes: ['intra_community_purchases', 'output_vat', 'input_vat'],
+          help: `Goods and services acquired from other EU member states (and other reverse-charge supplies): self-account for ${taxName} as output tax and deduct it as input tax.`,
+          authorityRef: ref,
+        },
+        {
+          code: 'PURCHASE_IMPORT',
+          label: 'Imports from outside the EU',
+          side: 'purchase',
+          rate: currentRate,
+          taxApplies: true,
+          creditable: true,
+          boxes: ['domestic_purchases', 'input_vat'],
+          help: `Import ${taxName} paid at customs (or postponed) is deductible as input tax.`,
+          authorityRef: ref,
+        },
+        {
+          code: 'WAGES',
+          label: 'Wages and salaries',
+          side: 'payroll',
+          rate: 0,
+          taxApplies: false,
+          creditable: false,
+          boxes: [],
+          help: 'Outside the scope of VAT.',
+          defaultFor: ['wages', 'salaries'],
+        },
+        {
+          code: 'WITHHOLDING',
+          label: 'Payroll tax withheld',
+          side: 'payroll',
+          rate: 0,
+          taxApplies: false,
+          creditable: false,
+          boxes: [],
+          help: 'Reported through payroll, not the VAT return.',
+          defaultFor: ['payg_withholding'],
+        },
+        {
+          code: 'OUT_OF_SCOPE',
+          label: 'Outside the scope of VAT',
+          side: 'excluded',
+          rate: 0,
+          taxApplies: false,
+          creditable: false,
+          boxes: [],
+          help: 'Transfers, loan principal, drawings, dividends, tax payments, depreciation.',
+          defaultFor: ['transfers', 'loan_principal', 'owner_drawings', 'dividends', 'tax_payments'],
+        },
+      ];
+    },
   };
 }
 
