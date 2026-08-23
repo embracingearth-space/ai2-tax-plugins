@@ -104,7 +104,10 @@ const zaPlugin: TaxFilingPlugin = {
     const net_vat = Math.round((total_output - total_input) * 100) / 100;
     const total_payable = Math.round((net_vat + penalties) * 100) / 100;
 
-    return { output_vat: output_vat_calc, total_output, input_vat: input_vat_calc, total_input, net_vat, total_payable };
+    // Return the override-aware output_vat/input_vat (not *_calc): total_output/total_input
+    // are computed from the overrides, so returning the pre-override figures discarded the
+    // user's manual VAT adjustments on save. embracingearth.space
+    return { output_vat, total_output, input_vat, total_input, net_vat, total_payable };
   },
 
   getAutoPopulateMapping: (): AggregationMapping[] => [

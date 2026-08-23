@@ -113,7 +113,10 @@ const saPlugin: TaxFilingPlugin = {
     const corrIn = Number(v.correction_input) || 0;
     const net_vat = Math.round(((output_vat + corrOut) - (input_vat + corrIn)) * 100) / 100;
 
-    return { total_sales, output_vat: output_vat_calc, total_purchases, input_vat: input_vat_calc, net_vat };
+    // Return the override-aware output_vat/input_vat (not *_calc): net_vat is computed
+    // from the overrides, so returning the pre-override figures discarded the user's
+    // manual VAT adjustments on save. embracingearth.space
+    return { total_sales, output_vat, total_purchases, input_vat, net_vat };
   },
 
   getAutoPopulateMapping: (): AggregationMapping[] => [

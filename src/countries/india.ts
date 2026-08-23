@@ -266,8 +266,11 @@ const inPlugin: TaxFilingPlugin = {
             calculated: true,
             editable: false,
             required: true,
+            // embracingearth.space — caption matched to code: calculateFields is
+            // totalTax − net ITC + interest + late fee (the interest/late-fee terms
+            // were missing from this description).
             helpText:
-              'Total tax liability minus net ITC. Positive = pay. Negative = carry forward.',
+              'Total tax liability minus net ITC, plus interest and late fee. Positive = pay. Negative = carry forward.',
           },
         ],
       },
