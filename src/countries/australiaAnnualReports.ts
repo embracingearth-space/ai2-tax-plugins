@@ -148,7 +148,18 @@ export interface TprsQualificationInput {
    * not answered "no".
    */
   paidContractorsForService?: boolean;
+  /**
+   * Whether the business has an ABN. The ATO lists this as a lodging
+   * condition in its own right ("You must lodge a TPAR if ALL conditions are
+   * met: … your business has an Australian business number"). Omit it and a
+   * business that clears the other two conditions gets `mustLodge: null`, not
+   * `true` — the same discipline as the payment fact.
+   */
+  hasAbn?: boolean;
 }
+
+/** A condition that is met, not met, or simply not known. */
+export type TriState = boolean | null;
 
 export interface TprsQualificationOutcome {
   /**
@@ -157,9 +168,18 @@ export interface TprsQualificationOutcome {
    * contractors were paid — the question is unanswered, and a host must not
    * collapse that to "no".
    */
-  mustLodge: boolean | null;
-  /** The threshold test on its own: is the business inside the reporting system? */
-  thresholdMet: boolean;
+  mustLodge: TriState;
+  /**
+   * The threshold test on its own: is the business inside the reporting
+   * system? `true` when any supplied limb clears the line. `false` ONLY when
+   * every limb the service has was supplied and none clears it. `null` when
+   * no supplied limb clears it but an applicable limb was not supplied — a
+   * business at 49% income whose prior year was never given may still
+   * qualify on that prior year, and saying "no" would be a guess.
+   */
+  thresholdMet: TriState;
+  /** Limbs of the applicable test that were NOT supplied. Empty when complete. */
+  limbsUnknown: TprsQualificationLimb[];
   test: AnnualReportQualificationTest;
   thresholdPercent: number;
   /** The limbs that were met. Empty when the test is not satisfied. */
@@ -208,41 +228,95 @@ export function auTprsQualifies(input: TprsQualificationInput): TprsQualificatio
 
   const threshold = service.thresholdPercent;
   const limbsMet: TprsQualificationLimb[] = [];
-  if (currentIncome !== null && currentIncome >= threshold) limbsMet.push('current_year_income');
-  if (currentActivity !== null && currentActivity >= threshold) limbsMet.push('current_year_activity');
-  if (priorIncome !== null && priorIncome >= threshold) limbsMet.push('prior_year_income');
-
-  const thresholdMet = limbsMet.length > 0;
-  const paid = input.paidContractorsForService;
-
-  // Two conditions, both required. The threshold puts a business inside the
-  // reporting system; contractor payments are what there is to report. Below
-  // the threshold the answer is a clean "no" whatever was paid. Above it, the
-  // answer is "yes" only once we know contractors were paid — and "unknown"
-  // until then, never a default.
-  let mustLodge: boolean | null;
-  let note: string;
-  if (!thresholdMet) {
-    mustLodge = false;
-    note =
-      `${service.label}: no limb of the ${threshold}% test is met on the figures given, so no ` +
-      'TPAR is due for this service. Check the other reportable services separately.';
-  } else if (paid === true) {
-    mustLodge = true;
-    note = `${service.label}: the ${threshold}% test is met and contractors were paid, so a TPAR is due for this year.`;
-  } else if (paid === false) {
-    mustLodge = false;
-    note =
-      `${service.label}: the ${threshold}% test is met, but no contractors were paid for this ` +
-      'service this year, so there is nothing to report.';
-  } else {
-    mustLodge = null;
-    note =
-      `${service.label}: the ${threshold}% test is met. Whether a TPAR is due depends on whether ` +
-      'contractors were paid for this service this year — confirm that before lodging or skipping.';
+  const limbsUnknown: TprsQualificationLimb[] = [];
+  if (currentIncome === null) limbsUnknown.push('current_year_income');
+  else if (currentIncome >= threshold) limbsMet.push('current_year_income');
+  if (service.activityLimb) {
+    if (currentActivity === null) limbsUnknown.push('current_year_activity');
+    else if (currentActivity >= threshold) limbsMet.push('current_year_activity');
+  }
+  if (service.priorYearLimb) {
+    if (priorIncome === null) limbsUnknown.push('prior_year_income');
+    else if (priorIncome >= threshold) limbsMet.push('prior_year_income');
   }
 
-  return { mustLodge, thresholdMet, test: service.test, thresholdPercent: threshold, limbsMet, note };
+  // The test is "or": one limb over the line settles it as met. It is settled
+  // as NOT met only once every limb the service has was supplied and none
+  // clears it. In between — nothing met, something not supplied — it is
+  // unknown, because the missing limb might be the one that qualifies.
+  const thresholdMet: TriState =
+    limbsMet.length > 0 ? true : limbsUnknown.length === 0 ? false : null;
+
+  // Three conditions, all required (the ATO's own framing: "if ALL conditions
+  // are met"). Tri-state AND: any known false decides "no"; all known true
+  // decides "yes"; otherwise the question is still open and stays open.
+  const conditions: Array<[string, TriState]> = [
+    ['threshold', thresholdMet],
+    ['paid', input.paidContractorsForService ?? null],
+    ['abn', input.hasAbn ?? null],
+  ];
+  const mustLodge: TriState = conditions.some(([, v]) => v === false)
+    ? false
+    : conditions.every(([, v]) => v === true)
+      ? true
+      : null;
+
+  const note = buildQualificationNote(service.label, threshold, thresholdMet, limbsUnknown, {
+    paid: input.paidContractorsForService ?? null,
+    abn: input.hasAbn ?? null,
+  });
+
+  return {
+    mustLodge,
+    thresholdMet,
+    test: service.test,
+    thresholdPercent: threshold,
+    limbsMet,
+    limbsUnknown,
+    note,
+  };
+}
+
+/** One sentence that says which condition decided the answer, or what is still open. */
+function buildQualificationNote(
+  label: string,
+  threshold: number,
+  thresholdMet: TriState,
+  limbsUnknown: TprsQualificationLimb[],
+  facts: { paid: TriState; abn: TriState },
+): string {
+  if (thresholdMet === false) {
+    return (
+      `${label}: no limb of the ${threshold}% test is met on the figures given, so no TPAR is ` +
+      'due for this service. Check the other reportable services separately.'
+    );
+  }
+  if (facts.abn === false) {
+    return `${label}: a TPAR is lodged by a business with an ABN; without one there is nothing to lodge.`;
+  }
+  if (facts.paid === false) {
+    return (
+      `${label}: the ${threshold}% test is met, but no contractors were paid for this service ` +
+      'this year, so there is nothing to report.'
+    );
+  }
+  if (thresholdMet === null) {
+    const missing = limbsUnknown.map((l) => l.replace(/_/g, ' ')).join(', ');
+    return (
+      `${label}: no supplied limb meets the ${threshold}% test, but ${missing} was not supplied ` +
+      'and could still qualify. Supply it before treating this as "no TPAR due".'
+    );
+  }
+  const open: string[] = [];
+  if (facts.paid === null) open.push('whether contractors were paid for this service this year');
+  if (facts.abn === null) open.push('whether the business has an ABN');
+  if (open.length > 0) {
+    return (
+      `${label}: the ${threshold}% test is met. Whether a TPAR is due also depends on ` +
+      `${open.join(' and ')} — confirm before lodging or skipping.`
+    );
+  }
+  return `${label}: the ${threshold}% test is met, contractors were paid and the business has an ABN, so a TPAR is due for this year.`;
 }
 
 function toPercentOrNull(value: number | undefined): number | null {

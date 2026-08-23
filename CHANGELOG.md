@@ -10,11 +10,14 @@ keeps working untouched.
   — 1 July on the caller's calendar — serialised as `2023-06-30` in Sydney and selected the
   wrong side of every 1-July boundary: the rate row, the write-off limit, the financial year.
   This keyed the whole effective-dated ledger, not only the write-off resolver.
-- **TPAR lodgment is two conditions, not one.** `auTprsQualifies` now separates `thresholdMet`
-  (is the business inside the reporting system?) from `mustLodge` (is a report owed?). The
-  latter also needs `paidContractorsForService`; without it the answer is `null` — unknown,
-  never a default "no". Evidence for a limb the selected service does not have (an activity
-  share offered to the 10% test) is no longer counted as "tested, not met"; it throws.
+- **TPAR lodgment is three conditions, all tri-state.** `auTprsQualifies` returns
+  `thresholdMet`, and `mustLodge` is a tri-state AND over the threshold,
+  `paidContractorsForService` and `hasAbn` (the ATO: "if ALL conditions are met"). Any known
+  `false` decides "no"; all known `true` decides "yes"; otherwise `null` — unknown, never a
+  default. `thresholdMet` itself is `null` when no supplied limb clears the line but an
+  applicable limb was not supplied (`limbsUnknown` lists which): a building business at 49%
+  this year may still qualify on last year's income. Evidence for a limb the service does not
+  have is no longer counted; offering only such evidence throws.
 
 ### Added — depreciation (capital allowances)
 

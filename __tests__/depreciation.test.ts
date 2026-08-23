@@ -935,11 +935,28 @@ describe('AU TPAR — building and construction has its own 50% test', () => {
     expect(r.limbsMet).toEqual(['current_year_income']);
   });
 
-  it('49% of current-year income is out — it is not "always lodge"', () => {
+  it('49% of current-year income ALONE is not "out" — the other limbs were never supplied', () => {
+    // This is the trap the old "always lodge" flag hid, from the other side:
+    // a business at 49% this year may still qualify on last year's income, and
+    // saying "no" before that figure is known is a guess.
     const r = auTprsQualifies({ service: bc, currentYearIncomePercent: 49 });
-    expect(r.thresholdMet).toBe(false);
-    expect(r.mustLodge).toBe(false); // below the line: a clean "no", whatever was paid
+    expect(r.thresholdMet).toBeNull();
+    expect(r.mustLodge).toBeNull();
     expect(r.limbsMet).toEqual([]);
+    expect(r.limbsUnknown).toEqual(['current_year_activity', 'prior_year_income']);
+    expect(r.note).toMatch(/not supplied/);
+  });
+
+  it('49% on EVERY limb, all supplied, is a clean "out"', () => {
+    const r = auTprsQualifies({
+      service: bc,
+      currentYearIncomePercent: 49,
+      currentYearActivityPercent: 49,
+      priorYearIncomePercent: 49,
+    });
+    expect(r.thresholdMet).toBe(false);
+    expect(r.mustLodge).toBe(false); // below the line on every limb: "no", whatever was paid
+    expect(r.limbsUnknown).toEqual([]);
   });
 
   it('50% of current-year ACTIVITY qualifies even where the income share does not', () => {
@@ -1052,13 +1069,50 @@ describe('AU TPAR — lodgment needs BOTH the threshold and contractor payments'
     expect(r.note).toMatch(/no contractors were paid/);
   });
 
-  it('above the threshold and contractors paid: a TPAR is due', () => {
+  it('above the threshold, contractors paid, ABN held: a TPAR is due', () => {
+    const r = auTprsQualifies({
+      service: 'cleaning',
+      currentYearIncomePercent: 40,
+      paidContractorsForService: true,
+      hasAbn: true,
+    });
+    expect(r.mustLodge).toBe(true);
+    expect(r.note).toMatch(/a TPAR is due/);
+  });
+
+  it('above the threshold and contractors paid, but the ABN is unknown: still unknown', () => {
+    // Two of three conditions known true is not "yes". The ATO lists the ABN
+    // as a condition in its own right ("if ALL conditions are met").
     const r = auTprsQualifies({
       service: 'cleaning',
       currentYearIncomePercent: 40,
       paidContractorsForService: true,
     });
-    expect(r.mustLodge).toBe(true);
+    expect(r.mustLodge).toBeNull();
+    expect(r.note).toMatch(/ABN/);
+  });
+
+  it('no ABN: nothing to lodge, whatever else is true', () => {
+    const r = auTprsQualifies({
+      service: 'cleaning',
+      currentYearIncomePercent: 90,
+      paidContractorsForService: true,
+      hasAbn: false,
+    });
+    expect(r.thresholdMet).toBe(true);
+    expect(r.mustLodge).toBe(false);
+    expect(r.note).toMatch(/without one/);
+  });
+
+  it('one known false decides "no" even while another condition is unknown', () => {
+    // Tri-state AND: false beats null. Nothing to report, so the open ABN
+    // question does not matter.
+    const r = auTprsQualifies({
+      service: 'cleaning',
+      currentYearIncomePercent: 40,
+      paidContractorsForService: false,
+    });
+    expect(r.mustLodge).toBe(false);
   });
 
   it('above the threshold with the payment fact unknown: the answer is unknown, not "no"', () => {
@@ -1069,12 +1123,16 @@ describe('AU TPAR — lodgment needs BOTH the threshold and contractor payments'
   });
 
   it('below the threshold: "no" regardless of payments — the business is outside the system', () => {
+    // An income-share service has exactly one limb, so supplying it makes the
+    // threshold test COMPLETE: 5% is a settled "no", not an unknown.
     const r = auTprsQualifies({
       service: 'cleaning',
       currentYearIncomePercent: 5,
       paidContractorsForService: true,
+      hasAbn: true,
     });
     expect(r.thresholdMet).toBe(false);
+    expect(r.limbsUnknown).toEqual([]);
     expect(r.mustLodge).toBe(false);
   });
 });
@@ -1112,13 +1170,17 @@ describe('the write-off resolver keys a Date by its LOCAL calendar day', () => {
     // Keeps this suite honest in any non-UTC runner. If the zone offset is
     // zero the two agree and the above tests prove nothing about the class —
     // so this case documents that and skips rather than claiming coverage.
+    // Only zones AHEAD of UTC (negative getTimezoneOffset) push local
+    // midnight 1 July back onto 30 June under toISOString(). UTC and the
+    // western zones land on 1 July either way, so they cannot discriminate —
+    // the tests above still run there, they just don't prove the class.
     const d = new Date(2023, 6, 1);
     const isoDay = d.toISOString().slice(0, 10);
-    if (d.getTimezoneOffset() === 0) {
-      expect(isoDay).toBe('2023-07-01'); // UTC runner: no discrimination possible here
+    if (d.getTimezoneOffset() >= 0) {
+      expect(isoDay).toBe('2023-07-01'); // UTC / west: no discrimination possible here
       return;
     }
-    expect(isoDay).not.toBe('2023-07-01'); // any other zone: the old code was wrong
+    expect(isoDay).toBe('2023-06-30'); // east of Greenwich: the old code keyed the wrong day
   });
 });
 
