@@ -4,6 +4,11 @@
  * Architecture: Plugin-based per country, shared framework for periods, drafts, export, audit.
  */
 
+// Type-only import: the depreciation contract lives with its arithmetic in
+// ./depreciation, and this reference is erased at compile time, so the two
+// modules do not form a runtime cycle.
+import type { DepreciationRules } from './depreciation';
+
 // ─── Identity & Authority ───────────────────────────────────────────────────
 
 export interface AuthorityInfo {
@@ -203,6 +208,44 @@ export interface TaxTreatmentDefinition {
   defaultFor?: string[];
 }
 
+// ─── Annual reports (lodged separately from the activity statement) ─────────
+
+export type AnnualReportColumnType = 'text' | 'currency' | 'abn';
+
+export interface AnnualReportColumn {
+  id: string;
+  /** Sentence-case label for the screen. */
+  label: string;
+  type: AnnualReportColumnType;
+  /** The authority's own wording for the same column, where it differs. */
+  officialLabel?: string;
+}
+
+/**
+ * A report a business lodges once a year, separately from its activity
+ * statement — the AU Taxable payments annual report (TPAR) is the first.
+ *
+ * A definition describes the report; it does not produce the lodgment file.
+ * Those formats are authority-specific and usually need an accredited channel
+ * (SBR for the ATO), so `lodgmentNote` says plainly where the report is
+ * actually lodged.
+ */
+export interface AnnualReportDefinition {
+  id: 'tpar' | string;
+  label: string;
+  authority: AuthorityInfo;
+  /** The lodgment due date for a financial year ending on this date. */
+  dueDate(financialYearEnd: Date): Date;
+  columns: AnnualReportColumn[];
+  /** The authority requires whole dollars with no cents. */
+  wholeDollarsOnly: boolean;
+  /** The services that bring a business into the reporting system. */
+  qualifyingServices?: Array<{ key: string; label: string; alwaysLodge?: boolean }>;
+  /** How the reporting threshold works, in the authority's terms. */
+  thresholdNote?: string;
+  lodgmentNote: string;
+}
+
 // ─── Main Plugin Interface ──────────────────────────────────────────────────
 
 export interface TaxFilingPlugin {
@@ -240,4 +283,17 @@ export interface TaxFilingPlugin {
    * plugins without one fall back to GENERIC_TREATMENTS via getTreatmentsForPlugin().
    */
   getTaxTreatments?(): TaxTreatmentDefinition[];
+
+  /**
+   * Capital allowance rules (methods, effective lives, write-off thresholds).
+   * Optional: plugins without one fall back to GENERIC_DEPRECIATION_RULES via
+   * getDepreciationRules(), so every country still gets a schedule.
+   */
+  getDepreciationRules?(): DepreciationRules;
+
+  /**
+   * Annual reports lodged separately from the activity statement. Optional and
+   * rare — only a country that actually has one declares it (AU: TPAR).
+   */
+  getAnnualReports?(): AnnualReportDefinition[];
 }
