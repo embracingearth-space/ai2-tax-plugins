@@ -34,8 +34,11 @@ import {
   type BalancingAdjustmentOutcome,
   type DeclineInValueInput,
   type DeclineInValueOutcome,
+  type AssetFieldSpec,
+  type DepreciationExplainer,
   type DepreciationRules,
   type EffectiveLifeCategory,
+  type FirstYearConcession,
   type InstantAssetWriteOffInfo,
 } from '../depreciation';
 
@@ -329,8 +332,46 @@ export function auSmallBusinessPoolWriteOff(
  */
 export const AU_DAY_FRACTION_DENOMINATOR = 365;
 
+/**
+ * The ATO's own vocabulary: "depreciating asset", "decline in value",
+ * "adjustable value", "effective life". The two links are the two pages the
+ * rules above were read from — nothing else.
+ */
+const AU_EXPLAINER: DepreciationExplainer = {
+  whatItIs:
+    'A depreciating asset — one that loses value as you use it — is claimed as a decline in ' +
+    'value over its effective life, not all at once.',
+  whenItApplies:
+    'Assets you hold for a taxable purpose, claimed for the days in the income year you held ' +
+    'them. A small business using the simplified depreciation rules can instead write an ' +
+    'asset off immediately where it costs less than the instant asset write-off limit for ' +
+    'that year, and pool the rest.',
+  howItWorks: [
+    'Record the cost (GST-exclusive if you claim the GST credit) and the date it was first used or installed ready for use.',
+    "Take the Commissioner's effective life for the asset, or self-assess your own; the rate follows from it.",
+    'Prime cost claims the same amount each year: cost × days held ÷ 365 × 100% ÷ effective life.',
+    'Diminishing value claims more early: adjustable value × days held ÷ 365 × 200% ÷ effective life, and the claim is your taxable-use share of that decline.',
+  ],
+  readMore: [
+    {
+      label: 'Prime cost (straight line) and diminishing value methods',
+      url: ATO_GENERAL_DEPRECIATION,
+      authority: 'ATO',
+    },
+    { label: 'Simpler depreciation for small business', url: ATO_SIMPLER_DEPRECIATION, authority: 'ATO' },
+  ],
+  vocabulary: {
+    asset: 'Depreciating asset',
+    decline: 'Decline in value',
+    writtenDown: 'Adjustable value',
+    rate: 'Rate',
+    rateBasis: 'Effective life',
+  },
+};
+
 export const AU_DEPRECIATION_RULES: DepreciationRules = {
   countryCode: 'AU',
+  regime: 'effective_life',
   methods: ['prime_cost', 'diminishing_value', 'immediate_writeoff', 'pool'],
   // The ATO's own worked examples lead with diminishing value, and it is what a
   // business claiming under the general rules usually chooses.
@@ -376,6 +417,35 @@ export const AU_DEPRECIATION_RULES: DepreciationRules = {
 
   balancingAdjustment(input: BalancingAdjustmentInput): BalancingAdjustmentOutcome {
     return computeBalancingAdjustment(input);
+  },
+
+  explainer(): DepreciationExplainer {
+    return {
+      ...AU_EXPLAINER,
+      howItWorks: [...AU_EXPLAINER.howItWorks],
+      readMore: AU_EXPLAINER.readMore.map((r) => ({ ...r })),
+    };
+  },
+
+  /** The instant asset write-off, with its effective-dated `verified` state. */
+  firstYearConcessions(onDate: Date | string): FirstYearConcession[] {
+    const w = auInstantAssetWriteOff(onDate);
+    return [
+      {
+        key: 'instant_asset_write_off',
+        label: 'Instant asset write-off',
+        kind: 'threshold_write_off',
+        limit: w.limit,
+        percent: null,
+        verified: w.verified,
+        note: w.note,
+      },
+    ];
+  },
+
+  /** Nothing beyond the common fields. */
+  extraAssetFields(): AssetFieldSpec[] {
+    return [];
   },
 };
 

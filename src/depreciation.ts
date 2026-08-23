@@ -81,6 +81,111 @@ export type DepreciationMethod =
   | 'immediate_writeoff'
   | 'pool';
 
+/**
+ * How a jurisdiction models depreciation. The four are NOT the same model
+ * wearing different rates, and pretending they are is how a product ships a
+ * wrong number with a confident face:
+ *
+ *   effective_life    — a life in years becomes a rate (AU: 100%/200% ÷ life),
+ *                       apportioned by DAYS held, claimed per asset.
+ *   rate_per_asset    — the authority publishes a rate per asset (NZ: IR265),
+ *                       apportioned by whole MONTHS, claimed per asset.
+ *   pooled_allowance  — the POOL is the unit, not the asset (UK: main/special
+ *                       rate pools, writing down allowance on the pool balance).
+ *   class_cca         — the CLASS is the unit (CA: capital cost allowance on
+ *                       the undepreciated capital cost of each class).
+ *   generic           — no country-specific rules are loaded.
+ *
+ * A host branches on this: AU/NZ print a per-asset schedule; UK/CA print a
+ * pool/class statement. Only `effective_life`, `rate_per_asset` and `generic`
+ * are implemented today.
+ */
+export type DepreciationRegime =
+  | 'effective_life'
+  | 'rate_per_asset'
+  | 'pooled_allowance'
+  | 'class_cca'
+  | 'generic';
+
+/**
+ * The part of the year an asset was used, in the unit the jurisdiction
+ * apportions by. Days is the ATO's convention; whole months is Inland
+ * Revenue's ("count part-months as whole months"), so `monthsUsed` must be a
+ * whole number from 0 to 12 — the engine refuses a fraction of a month rather
+ * than quietly computing something no authority publishes.
+ */
+export type PartYearInput =
+  | { kind: 'days'; daysHeld: number; daysInYear: number }
+  | { kind: 'months'; monthsUsed: number };
+
+/** Column labels for a schedule, in the authority's own words. */
+export interface DepreciationVocabulary {
+  /** The thing being depreciated — "Depreciating asset" (ATO), "Asset" (IRD). */
+  asset: string;
+  /** The year's amount — "Decline in value" (ATO), "Depreciation" (IRD). */
+  decline: string;
+  /** The carried value — "Adjustable value" (ATO), "Adjusted tax value" (IRD), "Written down value" (HMRC). */
+  writtenDown: string;
+  /** The rate column. */
+  rate: string;
+  /** What the rate is derived from — "Effective life" (ATO), "Estimated useful life" (IRD), "Pool" (HMRC), "Class" (CRA). */
+  rateBasis: string;
+}
+
+/**
+ * The per-country copy a host renders at the top of its assets page. It is
+ * content, not layout: the plugin says what depreciation IS in this country,
+ * in the authority's vocabulary, and links ONLY to the authority's own pages.
+ * Never hard-code this in a client; a client that knows the rules for one
+ * country prints them for every country.
+ */
+export interface DepreciationExplainer {
+  /** One sentence: what this page is, in this country's words. */
+  whatItIs: string;
+  /** Who it applies to and when — including the carve-outs. */
+  whenItApplies: string;
+  /** Three or four plain steps, using the country's own arithmetic. */
+  howItWorks: string[];
+  /** Official pages only. */
+  readMore: { label: string; url: string; authority: string }[];
+  vocabulary: DepreciationVocabulary;
+}
+
+/**
+ * A concession that changes what is claimed in the year an asset is acquired.
+ * `threshold_write_off`: the whole cost is deducted where it is under `limit`.
+ * `upfront_percent`: `percent` of the cost is deducted up front and the rest
+ * is depreciated as usual. `verified: false` means the figure could not be
+ * confirmed for that date — render the note, never a number.
+ */
+export interface FirstYearConcession {
+  key: string;
+  label: string;
+  kind: 'threshold_write_off' | 'upfront_percent';
+  /** Currency units, for `threshold_write_off`. */
+  limit: number | null;
+  /** 0-100, for `upfront_percent`. */
+  percent: number | null;
+  verified: boolean;
+  note: string;
+  /** An `extraAssetFields()` key this concession depends on, e.g. `isNewAsset`. */
+  requiresField?: string;
+}
+
+/**
+ * A field the asset register must collect for THIS country beyond the common
+ * ones (cost, date, method, category, business-use %). NZ needs `isNewAsset`
+ * for Investment Boost; the UK will need CO₂ g/km; Canada the CCA class.
+ */
+export interface AssetFieldSpec {
+  key: string;
+  label: string;
+  type: 'boolean' | 'number' | 'text' | 'enum';
+  required: boolean;
+  help: string;
+  options?: { value: string; label: string }[];
+}
+
 export interface DeclineInValueInput {
   method: DepreciationMethod;
   /** First plus second element of cost, tax-exclusive where the tax credit is claimable. */
@@ -99,14 +204,34 @@ export interface DeclineInValueInput {
    * what to pass instead.
    */
   secondElementCostThisYear?: number;
-  /** Commissioner's or self-assessed effective life. Ignored by write-off and pool. */
-  effectiveLifeYears: number;
+  /**
+   * Commissioner's or self-assessed effective life. Ignored by write-off and
+   * pool. Required for prime cost and diminishing value UNLESS `annualRate` is
+   * given, in which case it is not consulted.
+   */
+  effectiveLifeYears?: number;
+  /**
+   * The annual rate as a fraction (0.3 = 30%), for a `rate_per_asset` regime
+   * where the authority publishes the rate itself rather than a life to derive
+   * it from (NZ: IR265 lists a DV and an SL rate per asset). When given, it is
+   * applied as-is to both prime cost (straight line) and diminishing value —
+   * no 200% multiplier, no division by a life — and `effectiveLifeYears` is
+   * ignored.
+   */
+  annualRate?: number;
+  /**
+   * The part of the year the asset was used, in the jurisdiction's unit. When
+   * given, `daysHeld` / `daysInYear` are ignored; when absent, they are
+   * required and the days form is used, so every existing caller is unchanged.
+   */
+  partYear?: PartYearInput;
   /**
    * Days in the income year the asset was used or installed ready for use.
    * MAY be 366 in a leap income year — the ATO says so explicitly — and may
-   * therefore exceed `daysInYear`. That is not an error.
+   * therefore exceed `daysInYear`. That is not an error. Required unless
+   * `partYear` is given.
    */
-  daysHeld: number;
+  daysHeld?: number;
   /**
    * The DENOMINATOR the jurisdiction prescribes for the day fraction — not
    * necessarily the number of days in the income year. Australia fixes it at
@@ -116,8 +241,9 @@ export interface DeclineInValueInput {
    * A jurisdiction whose denominator is fixed OVERRIDES this inside its own
    * `declineInValue`, so passing 366 to `AU_DEPRECIATION_RULES` gives the same
    * answer as passing 365. The generic rules honour whatever you pass.
+   * Required unless `partYear` is given.
    */
-  daysInYear: number;
+  daysInYear?: number;
   /** Diminishing value at 150% rather than 200%. */
   heldBefore10May2006?: boolean;
   /**
@@ -175,6 +301,8 @@ export interface BalancingAdjustmentOutcome {
 
 export interface DepreciationRules {
   countryCode: string;
+  /** Which model these rules implement — see `DepreciationRegime`. Hosts branch on it. */
+  regime: DepreciationRegime;
   /** The methods this jurisdiction allows. */
   methods: DepreciationMethod[];
   defaultMethod: DepreciationMethod;
@@ -196,6 +324,60 @@ export interface DepreciationRules {
   /** Effective-dated write-off limit; verified=false means "this could not be confirmed". */
   instantAssetWriteOff(onDate: Date): InstantAssetWriteOffInfo;
   balancingAdjustment(input: BalancingAdjustmentInput): BalancingAdjustmentOutcome;
+  /** The per-country copy for an assets page, in the authority's vocabulary. */
+  explainer(): DepreciationExplainer;
+  /** Regime-specific first-year concessions in force on a date, each with `verified`. */
+  firstYearConcessions(onDate: Date | string): FirstYearConcession[];
+  /** What the register must collect for THIS country beyond the common fields. */
+  extraAssetFields(): AssetFieldSpec[];
+}
+
+/**
+ * A jurisdiction that publishes a rate per asset and apportions by whole
+ * months — New Zealand. `rateFor` returns fractions (0.3 = 30%) so a result
+ * can be passed straight to `declineInValue` as `annualRate`.
+ */
+export interface RatePerAssetRules extends DepreciationRules {
+  regime: 'rate_per_asset';
+  /** Part-months count as whole months; the fraction is months ÷ 12. */
+  partYear: 'months_whole';
+  rateFor(categoryKey: string): { dv: number; sl: number; source: string } | null;
+  lowValueThreshold(onDate: Date | string): { limit: number | null; verified: boolean; note: string };
+  investmentBoost(onDate: Date | string): { percent: number | null; verified: boolean; note: string };
+}
+
+// ─── Effective-dated rows ───────────────────────────────────────────────────
+
+/** A row that applies from a calendar day until the next row starts. */
+export interface EffectiveDatedRow {
+  /** YYYY-MM-DD, inclusive. */
+  effectiveFrom: string;
+}
+
+/**
+ * Newest-first by `effectiveFrom`. `YYYY-MM-DD` sorts correctly as a string.
+ * Order is derived, never trusted, so a row appended at the bottom of a literal
+ * still resolves correctly.
+ */
+export function sortNewestFirst<T extends EffectiveDatedRow>(rows: readonly T[]): T[] {
+  return [...rows].sort((a, b) =>
+    a.effectiveFrom < b.effectiveFrom ? 1 : a.effectiveFrom > b.effectiveFrom ? -1 : 0,
+  );
+}
+
+/**
+ * The row in force on a date: the one with the greatest `effectiveFrom` on or
+ * before it. A date before the earliest row gets the earliest row, which every
+ * ledger here makes an unverified "not recorded" — never a number. `ymd` is the
+ * caller's LOCAL calendar day (see `toYmd` in the rate ledger).
+ */
+export function resolveEffectiveDated<T extends EffectiveDatedRow>(
+  rowsNewestFirst: readonly T[],
+  ymd: string,
+): T {
+  return (
+    rowsNewestFirst.find((r) => r.effectiveFrom <= ymd) ?? rowsNewestFirst[rowsNewestFirst.length - 1]
+  );
 }
 
 // ─── Shared arithmetic ──────────────────────────────────────────────────────
@@ -222,6 +404,53 @@ function requirePositive(value: number, label: string): number {
  * acquisition), so they are capped rather than turned into a larger deduction.
  */
 const MAX_DAYS_HELD = 366;
+
+/** A published annual rate must be a fraction in (0, 1]; 30 where 0.3 was meant is a 30× deduction. */
+function requireRate(rate: number): number {
+  if (!Number.isFinite(rate) || rate <= 0 || rate > 1) {
+    throw new RangeError(
+      `annualRate must be a fraction in (0, 1] — 0.3 for 30% (received ${String(rate)})`,
+    );
+  }
+  return rate;
+}
+
+/**
+ * The fraction of the year to apportion by, in whichever unit the caller used.
+ *
+ * DAYS (the default, and every pre-2.2 caller): `daysHeld / daysInYear`, NOT
+ * clamped to 1. The ATO fixes the denominator at 365 and says in the same
+ * breath that "days held can be 366 for a leap year", so the fraction is
+ * deliberately allowed to exceed 1 — clamping it silently shortened every
+ * leap-year claim. Guard only against nonsense: a hold longer than a leap year
+ * is a caller bug, not a bigger deduction.
+ *
+ * MONTHS (NZ): `monthsUsed / 12`, where `monthsUsed` is a whole number from 0
+ * to 12. Inland Revenue's rule is "count part-months as whole months", so the
+ * CALLER rounds a part-month up before it gets here and this refuses a
+ * fraction — there is no authority for 10.5 months and the engine will not
+ * invent one.
+ */
+function partYearFraction(input: DeclineInValueInput): number {
+  const py = input.partYear;
+  if (py?.kind === 'months') {
+    const months = Number(py.monthsUsed);
+    if (!Number.isInteger(months) || months < 0 || months > 12) {
+      throw new RangeError(
+        'monthsUsed must be a whole number from 0 to 12 — part-months count as whole months ' +
+          `(received ${String(py.monthsUsed)})`,
+      );
+    }
+    return months / 12;
+  }
+  const daysInYear = requirePositive(
+    py?.kind === 'days' ? py.daysInYear : (input.daysInYear as number),
+    'daysInYear',
+  );
+  const heldRaw = py?.kind === 'days' ? py.daysHeld : input.daysHeld;
+  const daysHeld = Math.min(Math.max(0, Number(heldRaw) || 0), MAX_DAYS_HELD);
+  return daysHeld / daysInYear;
+}
 
 /**
  * The ATO formulas, shared by every implementation. `poolRates` is supplied
@@ -252,31 +481,31 @@ export function computeDeclineInValue(
    * improvement, which is every case the other three methods allow.
    */
   const baseValue = opening + secondElement;
-  const daysInYear = requirePositive(input.daysInYear, 'daysInYear');
-  // NOT clamped to `daysInYear`. The ATO fixes the denominator at 365 and says
-  // in the same breath that "days held can be 366 for a leap year", so the
-  // fraction is deliberately allowed to exceed 1 — clamping it silently
-  // shortened every leap-year claim. Guard only against nonsense: a hold longer
-  // than a leap year is a caller bug, not a bigger deduction.
-  const daysHeld = Math.min(Math.max(0, Number(input.daysHeld) || 0), MAX_DAYS_HELD);
-  const dayFraction = daysHeld / daysInYear;
+  const dayFraction = partYearFraction(input);
 
   let rate: number;
   let raw: number;
 
   switch (input.method) {
     case 'prime_cost': {
-      const life = requirePositive(input.effectiveLifeYears, 'effectiveLifeYears');
-      rate = 1 / life;
+      rate =
+        input.annualRate != null
+          ? requireRate(input.annualRate)
+          : 1 / requirePositive(input.effectiveLifeYears as number, 'effectiveLifeYears');
       raw = cost * dayFraction * rate;
       break;
     }
     case 'diminishing_value': {
-      const life = requirePositive(input.effectiveLifeYears, 'effectiveLifeYears');
-      const multiplier = input.heldBefore10May2006
-        ? DV_RATE_MULTIPLIER_PRE_10_MAY_2006
-        : DV_RATE_MULTIPLIER;
-      rate = multiplier / life;
+      if (input.annualRate != null) {
+        // A published per-asset rate is applied as-is: no multiplier, no life.
+        rate = requireRate(input.annualRate);
+      } else {
+        const life = requirePositive(input.effectiveLifeYears as number, 'effectiveLifeYears');
+        const multiplier = input.heldBefore10May2006
+          ? DV_RATE_MULTIPLIER_PRE_10_MAY_2006
+          : DV_RATE_MULTIPLIER;
+        rate = multiplier / life;
+      }
       // Base value, not the opening value: an improvement made this year
       // depreciates from the year it was incurred.
       raw = baseValue * dayFraction * rate;
@@ -339,6 +568,34 @@ const GENERIC_WRITE_OFF_NOTE =
  * effective lives are not, and inventing another country's numbers would be
  * worse than leaving the field blank for you to fill in.
  */
+/**
+ * Says plainly that nothing country-specific is loaded. No link, because there
+ * is no authority to link to — an invented "generic" URL would be a citation
+ * to nothing.
+ */
+const GENERIC_EXPLAINER: DepreciationExplainer = {
+  whatItIs:
+    'Assets you keep for more than a year are usually claimed over time rather than all at once.',
+  whenItApplies:
+    'No country-specific depreciation rules are loaded for this country, so no rate, ' +
+    'write-off threshold or part-year convention here is its own. Confirm every figure ' +
+    'with your tax authority or your tax agent before you rely on it.',
+  howItWorks: [
+    'Record the asset and its cost, excluding any tax credit you can claim back.',
+    'Pick straight line (the same amount each year) or diminishing value (a percentage of the remaining value each year).',
+    'Set the effective life yourself — none is published here — and the rate follows from it.',
+    "Claim the business-use share of each year's amount.",
+  ],
+  readMore: [],
+  vocabulary: {
+    asset: 'Asset',
+    decline: 'Depreciation',
+    writtenDown: 'Written down value',
+    rate: 'Rate',
+    rateBasis: 'Effective life',
+  },
+};
+
 export const GENERIC_DEPRECIATION_RULES: DepreciationRules = {
   /** No special convention: the fraction is over the real length of the year. */
   dayFractionDenominator(daysInIncomeYear: number): number {
@@ -346,6 +603,7 @@ export const GENERIC_DEPRECIATION_RULES: DepreciationRules = {
   },
 
   countryCode: '*',
+  regime: 'generic',
   methods: ['prime_cost', 'diminishing_value'],
   defaultMethod: 'prime_cost',
 
@@ -378,6 +636,19 @@ export const GENERIC_DEPRECIATION_RULES: DepreciationRules = {
 
   balancingAdjustment(input: BalancingAdjustmentInput): BalancingAdjustmentOutcome {
     return computeBalancingAdjustment(input);
+  },
+
+  explainer(): DepreciationExplainer {
+    return { ...GENERIC_EXPLAINER, howItWorks: [...GENERIC_EXPLAINER.howItWorks], readMore: [] };
+  },
+
+  /** Nothing is loaded, so nothing is offered — not even an unverified placeholder. */
+  firstYearConcessions(): FirstYearConcession[] {
+    return [];
+  },
+
+  extraAssetFields(): AssetFieldSpec[] {
+    return [];
   },
 };
 
