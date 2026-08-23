@@ -136,7 +136,11 @@ export function sgMethodsFor(asset: SgAssetInput, yearOfAssessment: number): SgW
   if (asset.isComputerOrAutomation === true) {
     methods.push('one_year_s19a2');
   }
-  if (cost > 0 && cost <= SG_LOW_VALUE_PER_ITEM_LIMIT) {
+  // The per-item limit is only recorded from the YA 2023 streamlining (see
+  // sgLowValueCap) — the same reasoning that gates working_life_s19 below.
+  // Offering the election for an earlier YA would write off a cost against a
+  // limit this module has already declared it cannot verify.
+  if (yearOfAssessment >= SG_WORKING_LIFE_ELECTION_FROM_YA && cost > 0 && cost <= SG_LOW_VALUE_PER_ITEM_LIMIT) {
     methods.push('one_year_low_value_s19a10a');
   }
   if (SG_TWO_YEAR_YAS.includes(yearOfAssessment)) {

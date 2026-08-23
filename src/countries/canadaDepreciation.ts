@@ -503,9 +503,13 @@ function halfYear(note: string): CaFirstYearOutcome {
  * after 20 November 2018") is the asset's.
  */
 export function caFirstYear(asset: CaAssetInput, onDate: Date | string): CaFirstYearOutcome {
-  const available = toYmd(onDate);
+  // The asset's own available-for-use date wins: it is what the enhanced
+  // first-year rules (half-year rule, AII, ZEV phase-out) key on per the
+  // field's own doc comment, and `onDate` is only the fallback when the
+  // caller hasn't recorded it separately from the acquisition date.
+  const available = ymdOrNull(asset.availableForUseDate) ?? toYmd(onDate);
   const availYear = yearOf(available);
-  const acquired = ymdOrNull(asset.acquiredDate) ?? ymdOrNull(asset.availableForUseDate) ?? available;
+  const acquired = ymdOrNull(asset.acquiredDate) ?? available;
   const acquiredYear = yearOf(acquired);
   const cls = caClassFor(asset);
   const row = caClassRow(cls.cls);

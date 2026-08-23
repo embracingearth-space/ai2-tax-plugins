@@ -224,6 +224,25 @@ describe('CA first year — half-year rule, AII and the ZEV uplift', () => {
     expect(caFirstYear({ cost: 1_000, kind: 'furniture', acquiredDate: '2026-01-01', nonArmsLength: true }, '2026-01-01').halfYear).toBe(true);
   });
 
+  it('the asset\'s own availableForUseDate wins over onDate for the AII phase-out band', () => {
+    // Both fields' own doc comments say the enhanced first-year rules key on
+    // availableForUseDate; a host that records it separately and passes the
+    // acquisition date as onDate (as those comments direct) must still get
+    // the true 2028 availability year, not the 2027 acquisition year.
+    const asset = {
+      cost: 1_000,
+      kind: 'furniture' as const,
+      acquiredDate: '2027-12-01',
+      availableForUseDate: '2028-01-15',
+    };
+    expect(caFirstYear(asset, '2027-12-01').halfYear).toBe(true);
+    // Without availableForUseDate, the same acquiredDate passed as onDate
+    // reads as available in 2027 and still falls in the AII phase-out band.
+    expect(
+      caFirstYear({ cost: 1_000, kind: 'furniture', acquiredDate: '2027-12-01' }, '2027-12-01').halfYear,
+    ).toBe(false);
+  });
+
   it('class 12 small tools have no half-year rule; class 12 software does unless the AII suspends it', () => {
     const tool = caFirstYear({ cost: 300, kind: 'tool', acquiredDate: '2015-01-01' }, '2015-01-01');
     expect(tool).toMatchObject({ halfYear: false, baseMultiplier: 1, enhancedPercent: 100 });

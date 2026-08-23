@@ -16,7 +16,8 @@
  * is to the 2025 Act and the 2026 Rules — the old section 32 / "New Appendix
  * I" citations appear nowhere except this note recording their replacement.
  *
- * Everything below was read from the authority's own documents on 2026-08-24:
+ * Everything below was read from the authority's own documents on
+ * 2026-08-23 (UTC):
  *   Income-tax Rules 2026, Appendix I (see rule 25), "Table of rates at which
  *   depreciation is admissible", from the Gazette notification (pp. 1802-1808)
  *   and the same table on incometaxindia.gov.in; Section 33, Income-tax Act
@@ -324,6 +325,12 @@ const NO_ADDITIONAL_DEPRECIATION_BLOCKS: ReadonlySet<string> = new Set([
   'aeroplane',
   'books_profession',
   'intangibles',
+  // Road transport vehicles routed here BY KIND (motor_car, bus_lorry_taxi_hire
+  // → motor_vehicle_hire) — s. 33(8) excludes them whatever the boolean flag
+  // says, and a caller that only sets `kind` must get the same "no" as one
+  // that sets `isRoadTransportVehicle`.
+  'motor_car',
+  'motor_vehicle_hire',
 ]);
 
 /**
@@ -365,7 +372,11 @@ export function inAdditionalDepreciation(asset: InAssetInput): InAdditionalDepre
             'or plant only, not previously used by any person.',
     );
   }
-  if (asset.isOfficeAppliance === true) {
+  // `kind: 'office_appliance'` routes to the same plant_machinery_general
+  // block as ordinary machinery (inBlockFor has no separate block for it), so
+  // the block-based exclusion below can't catch it — only the boolean or the
+  // kind itself can.
+  if (asset.isOfficeAppliance === true || asset.kind === 'office_appliance') {
     return no('Office appliances are excluded from additional depreciation by section 33(8) of the Income-tax Act 2025.');
   }
   if (asset.isRoadTransportVehicle === true) {

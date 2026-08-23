@@ -245,6 +245,19 @@ describe('US year arithmetic — computeMacrsYear', () => {
     expect(cheap.deduction).toBe(2_000);
   });
 
+  it('§179 above cost is clamped to cost', () => {
+    const y1 = computeMacrsYear({ cost: 5_000, yearIndex: 1, tablePercent: 20, section179: 9_000 });
+    expect(y1.section179).toBe(5_000);
+    expect(y1.depreciableBasis).toBe(0);
+    expect(y1.deduction).toBe(5_000);
+  });
+
+  it('a total exactly equal to the cap is not reported as capped', () => {
+    const y1 = computeMacrsYear({ cost: 10_000, yearIndex: 1, tablePercent: 20, autoCap: 2_000 });
+    expect(y1.deduction).toBe(2_000);
+    expect(y1.cappedByAutoLimit).toBe(false);
+  });
+
   it('rejects nonsense: a fractional year, a percent over 100', () => {
     expect(() => computeMacrsYear({ cost: 1_000, yearIndex: 1.5, tablePercent: 20 })).toThrow(/yearIndex/);
     expect(() => computeMacrsYear({ cost: 1_000, yearIndex: 1, tablePercent: 200 })).toThrow(/tablePercent/);

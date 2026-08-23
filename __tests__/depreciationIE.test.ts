@@ -136,6 +136,14 @@ describe('IE cars — the €24,000 specified amount by CO₂ category (s.380L T
     expect(ieAllowableCost({ cost: 30000, isCar: true, co2GPerKm: null }).allowableCost).toBe(0);
   });
 
+  it('a negative CO₂ reading is bad input, not a Category A car', () => {
+    // The band chain is a `<=` ladder — an unguarded negative number reads as
+    // BETTER than zero and falls into Category A's full €24,000, not the
+    // unverified worst case every other missing/bad reading gets.
+    const negative = ieAllowableCost({ cost: 30000, isCar: true, co2GPerKm: -1 });
+    expect(negative).toMatchObject({ allowableCost: 0, band: 'F' });
+  });
+
   // The boundaries CodeRabbit asked for on PR #36: the pre-2027 rungs turn at
   // 140/141 (full → half) and at 155/156 (half → nil).
   it('the pre-2027 rungs turn at 140/141 and 155/156', () => {

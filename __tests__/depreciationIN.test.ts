@@ -221,6 +221,16 @@ describe('IN additional depreciation — s. 33(8)-(9)', () => {
     expect(inAdditionalDepreciation({ ...newPlant, isRoadTransportVehicle: true }).eligible).toBe(false);
   });
 
+  it('the same exclusions apply when only `kind` says what the asset is', () => {
+    // A caller that records `kind` instead of the booleans must get the same
+    // "no" — otherwise a motor car or office appliance routed by kind alone
+    // slips through NO_ADDITIONAL_DEPRECIATION_BLOCKS and overstates the
+    // first-year claim by 20% of cost.
+    expect(inAdditionalDepreciation({ ...newPlant, kind: 'motor_car' }).eligible).toBe(false);
+    expect(inAdditionalDepreciation({ ...newPlant, kind: 'bus_lorry_taxi_hire' }).eligible).toBe(false);
+    expect(inAdditionalDepreciation({ ...newPlant, kind: 'office_appliance' }).eligible).toBe(false);
+  });
+
   it('not a manufacturer, not new, or unanswered — never a yes', () => {
     expect(inAdditionalDepreciation({ cost: 500_000, kind: 'machinery', isManufacturer: false, isNewAsset: true }).eligible).toBe(false);
     expect(inAdditionalDepreciation({ cost: 500_000, kind: 'machinery', isManufacturer: true, isNewAsset: false }).eligible).toBe(false);

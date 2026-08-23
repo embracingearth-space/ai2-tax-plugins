@@ -8,7 +8,7 @@
  * expenditure incurred since 4 December 2002. Everything below was read from
  * Revenue's "Capital allowances and deductions" page (published 25 Sep 2025)
  * and the Notes for Guidance to Part 11C TCA 1997, Finance Act 2025 Edition
- * (checked 2026-08-24, UTC):
+ * (checked 2026-08-23, UTC):
  *
  *   • The allowance runs only where the asset is IN USE FOR THE TRADE AT THE
  *     END of the accounting period, and is reduced for a period shorter than
@@ -119,6 +119,11 @@ function toCents(value: number): number {
  */
 export function ieCarCo2Category(co2GPerKm: number): IeCo2Band {
   const grams = Number(co2GPerKm);
+  // A negative or non-finite reading is not a verified low-emissions car — it
+  // is bad input. Falling through to the `<=` chain below would read it as
+  // BETTER than zero and hand it Category A's specified-cost ceiling instead
+  // of the unverified/worst-case F.
+  if (!Number.isFinite(grams) || grams < 0) return 'F';
   if (grams <= IE_CAR_CO2_CATEGORY_A_MAX) return 'A';
   if (grams <= IE_CAR_CO2_CATEGORY_B_MAX) return 'B';
   if (grams <= IE_CAR_CO2_CATEGORY_C_MAX) return 'C';

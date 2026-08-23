@@ -140,6 +140,15 @@ describe('SG allowances — s.19 working life, IA 20% plus AA 80% over the life'
     expect(sgMethodsFor(asset, 2023)).toContain('working_life_s19');
     expect(sgMethodsFor(asset, 2022)).not.toContain('working_life_s19');
   });
+
+  it('the low-value write-off is gated the same way: its $5,000 limit is only recorded from YA 2023', () => {
+    // sgLowValueCap declares the per-item limit unverified before YA 2023.
+    // Offering the election anyway would write off a cost against a limit
+    // this module has already said it cannot confirm for that year.
+    const lowValue: SgAssetInput = { cost: 3000 };
+    expect(sgMethodsFor(lowValue, 2023)).toContain('one_year_low_value_s19a10a');
+    expect(sgMethodsFor(lowValue, 2022)).not.toContain('one_year_low_value_s19a10a');
+  });
 });
 
 describe('SG allowances — the one-year write-offs', () => {
