@@ -18,6 +18,7 @@ Enterprise-grade tax filing plugin engine for `ai2fin.com`.
 - Strong TypeScript interfaces for inputs/outputs
 - Validation and sandbox-friendly plugin shape checks
 - Extensible metadata for official form references and filing cadence
+- Tax treatment catalogue: canonical transaction codes mapped to each country's official boxes
 
 ## Install
 
@@ -45,6 +46,57 @@ const result = plugin.calculate({
   transactions: []
 });
 ```
+
+## Tax treatments
+
+Every activity statement is a sum of classified transactions, so the package ships a catalogue of **tax treatments**: jurisdiction-neutral codes that a host app stores once per category or transaction, which each country plugin then translates into its own vocabulary and into the official boxes it feeds. The codes are deliberately small in number and mean the same thing everywhere; the plugin supplies the local label, the rate, whether tax is in the price, whether a credit is claimable, and the box list.
+
+| Code | Meaning | AU example (BAS) |
+| --- | --- | --- |
+| `SALE_STANDARD` | Taxable sale at the standard rate | GST on Income → G1, 1A |
+| `SALE_REDUCED` | Taxable sale at a reduced rate (UK 5%, EU reduced, JP 8%) | not used |
+| `SALE_ZERO_RATED` | Export / zero-rated: no tax, credits still claimable | Export Sales → G1, G2 |
+| `SALE_EXEMPT` | Domestic sale with no tax where credits stay claimable | GST-Free Income → G1, G3 |
+| `SALE_INPUT_TAXED` | No tax charged **and** related credits denied (financial supplies incl. interest, residential rent; UK/NZ/EU "exempt") | Input Taxed Income → G1, G4 |
+| `PURCHASE_STANDARD` | Non-capital purchase, tax in price, creditable | GST on Expenses → G11, 1B |
+| `PURCHASE_CAPITAL` | Capital purchase, tax in price, creditable | GST on Capital → G10, 1B |
+| `PURCHASE_REDUCED` | Reduced-rate purchase, creditable | not used |
+| `PURCHASE_NO_TAX` | Non-capital purchase with no tax in the price (bank fees, government charges, unregistered suppliers) | GST-Free Expenses → G11, G14 |
+| `PURCHASE_CAPITAL_NO_TAX` | Capital purchase with no tax in the price | GST-Free Capital → G10, G14 |
+| `PURCHASE_INPUT_TAXED` | Purchase that relates to making input-taxed sales; credit denied | Input Taxed Expenses → G11, G13 |
+| `PURCHASE_PRIVATE` | Private-use portion or non-income-tax-deductible purchase | Private / Non-deductible → G11, G15 |
+| `PURCHASE_REVERSE_CHARGE` | Imported services you account for yourself | Reverse charge → 1A, 1B |
+| `PURCHASE_IMPORT` | Goods imported with tax paid (or deferred) at the border | GST on Imports → G11, 1B |
+| `WAGES` | Gross salary and wages (never a purchase) | Wages & salaries → W1 |
+| `WITHHOLDING` | Tax withheld from wages | PAYG withheld → W2 |
+| `OUT_OF_SCOPE` | Not a supply: transfers, loan principal, drawings, super, dividends, tax payments | BAS Excluded |
+
+A `TaxTreatmentDefinition` carries `code`, `label`, `side` (`sale` / `purchase` / `payroll` / `excluded`), `rate` (`null` means "the standard rate at the transaction date", `0` means no tax), `taxApplies`, `creditable`, `boxes`, `help`, an optional `authorityRef` URL and optional `defaultFor` category hints. Plugins that know their form implement `getTaxTreatments()` (AU, NZ, GB, CA, SG, IN, ZA and the EU template today); everything else falls back to the jurisdiction-neutral `GENERIC_TREATMENTS`, which `getTreatmentsForPlugin()` hides from you:
+
+```ts
+import {
+  getPluginForCountry,
+  getTreatmentsForPlugin,
+  getTreatmentDefinition,
+  resolveTreatmentRate,
+  getStandardRateAsOf,
+} from '@ai2/tax-plugins';
+
+const plugin = getPluginForCountry('AU');
+
+// 1. Offer the country vocabulary in the category editor.
+const options = getTreatmentsForPlugin(plugin).map((t) => ({ value: t.code, label: t.label }));
+
+// 2. When a transaction is posted, find where it lands on the form.
+const interest = getTreatmentDefinition(plugin, 'SALE_INPUT_TAXED');
+interest?.boxes; // ['G1', 'G4'] — interest income is input-taxed, never "GST-free"
+
+// 3. Resolve the rate for the transaction date (null = standard rate on that date).
+const treatment = getTreatmentDefinition(plugin, 'PURCHASE_STANDARD')!;
+const rate = resolveTreatmentRate(treatment, getStandardRateAsOf('AU', '2026-03-01') || 0.1);
+```
+
+The host is expected to sum each treatment into the aggregate keys the plugins auto-populate from. The AU plugin reads `income_total`, `income_export`, `income_gst_free`, `income_input_taxed`, `expenses_capital`, `expenses_non_capital`, `expenses_input_taxed_related`, `expenses_no_tax`, `expenses_private`, `output_tax`, `input_tax`, `payroll_gross` and `payroll_withheld`; `1A`/`1B` use the accounts method (the GST recorded on each transaction) and fall back to the calculation-worksheet figures `G9`/`G20` when blank, with `1A_worksheet`/`1B_worksheet` returned alongside so the two methods can be cross-checked. Fields declared *excluding* tax (EU `standard_sales`, SG box 1, JP 課税標準額) read the net aggregates `income_standard_excl_tax` / `expenses_standard_excl_tax` / `expenses_domestic_excl_tax`; a gross figure in those boxes overstates the tax by the rate, so they stay blank until the host emits the net key.
 
 ## Development
 
