@@ -22,8 +22,12 @@
  *
  * TWO THINGS THAT ARE EASY TO GET WRONG, SO THEY ARE PARAMETERS, NOT CONSTANTS:
  *
- * 1. `daysInYear` is passed in, never assumed. A leap income year has 366 days
- *    and hardcoding 365 in the denominator overstates every part-year claim by
+ * 1. `daysInYear` is the DENOMINATOR the jurisdiction prescribes, passed in and
+ *    never assumed — and it is NOT always the number of days in the income year.
+ *    The ATO's published formula fixes the denominator at 365 while stating that
+ *    "days held can be 366 for a leap year", so in a leap year a full-year hold
+ *    legitimately yields 366/365 of a year's decline. Callers pass what their
+ *    authority prescribes; nothing here clamps the fraction to 1. (The old text
  *    a quarter of a percent — small per asset, systematic across a register.
  * 2. Private use does NOT reduce the base value carried forward. The decline in
  *    value is computed on the full base and only the taxable-use portion is
@@ -57,9 +61,18 @@ export interface DeclineInValueInput {
   openingAdjustableValue: number;
   /** Commissioner's or self-assessed effective life. Ignored by write-off and pool. */
   effectiveLifeYears: number;
-  /** Days in the income year the asset was used or installed ready for use. */
+  /**
+   * Days in the income year the asset was used or installed ready for use.
+   * MAY be 366 in a leap income year — the ATO says so explicitly — and may
+   * therefore exceed `daysInYear`. That is not an error.
+   */
   daysHeld: number;
-  /** 365, or 366 in a leap income year. Never assumed. */
+  /**
+   * The DENOMINATOR the jurisdiction prescribes for the day fraction — not
+   * necessarily the number of days in the income year. Australia fixes it at
+   * 365 in every year, leap or not (see AU_DAY_FRACTION_DENOMINATOR). Pass what
+   * your authority publishes; never assume.
+   */
   daysInYear: number;
   /** Diminishing value at 150% rather than 200%. */
   heldBefore10May2006?: boolean;
@@ -150,6 +163,13 @@ function requirePositive(value: number, label: string): number {
  * only by a jurisdiction that offers the pool method; without it, asking for
  * `pool` is an error rather than a silently-invented rate.
  */
+/**
+ * The longest a depreciating asset can be held within one income year. Days
+ * beyond this are a caller bug (an unclosed date range, a disposal before
+ * acquisition), so they are capped rather than turned into a larger deduction.
+ */
+const MAX_DAYS_HELD = 366;
+
 export function computeDeclineInValue(
   input: DeclineInValueInput,
   poolRates?: { allocationYear: number; ongoing: number },
@@ -157,9 +177,12 @@ export function computeDeclineInValue(
   const opening = Math.max(0, Number(input.openingAdjustableValue) || 0);
   const cost = Math.max(0, Number(input.cost) || 0);
   const daysInYear = requirePositive(input.daysInYear, 'daysInYear');
-  // Clamp rather than trust: more days held than there are in the year would
-  // otherwise claim more than a full year's decline.
-  const daysHeld = Math.min(Math.max(0, Number(input.daysHeld) || 0), daysInYear);
+  // NOT clamped to `daysInYear`. The ATO fixes the denominator at 365 and says
+  // in the same breath that "days held can be 366 for a leap year", so the
+  // fraction is deliberately allowed to exceed 1 — clamping it silently
+  // shortened every leap-year claim. Guard only against nonsense: a hold longer
+  // than a leap year is a caller bug, not a bigger deduction.
+  const daysHeld = Math.min(Math.max(0, Number(input.daysHeld) || 0), MAX_DAYS_HELD);
   const dayFraction = daysHeld / daysInYear;
 
   let rate: number;

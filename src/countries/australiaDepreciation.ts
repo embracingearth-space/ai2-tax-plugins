@@ -272,6 +272,19 @@ export function auSmallBusinessPoolWriteOff(
 
 // ─── Rules object ───────────────────────────────────────────────────────────
 
+/**
+ * Australia fixes the day-fraction denominator at 365 in EVERY income year.
+ *
+ * The published formula is "cost × (days held ÷ 365) × (100% ÷ effective life)"
+ * and the same page states that "days held can be 366 for a leap year". Both
+ * are true at once: in a leap year a full-year hold yields 366/365 of a year's
+ * decline. Dividing by 366 instead would quietly shorten every leap-year claim,
+ * so callers must pass 365 here — not the actual length of the income year.
+ *
+ * Reference: ATO, "Prime cost (straight line) and diminishing value methods".
+ */
+export const AU_DAY_FRACTION_DENOMINATOR = 365;
+
 export const AU_DEPRECIATION_RULES: DepreciationRules = {
   countryCode: 'AU',
   methods: ['prime_cost', 'diminishing_value', 'immediate_writeoff', 'pool'],

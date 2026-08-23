@@ -84,10 +84,17 @@ export {
   AU_DEPRECIATION_AUTHORITY_URLS,
   auInstantAssetWriteOff,
   auSmallBusinessPoolWriteOff,
+  AU_DAY_FRACTION_DENOMINATOR,
 } from './countries/australiaDepreciation';
 
 // ─── Annual reports (lodged separately from the activity statement) ──────────
-export { AU_TPAR, AU_ANNUAL_REPORTS, AU_TPRS_SERVICES, tparDueDate } from './countries/australiaAnnualReports';
+export {
+  AU_TPAR,
+  AU_ANNUAL_REPORTS,
+  AU_TPRS_SERVICES,
+  tparDueDate,
+  tparDueDateYmd,
+} from './countries/australiaAnnualReports';
 
 // ─── Registry ────────────────────────────────────────────────────────────────
 export {

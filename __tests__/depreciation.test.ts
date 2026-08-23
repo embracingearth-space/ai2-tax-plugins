@@ -27,6 +27,8 @@ import {
   AU_TPAR,
   tparDueDate,
   type DepreciationRules,
+  AU_DAY_FRACTION_DENOMINATOR,
+  tparDueDateYmd,
 } from '../src';
 
 const au: DepreciationRules = AU_DEPRECIATION_RULES;
@@ -131,26 +133,61 @@ describe('AU depreciation — ATO worked example, part-year apportionment', () =
 
 // ─── Leap income year ───────────────────────────────────────────────────────
 
-describe('AU depreciation — a leap income year has 366 days in the denominator', () => {
-  const halfYear = {
+describe('AU depreciation — the denominator is 365 in EVERY year, leap or not', () => {
+  // The ATO publishes "cost × (days held ÷ 365) × (100% ÷ effective life)" and,
+  // on the same page, "Days held can be 366 for a leap year". Both hold at once:
+  // the denominator never moves, so a full leap-year hold claims 366/365 of a
+  // year. Dividing by 366 instead would quietly shorten every leap-year claim.
+  const base = {
     method: 'prime_cost' as const,
     cost: 80000,
     openingAdjustableValue: 80000,
     effectiveLifeYears: 5,
-    daysHeld: 182, // 1 January to 30 June 2024
   };
 
-  it('182 days of a 366-day income year is 7,956.28, not the 365-day figure', () => {
-    const leap = au.declineInValue({ ...halfYear, daysInYear: 366 });
-    const nonLeap = au.declineInValue({ ...halfYear, daysInYear: 365 });
-    expect(leap.declineInValue).toBeCloseTo(7956.28, 2);
-    expect(nonLeap.declineInValue).toBeCloseTo(7978.08, 2);
-    expect(leap.declineInValue).toBeLessThan(nonLeap.declineInValue);
+  it('publishes 365 as the day-fraction denominator', () => {
+    expect(AU_DAY_FRACTION_DENOMINATOR).toBe(365);
   });
 
-  it('a full 366-day year still claims exactly one year of decline', () => {
-    const r = au.declineInValue({ ...halfYear, daysHeld: 366, daysInYear: 366 });
+  it('182 days claims the same whether or not the income year is a leap year', () => {
+    // 80,000 × (182 ÷ 365) × 20% = 7,978.08
+    const r = au.declineInValue({
+      ...base,
+      daysHeld: 182,
+      daysInYear: AU_DAY_FRACTION_DENOMINATOR,
+    });
+    expect(r.declineInValue).toBeCloseTo(7978.08, 2);
+  });
+
+  it('a full 366-day hold claims 366/365 of a year — the fraction may exceed 1', () => {
+    // 80,000 × (366 ÷ 365) × 20% = 16,043.84, NOT 16,000.
+    const r = au.declineInValue({
+      ...base,
+      daysHeld: 366,
+      daysInYear: AU_DAY_FRACTION_DENOMINATOR,
+    });
+    expect(r.declineInValue).toBeCloseTo(16043.84, 2);
+    expect(r.declineInValue).toBeGreaterThan(16000);
+  });
+
+  it('a full 365-day hold claims exactly one year of decline', () => {
+    const r = au.declineInValue({
+      ...base,
+      daysHeld: 365,
+      daysInYear: AU_DAY_FRACTION_DENOMINATOR,
+    });
     expect(r.declineInValue).toBe(16000);
+  });
+
+  it('caps a nonsensical days-held rather than paying out a bigger deduction', () => {
+    // 400 days in one income year is a caller bug (an unclosed range), not a
+    // larger claim: it is capped at the longest a year can be.
+    const r = au.declineInValue({
+      ...base,
+      daysHeld: 400,
+      daysInYear: AU_DAY_FRACTION_DENOMINATOR,
+    });
+    expect(r.declineInValue).toBeCloseTo(16043.84, 2);
   });
 });
 
@@ -570,3 +607,22 @@ describe('AU annual reports — Taxable payments annual report (TPAR)', () => {
     expect(AU_TPAR.lodgmentNote).toMatch(/28 August/);
   });
 });
+describe('AU TPAR — the due date is a calendar date and must not drift', () => {
+  it('is 28 August following the financial year end', () => {
+    expect(tparDueDateYmd(new Date(2027, 5, 30))).toBe('2027-08-28');
+    expect(tparDueDateYmd(new Date(2026, 5, 30))).toBe('2026-08-28');
+  });
+
+  it('serialises as 28 August via toISOString, not 27 August', () => {
+    // A local-midnight Date renders as the PREVIOUS day under toISOString for
+    // every lodger east of Greenwich — which is every Australian.
+    expect(tparDueDate(new Date(2027, 5, 30)).toISOString().slice(0, 10)).toBe('2027-08-28');
+  });
+
+  it('reads as 28 August from local getters too', () => {
+    const d = tparDueDate(new Date(2027, 5, 30));
+    expect(d.getMonth()).toBe(7);
+    expect(d.getDate()).toBe(28);
+  });
+});
+

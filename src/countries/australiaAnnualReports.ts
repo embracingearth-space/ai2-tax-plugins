@@ -38,7 +38,21 @@ export function tparDueDate(financialYearEnd: Date): Date {
   const afterThisAugust =
     financialYearEnd.getMonth() > 7 ||
     (financialYearEnd.getMonth() === 7 && financialYearEnd.getDate() > 28);
-  return new Date(afterThisAugust ? year + 1 : year, 7, 28);
+  // Built at UTC NOON, not local midnight. A due date is a calendar date, and
+  // consumers serialise it with toISOString().slice(0, 10); a local-midnight
+  // Date renders as 27 August for every lodger east of Greenwich — which is
+  // every Australian, i.e. everyone who lodges a TPAR. Noon keeps the calendar
+  // date intact for both toISOString() and local getters.
+  return new Date(Date.UTC(afterThisAugust ? year + 1 : year, 7, 28, 12, 0, 0));
+}
+
+/**
+ * The due date as a plain calendar date, `YYYY-08-28`. Prefer this wherever the
+ * date is stored, compared or rendered — a string cannot drift across a
+ * timezone the way a `Date` can.
+ */
+export function tparDueDateYmd(financialYearEnd: Date): string {
+  return tparDueDate(financialYearEnd).toISOString().slice(0, 10);
 }
 
 /**

@@ -47,6 +47,24 @@ keeps working untouched.
 - Effective lives outside Australia are not invented; the category list is empty
   and `effectiveLife()` returns null so the user enters their own.
 
+## 2.1.0 — 2026-08-23 (continued)
+
+### Fixed
+- **The day fraction follows the ATO's published formula.** The denominator is
+  fixed at 365 in every income year — `cost × (days held ÷ 365) × (100% ÷ life)`
+  — while the same ATO page states "days held can be 366 for a leap year". Both
+  hold at once: a full leap-year hold claims 366/365 of a year. The first cut
+  divided by the actual length of the year and clamped the fraction at 1, which
+  silently shortened every leap-year claim. `AU_DAY_FRACTION_DENOMINATOR` now
+  publishes the 365, and `daysHeld` is capped only at 366 (a longer hold inside
+  one income year is a caller bug, not a bigger deduction).
+- **The TPAR due date no longer drifts a day.** `tparDueDate` built a local-
+  midnight `Date`, which `toISOString()` renders as 27 August for anyone east of
+  Greenwich — i.e. every Australian, i.e. everyone who lodges a TPAR. It is now
+  built at UTC noon so both `toISOString()` and local getters read 28 August, and
+  `tparDueDateYmd()` returns the calendar date as a string for storage and
+  comparison.
+
 ## 2.0.0 — 2026-08-23
 
 Activity statements re-verified against the authorities' own forms, plus the
