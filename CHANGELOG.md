@@ -2,7 +2,7 @@
 
 ## 2.2.0 — 2026-08-24
 
-Depreciation regimes — New Zealand, the United Kingdom and Canada. Additive: every new `DepreciationRules`
+Depreciation regimes — New Zealand, the United Kingdom, Canada, the United States and India. Additive: every new `DepreciationRules`
 member has a value on every rules object that ships, `declineInValue` still
 accepts `daysHeld` / `daysInYear` exactly as before, and a host on 2.1.0 keeps
 working untouched.
@@ -10,10 +10,11 @@ working untouched.
 ### Added — regime machinery (`src/depreciation.ts`)
 
 - `DepreciationRules.regime` — `'effective_life' | 'rate_per_asset' | 'pooled_allowance' |
-  'class_cca' | 'generic'`. The countries do not share a model, and a host branches on this
-  rather than printing one country's schedule for every country. Australia is
-  `effective_life`, New Zealand `rate_per_asset`, the United Kingdom `pooled_allowance`,
-  Canada `class_cca`, the fallback `generic`.
+  'class_cca' | 'macrs' | 'block_wdv' | 'generic'`. The countries do not share a model, and a
+  host branches on this rather than printing one country's schedule for every country.
+  Australia is `effective_life`, New Zealand `rate_per_asset`, the United Kingdom
+  `pooled_allowance`, Canada `class_cca`, the United States `macrs`, India `block_wdv`, the
+  fallback `generic`.
 - `explainer()` on every rules object — `whatItIs`, `whenItApplies`, `howItWorks[]`,
   `readMore[]` (official pages only) and a `vocabulary` that drives column labels, so a
   schedule prints "Adjustable value" for the ATO, "Adjusted tax value" for Inland Revenue.
@@ -62,6 +63,25 @@ working untouched.
   (`claimLimit`); class 10.1's `noRecaptureOrTerminalLoss` and `halfYearOnSale` (base = half
   the opening UCC); closing UCC. Per year only — the host replays. The AII page's Examples 3,
   5 and 6 replay to the cent.
+- `MacrsRules` — `regime: 'macrs'`, `propertyClass(asset)`, `tablePercent(recoveryYears,
+  yearIndex, convention)`, `convention(input)`, `section179(taxYear)`,
+  `bonusPercent(acquired, placedInService)`, `autoCap(placedInServiceYear, withBonus)`,
+  `deMinimis(hasAfs)`, with the `Us*` input and outcome types.
+- `computeMacrsYear(input)` — one asset for one recovery year in the IRS's order: the §179
+  election off the cost first, the special depreciation allowance as a percentage of what
+  §179 left, the Appendix A table figure on the basis left after both, and the §280F cap as
+  a ceiling on a passenger automobile's total. Later years deduct the table figure only —
+  §179 and bonus are passed in every year purely so the depreciable basis stays reduced.
+  Per year only — the host replays.
+- `BlockWdvRules` — `regime: 'block_wdv'`, `blockFor(asset)`, `halfRate(putToUseDays)`,
+  `additionalDepreciation(asset)`, with the `In*` input and outcome types.
+- `computeBlockPeriod(input)` — one block for one tax year in section 33's order: opening
+  written down value; additions at actual cost, split by the 180-day test; sale proceeds
+  off; depreciation at the block rate — half the rate on the under-180-day additions, sale
+  proceeds offsetting the full-rate portion first — never more than the balance; closing
+  written down value. Proceeds exceeding the balance, or a block left with nothing in it,
+  raise `shortTermCapitalGainReview: true` and depreciate nothing: the short-term capital
+  gain or loss is a return item this module flags and never computes.
 
 ### Added — United Kingdom (`src/countries/unitedKingdomDepreciation.ts`)
 
@@ -157,6 +177,76 @@ working untouched.
   removal) and the `pool` method throws; pool arithmetic is not built.
 - `newZealandPlugin.getDepreciationRules()` now returns these rules instead of the generic
   fallback.
+
+### Added — United States (`src/countries/unitedStatesDepreciation.ts`)
+
+- The table regime. The IRS prints the yearly percentages, so this module ships them
+  verbatim rather than re-deriving them: Table A-1 (half-year convention) and Tables A-2 to
+  A-5 (mid-quarter, by the quarter placed in service) for 3, 5, 7, 10 and 15-year property,
+  every figure read from Publication 946 (2025) pp. 71-73, every column summing to 100%.
+  A recovery period the tables do not cover comes back `{ percent: null, verified: false }`
+  rather than interpolated.
+- Property classes from Table B-1: 00.11 office furniture (7-year), 00.12 information
+  systems (5), 00.13 data handling equipment (5), 00.22 automobiles (5), 00.241 light and
+  00.242 heavy trucks (5), 00.27 trailers (5), 00.3 land improvements (15). A recorded
+  asset class wins over `kind`; an asset nothing describes falls to Pub 946's 7-year
+  "no class life" default, unverified.
+- The mid-quarter test: more than 40% of the year's depreciable bases placed in service in
+  the fourth quarter (bases reflecting the §179 reduction but not bonus, real property
+  excluded) forces the mid-quarter convention; exactly 40% does not.
+- §179 dollar limits from "What's New": $2,500,000 / $4,000,000 phase-out / $31,300 SUV cap
+  for tax years beginning in 2025; $2,560,000 / $4,090,000 / $32,000 for 2026. Any other
+  year is `{ limit: null, verified: false }`.
+- Bonus depreciation is a cliff, not a phase, and keys on the ACQUISITION date: 100% for
+  property acquired and placed in service after 19 January 2025 (P.L. 119-21, with the 40%
+  election noted, never applied); 40% for property acquired before 20 January 2025 and
+  placed in service in 2025 (60% for long-production-period property and certain aircraft,
+  not modelled); any other combination unverified.
+- §280F passenger automobile caps, [year 1, year 2, year 3, later]: 2025 with bonus
+  $20,200 / $19,600 / $11,800 / $7,060 ($12,200 first year without), 2026 $20,300 /
+  $19,800 / $11,900 / $7,160 ($12,300 without), from Rev. Proc. 2025-16 and 2026-15. Other
+  years unverified. `computeMacrsYear` applies the cap as a ceiling on the year's total.
+- De minimis safe harbor: $2,500 per item or invoice, $5,000 with an applicable financial
+  statement — the reason most small purchases never reach the register, and the first line
+  of the explainer.
+- `extraAssetFields()`: `assetClass` (optional enum of the shipped Table B-1 classes),
+  `placedInServiceDate`, `isPassengerAutomobile`, `hasAfs`. Vocabulary: "Depreciable
+  property", "Depreciation deduction", "Adjusted basis", "Recovery period". `readMore`
+  links are irs.gov pages only.
+- `usPlugin.getDepreciationRules()` now returns these rules instead of the generic fallback.
+
+### Added — India (`src/countries/indiaDepreciation.ts`)
+
+- The block regime under the law in force since 1 April 2026: section 33 of the Income-tax
+  Act 2025 and Appendix I (rule 25) of the Income-tax Rules 2026. The 1961 Act and 1962
+  Rules ceased on 31 March 2026 and are cited nowhere except the note recording their
+  replacement.
+- Blocks from Appendix I, every rate the Gazette table's own: buildings mainly residential
+  5%, other buildings 10%, purely temporary erections 40%; furniture and fittings including
+  electrical fittings 10%; machinery and plant general 15%; motor cars not on hire 15%;
+  motor buses, lorries and taxis on hire 30%; aeroplanes 40%; computers including computer
+  software 40%; books of a professional 40%; ships 20%; Part B intangibles 25%. The closed
+  2019-20 uplifted vehicle rates (30% / 45%) are notes, not rates. Goodwill is not a
+  depreciable asset.
+- The 180-day rule (s. 33(4)): an asset acquired in the tax year (1 April – 31 March) and
+  put to use under 180 days earns half the prescribed rate that year; 180 days exactly is
+  the full rate.
+- Additional depreciation (s. 33(8)-(9)): an extra 20% of actual cost for NEW machinery or
+  plant of a manufacturer or power producer — 10% + 10% across two years where used under
+  180 days. Never for office appliances, road transport vehicles, ships, aircraft,
+  buildings, furniture or intangibles, and every condition is a recorded answer: an
+  unanswered `isManufacturer` or `isNewAsset` is a "no".
+- Sales come off the block, not the asset: proceeds reduce the block's written down value,
+  and proceeds that swallow the block — or a block left with no assets — end depreciation
+  and raise `shortTermCapitalGainReview` instead of computing a gain the return owns.
+- No general instant write-off: `instantAssetWriteOff()` is `{ limit: null,
+  verified: false }` with a note, because a 40% block rate is a rate, not a threshold.
+- `extraAssetFields()`: `blockKey` (optional enum of the shipped blocks), `putToUseDays`,
+  `isManufacturer`, `isNewAsset`, `isOfficeAppliance`, `isRoadTransportVehicle`.
+  Vocabulary: "Asset in block", "Depreciation", "Written down value of the block", "Block
+  of assets". `readMore` links are incometaxindia.gov.in pages only — section 33 and the
+  Appendix I table.
+- `inPlugin.getDepreciationRules()` now returns these rules instead of the generic fallback.
 
 ## 2.1.0 — 2026-08-23
 
