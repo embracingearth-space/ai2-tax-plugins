@@ -18,6 +18,8 @@ import type {
   ExportOutput,
   TaxTreatmentDefinition,
 } from '../types';
+import type { DepreciationRules } from '../depreciation';
+import UK_DEPRECIATION_RULES from './unitedKingdomDepreciation';
 
 const ukPlugin: TaxFilingPlugin = {
   countryCode: 'GB',
@@ -499,6 +501,11 @@ const ukPlugin: TaxFilingPlugin = {
         defaultFor: ['transfers', 'loan_principal', 'owner_drawings', 'dividends', 'tax_payments', 'government_fees'],
       },
     ];
+  },
+
+  /** HMRC's pooled capital allowances regime — see ./unitedKingdomDepreciation. */
+  getDepreciationRules(): DepreciationRules {
+    return UK_DEPRECIATION_RULES;
   },
 };
 
