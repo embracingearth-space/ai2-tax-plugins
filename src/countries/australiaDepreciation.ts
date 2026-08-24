@@ -211,12 +211,14 @@ export const AU_INSTANT_ASSET_WRITE_OFF_ROWS: AuWriteOffRow[] = [
     effectiveFrom: '2023-07-01',
     limit: 20000,
     verified: true,
+    // The ATO's wording is "cost less than $20,000" — exactly $20,000 misses.
+    boundary: 'under',
     note:
       '$20,000 per asset for the 2023-24, 2024-25 and 2025-26 income years, for small ' +
       'businesses with an aggregated turnover under $10 million using the simplified ' +
-      'depreciation rules. The asset must be first used or installed ready for use for a ' +
-      'taxable purpose within the income year. The limit applies per asset, so more than one ' +
-      'asset can be written off.',
+      'depreciation rules. The asset must cost less than $20,000 and be first used or ' +
+      'installed ready for use for a taxable purpose within the income year. The limit ' +
+      'applies per asset, so more than one asset can be written off.',
   },
   {
     effectiveFrom: '2020-10-06',
@@ -266,7 +268,12 @@ export function resolveWriteOffRow(
   // earliest row falls back to that earliest row, which is itself an unverified
   // "not recorded here" — never to a number.
   const row = ordered.find((r) => r.effectiveFrom <= ymd) ?? ordered[ordered.length - 1];
-  return { limit: row.limit, verified: row.verified, note: row.note };
+  return {
+    limit: row.limit,
+    verified: row.verified,
+    note: row.note,
+    ...(row.boundary ? { boundary: row.boundary } : {}),
+  };
 }
 
 /** Sorted once, at module load, rather than on every lookup. */

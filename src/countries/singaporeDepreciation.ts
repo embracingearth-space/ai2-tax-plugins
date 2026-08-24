@@ -457,7 +457,14 @@ export const SG_DEPRECIATION_RULES: WriteOffElectiveRules = {
   instantAssetWriteOff(onDate: Date | string): InstantAssetWriteOffInfo {
     const ya = Number(toYmd(onDate).slice(0, 4)) + 1;
     const cap = sgLowValueCap(ya);
-    return { limit: cap.perItemLimit, verified: cap.verified, note: cap.note };
+    return {
+      limit: cap.perItemLimit,
+      verified: cap.verified,
+      note: cap.note,
+      // s.19A(10A) is "no more than $5,000 each" — exactly $5,000 qualifies,
+      // matching sgMethodsFor's own `cost <= SG_LOW_VALUE_PER_ITEM_LIMIT`.
+      ...(cap.perItemLimit != null ? { boundary: 'up_to' as const } : {}),
+    };
   },
 
   balancingAdjustment(input: BalancingAdjustmentInput): BalancingAdjustmentOutcome {

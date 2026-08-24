@@ -142,6 +142,8 @@ export const ZA_SMALL_ITEM_ROWS: ZaSmallItemRow[] = [
     effectiveFrom: ZA_SMALL_ITEM_LIMIT_FROM,
     limit: ZA_SMALL_ITEM_LIMIT,
     verified: true,
+    // SARS's wording is "costing less than R7,000" — exactly R7,000 misses.
+    boundary: 'under',
     note:
       'An item costing less than R7,000 is written off in full in the year it is acquired and ' +
       'brought into use (acquisitions on or after 1 March 2009). A set — chairs bought together ' +
@@ -161,7 +163,12 @@ const ZA_SMALL_ITEM_ROWS_NEWEST_FIRST: readonly ZaSmallItemRow[] = sortNewestFir
 
 export function zaSmallItemThreshold(onDate: Date | string): InstantAssetWriteOffInfo {
   const row = resolveEffectiveDated(ZA_SMALL_ITEM_ROWS_NEWEST_FIRST, toYmd(onDate));
-  return { limit: row.limit, verified: row.verified, note: row.note };
+  return {
+    limit: row.limit,
+    verified: row.verified,
+    note: row.note,
+    ...(row.boundary ? { boundary: row.boundary } : {}),
+  };
 }
 
 // ─── Explainer ──────────────────────────────────────────────────────────────

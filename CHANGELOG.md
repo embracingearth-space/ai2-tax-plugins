@@ -10,6 +10,14 @@ working untouched.
 
 ### Added — regime machinery (`src/depreciation.ts`)
 
+- `InstantAssetWriteOffInfo.boundary` — `'under' | 'up_to'`, optional. Which side of the
+  limit qualifies is country law, not a convention: Australia's write-off is for assets
+  costing *less than* the threshold, New Zealand's s EE 38 is *"equal to or less than"*, so
+  exactly-at-the-limit is an over-claim in one country and a legitimate deduction in the
+  other. Absent where the figure is not a per-asset boundary at all — the UK annual
+  investment allowance and the US §179 dollar limit are annual aggregates, and a host must
+  not treat absence as either value. The New Zealand notes now quote the statute's
+  inclusive wording rather than the summary page's "less than" paraphrase.
 - `DepreciationRules.regime` — `'effective_life' | 'rate_per_asset' | 'pooled_allowance' |
   'class_cca' | 'macrs' | 'block_wdv' | 'write_off_elective' | 'straight_line_fixed' |
   'write_off_period' | 'generic'`. The countries do not share a model, and a host branches

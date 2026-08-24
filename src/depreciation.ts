@@ -300,6 +300,24 @@ export interface InstantAssetWriteOffInfo {
   /** false means "this could not be confirmed" — never print an unverified number. */
   verified: boolean;
   note: string;
+  /**
+   * Which side of the limit qualifies. The direction is country law, not a
+   * convention: Australia's write-off is for assets costing LESS THAN the
+   * threshold and New Zealand's s EE 38 is "equal to or less than", so an
+   * asset costing exactly the limit is an over-claim in one country and a
+   * legitimate immediate deduction in the other. A host that compares a cost
+   * against `limit` without this field has to guess, and either guess is
+   * wrong somewhere.
+   *
+   * `'under'` = strictly less than the limit qualifies. `'up_to'` = the limit
+   * itself qualifies too. ABSENT means the number is not a per-asset boundary
+   * at all: a null limit has no boundary to describe, and the UK's annual
+   * investment allowance and the US §179 dollar limit are ANNUAL AGGREGATES
+   * across all qualifying additions, so comparing one asset's cost against
+   * them answers a different question. A host must not treat absence as
+   * either value.
+   */
+  boundary?: 'under' | 'up_to';
 }
 
 export interface BalancingAdjustmentInput {

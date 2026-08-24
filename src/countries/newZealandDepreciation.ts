@@ -310,33 +310,45 @@ export interface NzLowValueRow extends EffectiveDatedRow, InstantAssetWriteOffIn
  * to 16 March 2021, $5,000 (temporary); 17 March 2021 onwards, $1,000. All
  * three rows are the page's own, so all three are verified. The thresholds
  * are keyed by the date the asset was bought.
+ *
+ * THE BOUNDARY IS INCLUSIVE, and the statute is the source, not the summary
+ * page. Section EE 38 of the Income Tax Act 2007 applies where the item's
+ * total cost is "equal to or less than the threshold value" — an asset
+ * costing exactly $1,000 takes the immediate deduction. IRD's own summary
+ * pages paraphrase this as "less than $1,000" in places, which reads as
+ * strict and is not; the notes below say "or less" so no host repeats the
+ * paraphrase's mistake.
  */
 export const NZ_LOW_VALUE_ASSET_ROWS: NzLowValueRow[] = [
   {
     effectiveFrom: '2021-03-17',
     limit: 1000,
     verified: true,
+    boundary: 'up_to',
     note:
-      'Low value asset threshold of $1,000 for assets bought from 17 March 2021. An asset under ' +
-      'the threshold is claimed in full as an expense in the year you buy it, rather than ' +
-      'depreciated. Use the GST-exclusive cost if you are GST registered.',
+      'Low value asset threshold of $1,000 for assets bought from 17 March 2021. An asset ' +
+      'costing $1,000 or less (s EE 38: "equal to or less than the threshold value") is ' +
+      'claimed in full as an expense in the year you buy it, rather than depreciated. Use the ' +
+      'GST-exclusive cost if you are GST registered.',
   },
   {
     effectiveFrom: '2020-03-17',
     limit: 5000,
     verified: true,
+    boundary: 'up_to',
     note:
       'Temporary low value asset threshold of $5,000 for assets bought from 17 March 2020 to ' +
-      '16 March 2021. An asset under the threshold is claimed in full as an expense in the year ' +
-      'you buy it.',
+      '16 March 2021. An asset costing $5,000 or less is claimed in full as an expense in the ' +
+      'year you buy it.',
   },
   {
     effectiveFrom: '1900-01-01',
     limit: 500,
     verified: true,
+    boundary: 'up_to',
     note:
-      'Low value asset threshold of $500 for assets bought up to 16 March 2020. An asset under ' +
-      'the threshold is claimed in full as an expense in the year you buy it.',
+      'Low value asset threshold of $500 for assets bought up to 16 March 2020. An asset ' +
+      'costing $500 or less is claimed in full as an expense in the year you buy it.',
   },
 ];
 
@@ -347,7 +359,12 @@ const NZ_LOW_VALUE_ROWS_NEWEST_FIRST: readonly NzLowValueRow[] = sortNewestFirst
 
 export function nzLowValueThreshold(onDate: Date | string): InstantAssetWriteOffInfo {
   const row = resolveEffectiveDated(NZ_LOW_VALUE_ROWS_NEWEST_FIRST, toYmd(onDate));
-  return { limit: row.limit, verified: row.verified, note: row.note };
+  return {
+    limit: row.limit,
+    verified: row.verified,
+    note: row.note,
+    ...(row.boundary ? { boundary: row.boundary } : {}),
+  };
 }
 
 // ─── Investment Boost — effective-dated ─────────────────────────────────────
@@ -465,7 +482,7 @@ const NZ_EXPLAINER: DepreciationExplainer = {
     'sets for that asset, not all at once.',
   whenItApplies:
     'Anything costing more than the low value asset threshold — $1,000 for purchases from ' +
-    '17 March 2021, GST-exclusive if you are GST registered. Under that, claim it straight ' +
+    '17 March 2021, GST-exclusive if you are GST registered. At $1,000 or less, claim it straight ' +
     'away. New assets bought from 22 May 2025 get 20% up front under Investment Boost, with ' +
     'the remaining 80% depreciated as usual.',
   howItWorks: [
