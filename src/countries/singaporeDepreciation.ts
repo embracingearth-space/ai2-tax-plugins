@@ -161,16 +161,56 @@ export function sgMethodsFor(asset: SgAssetInput, yearOfAssessment: number): SgW
  * the FINAL year absorbs it, so the allowances always sum to the cost and the
  * tax written down value ends at exactly zero.
  */
+/**
+ * Elections whose availability is a function of the year of assessment, not
+ * of the asset. Computing one without knowing the YA is computing a number
+ * for a year it may not have been claimable in, which `sgMethodsFor` already
+ * refuses to offer — so this path refuses it too rather than leaving the
+ * gate to whichever caller happens to check.
+ */
+const YEAR_GATED_METHODS: ReadonlySet<SgWriteOffMethod> = new Set([
+  'one_year_low_value_s19a10a',
+  'two_year_s19a1e',
+]);
+
 export function sgAllowanceForYear(
   asset: SgAssetInput,
   method: SgWriteOffMethod,
   yearIndex: number,
+  yearOfAssessment?: number,
 ): SgAllowanceOutcome {
   requireYearIndex(yearIndex);
   const cost = Math.max(0, Number(asset.cost) || 0);
   const eligibility = sgEligibility(asset);
   if (!eligibility.eligible) {
     throw new RangeError(eligibility.note);
+  }
+
+  if (yearOfAssessment !== undefined) {
+    // Only the YEAR dimension is checked here. `sgMethodsFor` also filters on
+    // the asset — cost against the low-value limit, the computer flag — and
+    // those conditions have their own, more specific errors further down.
+    // Reusing the whole list would mask "costs more than $5,000" behind a
+    // vaguer "not available for this YA".
+    const unavailableForYa =
+      (method === 'two_year_s19a1e' && !SG_TWO_YEAR_YAS.includes(yearOfAssessment)) ||
+      (method === 'one_year_low_value_s19a10a' &&
+        yearOfAssessment < SG_WORKING_LIFE_ELECTION_FROM_YA) ||
+      (method === 'working_life_s19' && yearOfAssessment < SG_WORKING_LIFE_ELECTION_FROM_YA);
+    if (unavailableForYa) {
+      throw new RangeError(
+        `"${method}" is not available for the year of assessment ${yearOfAssessment}. ` +
+          'The 75%/25% two-year write-off ran for YA 2021, 2022 and 2024 only; the low-value ' +
+          `write-off and the streamlined working-life election are offered from YA ${SG_WORKING_LIFE_ELECTION_FROM_YA}.`,
+      );
+    }
+  } else if (YEAR_GATED_METHODS.has(method)) {
+    throw new RangeError(
+      `"${method}" exists only for certain years of assessment, so it cannot be computed ` +
+        'without one — pass yearOfAssessment. The 75%/25% two-year write-off ran for YA 2021, ' +
+        '2022 and 2024 only; the low-value write-off is offered from YA 2023, when IRAS first ' +
+        'recorded its limit.',
+    );
   }
 
   const done = (
@@ -516,8 +556,13 @@ export const SG_DEPRECIATION_RULES: WriteOffElectiveRules = {
     return sgMethodsFor(asset, yearOfAssessment);
   },
 
-  allowanceForYear(asset: SgAssetInput, method: SgWriteOffMethod, yearIndex: number): SgAllowanceOutcome {
-    return sgAllowanceForYear(asset, method, yearIndex);
+  allowanceForYear(
+    asset: SgAssetInput,
+    method: SgWriteOffMethod,
+    yearIndex: number,
+    yearOfAssessment?: number,
+  ): SgAllowanceOutcome {
+    return sgAllowanceForYear(asset, method, yearIndex, yearOfAssessment);
   },
 
   lowValueCap(yearOfAssessment: number): SgLowValueCapOutcome {

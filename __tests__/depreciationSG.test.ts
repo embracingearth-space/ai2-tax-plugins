@@ -90,9 +90,9 @@ describe('SG allowances — s.19A(1) three-year write-off', () => {
 describe('SG allowances — s.19A(1E) two-year write-off, 75% then 25%', () => {
   it('a $3,000 asset claims $2,250 then $750', () => {
     const asset: SgAssetInput = { cost: 3000 };
-    expect(sgAllowanceForYear(asset, 'two_year_s19a1e', 1).allowance).toBe(2250);
-    expect(sgAllowanceForYear(asset, 'two_year_s19a1e', 2).allowance).toBe(750);
-    expect(sgAllowanceForYear(asset, 'two_year_s19a1e', 3).allowance).toBe(0);
+    expect(sgAllowanceForYear(asset, 'two_year_s19a1e', 1, 2024).allowance).toBe(2250);
+    expect(sgAllowanceForYear(asset, 'two_year_s19a1e', 2, 2024).allowance).toBe(750);
+    expect(sgAllowanceForYear(asset, 'two_year_s19a1e', 3, 2024).allowance).toBe(0);
   });
 
   it('is offered only for the basis periods of YAs 2021, 2022 and 2024', () => {
@@ -163,9 +163,38 @@ describe('SG allowances — the one-year write-offs', () => {
   });
 
   it('s.19A(10A): a low-value asset claims 100%, over $5,000 is refused', () => {
-    expect(sgAllowanceForYear({ cost: 4400 }, 'one_year_low_value_s19a10a', 1).allowance).toBe(4400);
-    expect(sgAllowanceForYear({ cost: 5000 }, 'one_year_low_value_s19a10a', 1).allowance).toBe(5000);
-    expect(() => sgAllowanceForYear({ cost: 5001 }, 'one_year_low_value_s19a10a', 1)).toThrow(/5,000/);
+    expect(sgAllowanceForYear({ cost: 4400 }, 'one_year_low_value_s19a10a', 1, 2026).allowance).toBe(4400);
+    expect(sgAllowanceForYear({ cost: 5000 }, 'one_year_low_value_s19a10a', 1, 2026).allowance).toBe(5000);
+    expect(() => sgAllowanceForYear({ cost: 5001 }, 'one_year_low_value_s19a10a', 1, 2026)).toThrow(/5,000/);
+  });
+
+  it('refuses a year-gated election for a YA it was never available in', () => {
+    // sgMethodsFor hides both of these for the wrong YA, but the calculator
+    // could be called directly and would happily compute a claim for a year
+    // the election did not exist in. The gate now lives on both paths.
+    expect(() =>
+      sgAllowanceForYear({ cost: 3000 }, 'one_year_low_value_s19a10a', 1, 2022),
+    ).toThrow(/not available for the year of assessment 2022/);
+    expect(() => sgAllowanceForYear({ cost: 3000 }, 'two_year_s19a1e', 1, 2023)).toThrow(
+      /not available for the year of assessment 2023/,
+    );
+    // And through the rules object, which is the canonical path.
+    expect(() => sg.allowanceForYear({ cost: 3000 }, 'two_year_s19a1e', 1, 2026)).toThrow(
+      /not available/,
+    );
+  });
+
+  it('refuses a year-gated election when no year of assessment is given at all', () => {
+    // Availability is a function of the YA, so computing one without a YA is
+    // computing a number for a year nobody named.
+    expect(() => sgAllowanceForYear({ cost: 3000 }, 'two_year_s19a1e', 1)).toThrow(
+      /cannot be computed without one/,
+    );
+    expect(() => sgAllowanceForYear({ cost: 3000 }, 'one_year_low_value_s19a10a', 1)).toThrow(
+      /cannot be computed without one/,
+    );
+    // A method with no year gate is unaffected.
+    expect(sgAllowanceForYear({ cost: 3000 }, 'three_year_s19a1', 1).allowance).toBe(1000);
   });
 
   it('the $30,000 cap is published for the host: seven $4,400 assets do not all fit', () => {

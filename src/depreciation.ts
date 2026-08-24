@@ -933,11 +933,22 @@ export interface WriteOffElectiveRules extends DepreciationRules {
   regime: 'write_off_elective';
   /** The elections this asset may make for a year of assessment. Empty where the asset cannot claim at all. */
   methodsFor(asset: SgAssetInput, yearOfAssessment: number): SgWriteOffMethod[];
-  /** One year of one method, IRAS's arithmetic. `yearIndex` is 1-based. */
+  /**
+   * One year of one method, IRAS's arithmetic. `yearIndex` is 1-based.
+   *
+   * `yearOfAssessment` is what makes the answer lawful rather than merely
+   * arithmetic: two of the elections exist only for certain YAs — the
+   * 75%/25% two-year write-off ran for YA 2021, 2022 and 2024 only, and the
+   * low-value write-off is offered from YA 2023, when its limit was first
+   * recorded. Pass it and the method is checked against `methodsFor`; omit it
+   * and those two methods are refused outright, because the answer depends on
+   * a year nobody supplied.
+   */
   allowanceForYear(
     asset: SgAssetInput,
     method: SgWriteOffMethod,
     yearIndex: number,
+    yearOfAssessment?: number,
   ): SgAllowanceOutcome;
   /** The s.19A(10A) low-value limits for a YA: per item, and in total across the YA. */
   lowValueCap(yearOfAssessment: number): SgLowValueCapOutcome;
