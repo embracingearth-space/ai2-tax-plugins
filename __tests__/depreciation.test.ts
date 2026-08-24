@@ -6,11 +6,15 @@
  * (straight line) and diminishing value methods". If one of these fails, the
  * plugin disagrees with the ATO — do not "fix" the test.
  *
- * The instant-asset-write-off block is an honesty test, not an arithmetic one:
- * the ATO publishes $20,000 for 2023-24 to 2025-26 and publishes nothing for
- * 2026-27, so a 2026-27 date MUST come back null and unverified. A test that
- * passes with $20,000 carried forward would be a test that lets a false
- * statutory number reach a tax return.
+ * The instant-asset-write-off block is an honesty test, not an arithmetic one.
+ * $20,000 is law for 2023-24 to 2025-26 and ENDED on 30 June 2026. From
+ * 1 July 2026 the standing legislated threshold applies — $1,000 — and the
+ * permanent $20,000 announced in the 2026-27 Budget is before Parliament and
+ * NOT YET LAW. So a 2026-27 date must come back $1,000, with the announcement
+ * carried in `proposed` and never in `limit`. A test that passes with $20,000
+ * as the 2026-27 limit is a test that lets an unenacted number reach a tax
+ * return; one that passes with null is a test that hides a real $1,000
+ * deduction and suppresses the warning on everything above it.
  */
 
 import {
@@ -491,10 +495,28 @@ describe('AU depreciation — the decline never exceeds the opening value', () =
   });
 
   it('with no verified limit the pool question is unanswered, not answered "no"', () => {
-    const unknown = auSmallBusinessPoolWriteOff(900, '2026-09-01');
+    // Temporary full expensing (Oct 2020 - Jun 2023) carries no ordinary
+    // threshold, so the pool question genuinely has no answer there. This
+    // used to use a 2026-27 date, which stopped being unverified once that
+    // year was corrected to its standing $1,000 legislated default.
+    const unknown = auSmallBusinessPoolWriteOff(900, '2022-01-01');
     expect(unknown.deductWholeBalance).toBeNull();
     expect(unknown.amount).toBeNull();
     expect(unknown.verified).toBe(false);
+  });
+
+  it('answers the pool question against the 2026-27 standing $1,000', () => {
+    // The flip side of correcting that year: a pool balance under the
+    // legislated threshold IS written off in full, and saying "unknown"
+    // there was itself a missed deduction.
+    const under = auSmallBusinessPoolWriteOff(900, '2026-09-01');
+    expect(under.deductWholeBalance).toBe(true);
+    expect(under.amount).toBe(900);
+    expect(under.limit).toBe(1000);
+
+    const over = auSmallBusinessPoolWriteOff(4500, '2026-09-01');
+    expect(over.deductWholeBalance).toBe(false);
+    expect(over.amount).toBe(0);
   });
 });
 
@@ -539,7 +561,9 @@ describe('AU instant asset write-off — effective-dated, and null where the ATO
   });
 
   it('an unverified year carries no boundary — there is nothing for one to describe', () => {
-    const r = au.instantAssetWriteOff(new Date('2026-07-01'));
+    // Pre-2020-21 is genuinely "not recorded here": no limit, no boundary.
+    const r = au.instantAssetWriteOff(new Date('1995-01-01'));
+    expect(r.limit).toBeNull();
     expect(r.boundary).toBeUndefined();
   });
 });
@@ -588,19 +612,41 @@ describe('write-off boundary — which side of the limit qualifies is country la
   });
 });
 
-describe('AU instant asset write-off — years the ATO has not published', () => {
-  it('2026-27 has no published limit: null, verified false, and a note telling you to confirm it', () => {
+describe('AU instant asset write-off — the 2026-27 legislated default', () => {
+  it('reverts to the standing $1,000 once the temporary $20,000 ends', () => {
+    // This used to report null/unverified — "not published". Wrong in both
+    // directions: a $900 asset got no offer (a real missed deduction) and a
+    // $15,000 one got no warning (an over-claim under the law as it stands).
     const r = au.instantAssetWriteOff(new Date('2026-07-01'));
-    expect(r.limit).toBeNull();
-    expect(r.verified).toBe(false);
-    expect(r.note).toMatch(/confirm/i);
-    expect(r.note).not.toMatch(/20,?000/);
+    expect(r.limit).toBe(1000);
+    expect(r.verified).toBe(true);
+    expect(r.boundary).toBe('under');
   });
 
-  it('a date well into 2026-27 is still null — $20,000 does not carry forward', () => {
+  it('carries the announced $20,000 as PROPOSED, never as the limit', () => {
+    // A budget announcement is not a rate. The bill can lapse, change, or
+    // commence from another date; reporting it as `limit` would have every
+    // host claiming against a law that does not exist.
+    const r = au.instantAssetWriteOff(new Date('2026-07-01'));
+    expect(r.proposed?.limit).toBe(20000);
+    expect(r.proposed?.note).toMatch(/not yet law/i);
+    // The relied-upon figure stays $1,000 — the two never merge.
+    expect(r.limit).toBe(1000);
+    // And the main note says plainly that the $20,000 cannot be relied on.
+    expect(r.note).toMatch(/NOT YET LAW/i);
+  });
+
+  it('keeps the $1,000 default well into 2026-27 — $20,000 does not carry forward', () => {
     const r = au.instantAssetWriteOff(new Date('2027-03-01'));
-    expect(r.limit).toBeNull();
-    expect(r.verified).toBe(false);
+    expect(r.limit).toBe(1000);
+    expect(r.verified).toBe(true);
+  });
+
+  it('leaves the 2025-26 year untouched at $20,000', () => {
+    // The row that IS law for its own year must not move.
+    const r = au.instantAssetWriteOff(new Date('2026-06-30'));
+    expect(r.limit).toBe(20000);
+    expect(r.proposed).toBeUndefined();
   });
 
   it('the temporary full expensing window carries no threshold', () => {

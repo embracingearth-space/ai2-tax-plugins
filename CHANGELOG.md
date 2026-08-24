@@ -10,6 +10,7 @@ working untouched.
 
 ### Added — regime machinery (`src/depreciation.ts`)
 
+- `InstantAssetWriteOffInfo.proposed` — an announced-but-unenacted threshold, kept strictly OUT of `limit`. AU 2026-27 now reports its standing legislated $1,000 (the temporary $20,000 ended 30 June 2026) and carries the Budget-announced permanent $20,000 as `proposed`, not yet law. Reporting null there hid a real $1,000 deduction and suppressed the over-claim warning above it; reporting $20,000 would let an unenacted number reach a return.
 - `InstantAssetWriteOffInfo.boundary` — `'under' | 'up_to'`, optional. Which side of the
   limit qualifies is country law, not a convention: Australia's write-off is for assets
   costing *less than* the threshold, New Zealand's s EE 38 is *"equal to or less than"*, so

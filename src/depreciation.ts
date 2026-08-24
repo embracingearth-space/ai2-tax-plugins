@@ -318,6 +318,27 @@ export interface InstantAssetWriteOffInfo {
    * either value.
    */
   boundary?: 'under' | 'up_to';
+  /**
+   * A threshold that has been ANNOUNCED BUT IS NOT YET LAW.
+   *
+   * Kept strictly out of `limit`, which only ever carries the figure a
+   * taxpayer can rely on today. A budget announcement is not a rate: the
+   * enabling bill can lapse, change, or commence from a different date, and a
+   * package that reported one as `limit` would have every host quietly
+   * claiming against a law that does not exist.
+   *
+   * It is published rather than dropped because the gap matters to the user:
+   * knowing that a $20,000 threshold is before Parliament is what tells them
+   * to check timing, or to ask their agent, instead of assuming last year's
+   * figure rolled over. A host should render it as pending — never as the
+   * threshold, and never added to it. embracingearth.space
+   */
+  proposed?: {
+    /** The announced figure, or null where the announcement carries no number. */
+    limit: number | null;
+    /** What was announced, by whom, and that it is not yet law. */
+    note: string;
+  };
 }
 
 export interface BalancingAdjustmentInput {
