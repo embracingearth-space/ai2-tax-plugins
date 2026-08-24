@@ -11,6 +11,8 @@
  */
 
 import { toCsv } from '../exportUtils';
+import type { DepreciationRules } from '../depreciation';
+import NZ_DEPRECIATION_RULES from './newZealandDepreciation';
 
 import type {
   TaxFilingPlugin,
@@ -438,6 +440,11 @@ const nzPlugin: TaxFilingPlugin = {
         defaultFor: ['transfers', 'loan_principal', 'owner_drawings', 'dividends', 'tax_payments'],
       },
     ];
+  },
+
+  /** Inland Revenue's rate-per-asset regime — see ./newZealandDepreciation. */
+  getDepreciationRules(): DepreciationRules {
+    return NZ_DEPRECIATION_RULES;
   },
 };
 

@@ -11,6 +11,8 @@
  */
 
 import { toCsv } from '../exportUtils';
+import { US_DEPRECIATION_RULES } from './unitedStatesDepreciation';
+import type { DepreciationRules } from '../depreciation';
 
 import type {
   TaxFilingPlugin,
@@ -506,6 +508,11 @@ const usPlugin: TaxFilingPlugin = {
   hasSubJurisdictions: () => true,
   getSubJurisdictions: () => US_STATES,
   supportsCustomFields: () => false,
+
+  /** The IRS's MACRS table regime — see ./unitedStatesDepreciation. */
+  getDepreciationRules(): DepreciationRules {
+    return US_DEPRECIATION_RULES;
+  },
 };
 
 export default usPlugin;

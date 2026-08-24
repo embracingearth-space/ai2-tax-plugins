@@ -9,6 +9,8 @@
  */
 
 import { toCsv } from '../exportUtils';
+import { ZA_DEPRECIATION_RULES } from './southAfricaDepreciation';
+import type { DepreciationRules } from '../depreciation';
 
 import type {
   TaxFilingPlugin, FormSection, FieldValues, CalculatedFields,
@@ -296,6 +298,11 @@ const zaPlugin: TaxFilingPlugin = {
         defaultFor: ['transfers', 'loan_principal', 'owner_drawings', 'dividends', 'tax_payments'],
       },
     ];
+  },
+
+  /** SARS's write-off period regime (IN47 s.11(e)) — see ./southAfricaDepreciation. */
+  getDepreciationRules(): DepreciationRules {
+    return ZA_DEPRECIATION_RULES;
   },
 };
 

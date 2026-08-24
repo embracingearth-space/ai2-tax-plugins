@@ -9,7 +9,7 @@
  * - Factory: createAdaptiveGenericPlugin (for building new plugins)
  * - EU Factory: createEUPlugin (for adding EU member states)
  * - Treatments: GENERIC_TREATMENTS, getTreatmentsForPlugin (transaction → box mapping)
- * - Depreciation: GENERIC_DEPRECIATION_RULES, getDepreciationRules (capital allowances)
+ * - Depreciation: GENERIC_DEPRECIATION_RULES, getDepreciationRules, computePoolPeriod, computeClassPeriod, computeMacrsYear, computeBlockPeriod (capital allowances)
  * - Annual reports: AnnualReportDefinition (AU TPAR)
  */
 
@@ -61,13 +61,94 @@ export {
   getDepreciationRules,
   computeDeclineInValue,
   computeBalancingAdjustment,
+  computePoolPeriod,
+  computeClassPeriod,
+  computeMacrsYear,
+  computeBlockPeriod,
+  sortNewestFirst,
+  resolveEffectiveDated,
   DV_RATE_MULTIPLIER,
   DV_RATE_MULTIPLIER_PRE_10_MAY_2006,
 } from './depreciation';
 
 export type {
   DepreciationMethod,
+  DepreciationRegime,
   DepreciationRules,
+  RatePerAssetRules,
+  PooledAllowanceRules,
+  UkPool,
+  UkTaxpayerType,
+  UkPeriod,
+  UkAssetInput,
+  UkPoolAssignment,
+  UkWdaRateOutcome,
+  UkAiaOutcome,
+  UkSmallPoolsOutcome,
+  UkFirstYearAllowanceKind,
+  UkFirstYearAllowanceOutcome,
+  UkEligibilityOutcome,
+  PoolPeriodAddition,
+  PoolPeriodDisposal,
+  PoolPeriodInput,
+  PoolPeriodOutcome,
+  ClassCcaRules,
+  CaCcaClass,
+  CaAssetKind,
+  CaAssetInput,
+  CaClassAssignment,
+  CaFirstYearOutcome,
+  CaVehicleCapOutcome,
+  ClassPeriodAddition,
+  ClassPeriodDisposal,
+  ClassPeriodInput,
+  ClassPeriodOutcome,
+  MacrsRules,
+  UsAssetKind,
+  UsAssetInput,
+  UsPropertyClassAssignment,
+  UsTableConvention,
+  UsTablePercentOutcome,
+  UsConventionInput,
+  UsConventionOutcome,
+  UsSection179Outcome,
+  UsBonusOutcome,
+  UsAutoCapOutcome,
+  UsDeMinimisOutcome,
+  MacrsYearInput,
+  MacrsYearOutcome,
+  BlockWdvRules,
+  InBlockKey,
+  InAssetKind,
+  InAssetInput,
+  InBlockAssignment,
+  InHalfRateOutcome,
+  InAdditionalDepreciationOutcome,
+  BlockPeriodAddition,
+  BlockPeriodInput,
+  BlockPeriodOutcome,
+  WriteOffElectiveRules,
+  SgWriteOffMethod,
+  SgWorkingLifeYears,
+  SgAssetInput,
+  SgEligibilityOutcome,
+  SgAllowanceOutcome,
+  SgLowValueCapOutcome,
+  StraightLineFixedRules,
+  IeCo2Band,
+  IeCarLimitRegime,
+  IeAssetInput,
+  IeAllowableCostOutcome,
+  IeWearAndTearInput,
+  IeWearAndTearOutcome,
+  WriteOffPeriodRules,
+  ZaWriteOffPeriodOutcome,
+  PartYearInput,
+  DepreciationExplainer,
+  DepreciationVocabulary,
+  FirstYearConcession,
+  AssetFieldSpec,
+  EffectiveDatedRow,
   DeclineInValueInput,
   DeclineInValueOutcome,
   EffectiveLifeCategory,
@@ -76,7 +157,7 @@ export type {
   BalancingAdjustmentOutcome,
 } from './depreciation';
 
-// Australia — the only jurisdiction here with its own capital-allowance rules.
+// Australia — the ATO's effective-life regime.
 export {
   AU_DEPRECIATION_RULES,
   AU_EFFECTIVE_LIFE_CATEGORIES,
@@ -92,6 +173,171 @@ export {
 } from './countries/australiaDepreciation';
 
 export type { AuWriteOffRow } from './countries/australiaDepreciation';
+
+// New Zealand — Inland Revenue's rate-per-asset regime (IR265 rates, whole-month part years).
+export {
+  NZ_DEPRECIATION_RULES,
+  NZ_RATE_CATEGORIES,
+  NZ_RATE_SOURCE,
+  NZ_LOW_VALUE_ASSET_ROWS,
+  NZ_INVESTMENT_BOOST_ROWS,
+  NZ_INVESTMENT_BOOST_START,
+  NZ_POOLING_RULES,
+  NZ_DEPRECIATION_AUTHORITY_URLS,
+  nzRateFor,
+  nzWholeMonthsUsed,
+  nzLowValueThreshold,
+  nzInvestmentBoost,
+  nzInvestmentBoostSplit,
+} from './countries/newZealandDepreciation';
+
+export type {
+  NzRateCategory,
+  NzLowValueRow,
+  NzInvestmentBoostRow,
+  NzInvestmentBoostInfo,
+  NzInvestmentBoostSplit,
+} from './countries/newZealandDepreciation';
+
+// United Kingdom — HMRC's pooled capital allowances (pools, WDA, AIA, FYAs, CO₂ cars, cash basis).
+export {
+  UK_DEPRECIATION_RULES,
+  UK_AIA_ROWS,
+  UK_CAR_BAND_ROWS,
+  UK_CASH_BASIS_RESTRICTION,
+  UK_DEPRECIATION_AUTHORITY_URLS,
+  UK_MAIN_POOL_WDA_BEFORE_APRIL_2026,
+  UK_MAIN_POOL_WDA_FROM_APRIL_2026,
+  UK_SPECIAL_RATE_POOL_WDA,
+  UK_MAIN_POOL_WDA_CHANGE_YEAR,
+  UK_SMALL_POOLS_ANNUAL_LIMIT,
+  UK_FYA_40_START,
+  UK_FULL_EXPENSING_START,
+  UK_SUPER_DEDUCTION_START,
+  UK_SUPER_DEDUCTION_END,
+  ukPeriodYearFraction,
+  ukWdaRate,
+  ukAia,
+  ukAiaOnDate,
+  ukSmallPoolsAllowance,
+  ukCarBand,
+  ukPoolFor,
+  ukFirstYearAllowance,
+  ukCashBasisRestriction,
+  ukEligibility,
+} from './countries/unitedKingdomDepreciation';
+
+export type { UkAiaRow, UkCarBandRow } from './countries/unitedKingdomDepreciation';
+
+// Canada — the CRA's class-based capital cost allowance regime.
+export {
+  CA_DEPRECIATION_RULES,
+  CA_CCA_CLASSES,
+  CA_PASSENGER_VEHICLE_CAP_ROWS,
+  CA_PASSENGER_VEHICLE_CAP_LAST_VERIFIED_YEAR,
+  CA_ZEV_CAP_ROWS,
+  CA_DEPRECIATION_AUTHORITY_URLS,
+  CA_AII_ACQUIRED_AFTER,
+  CA_AII_AVAILABLE_BEFORE_YEAR,
+  CA_AII_PHASE_OUT_FROM_YEAR,
+  CA_CLASS_50_ACQUIRED_AFTER,
+  CA_ZEV_ACQUIRED_AFTER,
+  caClassRow,
+  caClassFor,
+  caFirstYear,
+  caPassengerVehicleCap,
+  caZeroEmissionVehicleCap,
+} from './countries/canadaDepreciation';
+
+export type { CaCcaClassRow, CaVehicleCapRow } from './countries/canadaDepreciation';
+// United States — the IRS's MACRS table regime (Pub 946 tables, §179, bonus, §280F caps, de minimis).
+export {
+  US_DEPRECIATION_RULES,
+  US_PROPERTY_CLASSES,
+  US_MACRS_TABLE_A1,
+  US_MACRS_MID_QUARTER_TABLES,
+  US_SECTION_179_ROWS,
+  US_AUTO_CAP_ROWS,
+  US_DEPRECIATION_AUTHORITY_URLS,
+  US_BONUS_100_ACQUIRED_AFTER,
+  usPropertyClassRow,
+  usPropertyClass,
+  usTablePercent,
+  usConvention,
+  usSection179,
+  usBonusPercent,
+  usAutoCap,
+  usDeMinimis,
+} from './countries/unitedStatesDepreciation';
+
+export type { UsPropertyClassRow } from './countries/unitedStatesDepreciation';
+
+// India — the CBDT's block-of-assets regime (Income-tax Act 2025 s.33, Income-tax Rules 2026 Appendix I).
+export {
+  IN_DEPRECIATION_RULES,
+  IN_BLOCKS,
+  IN_DEPRECIATION_AUTHORITY_URLS,
+  IN_HALF_RATE_UNDER_DAYS,
+  inBlockRow,
+  inBlockFor,
+  inHalfRate,
+  inAdditionalDepreciation,
+} from './countries/indiaDepreciation';
+
+export type { InBlockRow } from './countries/indiaDepreciation';
+
+
+// Singapore — IRAS's write-off elective capital allowances (ss.19/19A elections per asset).
+export {
+  SG_DEPRECIATION_RULES,
+  SG_DEPRECIATION_AUTHORITY_URLS,
+  SG_LOW_VALUE_PER_ITEM_LIMIT,
+  SG_LOW_VALUE_TOTAL_PER_YA,
+  SG_TWO_YEAR_YAS,
+  SG_WORKING_LIFE_ELECTION_FROM_YA,
+  SG_INITIAL_ALLOWANCE_RATE,
+  SG_MOTOR_VEHICLE_WORKING_LIFE,
+  sgEligibility,
+  sgMethodsFor,
+  sgAllowanceForYear,
+  sgLowValueCap,
+} from './countries/singaporeDepreciation';
+
+// Ireland — Revenue's fixed 12.5% straight-line wear and tear (car cost cap by CO₂ band).
+export {
+  IE_DEPRECIATION_RULES,
+  IE_DEPRECIATION_AUTHORITY_URLS,
+  IE_DISPOSAL_BALANCING,
+  IE_WEAR_AND_TEAR_RATE,
+  IE_WEAR_AND_TEAR_YEARS,
+  IE_CAR_SPECIFIED_LIMIT,
+  IE_CAR_HALF_SPECIFIED_LIMIT,
+  IE_CAR_CO2_CATEGORY_A_MAX,
+  IE_CAR_CO2_CATEGORY_B_MAX,
+  IE_CAR_CO2_CATEGORY_C_MAX,
+  IE_CAR_CO2_CATEGORY_D_MAX,
+  IE_CAR_CO2_CATEGORY_E_MAX,
+  IE_CAR_LIMIT_REGIME_CHANGE_DATE,
+  ieAllowableCost,
+  ieCarCo2Category,
+  ieCarLimitRegime,
+  ieWearAndTear,
+} from './countries/irelandDepreciation';
+
+// South Africa — SARS's write-off period regime (IN47 schedule, SL/DV election, day apportionment).
+export {
+  ZA_DEPRECIATION_RULES,
+  ZA_DEPRECIATION_AUTHORITY_URLS,
+  ZA_WRITE_OFF_CATEGORIES,
+  ZA_WRITE_OFF_SOURCE,
+  ZA_SMALL_ITEM_ROWS,
+  ZA_SMALL_ITEM_LIMIT,
+  ZA_SMALL_ITEM_LIMIT_FROM,
+  zaWriteOffPeriod,
+  zaSmallItemThreshold,
+} from './countries/southAfricaDepreciation';
+
+export type { ZaSmallItemRow } from './countries/southAfricaDepreciation';
 
 // ─── Annual reports (lodged separately from the activity statement) ──────────
 export {

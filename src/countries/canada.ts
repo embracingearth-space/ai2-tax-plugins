@@ -8,6 +8,8 @@
  */
 
 import { toCsv } from '../exportUtils';
+import type { DepreciationRules } from '../depreciation';
+import CA_DEPRECIATION_RULES from './canadaDepreciation';
 
 import type {
   TaxFilingPlugin,
@@ -450,6 +452,11 @@ const caPlugin: TaxFilingPlugin = {
         defaultFor: ['transfers', 'loan_principal', 'owner_drawings', 'dividends', 'tax_payments'],
       },
     ];
+  },
+
+  /** The CRA's class-based capital cost allowance regime — see ./canadaDepreciation. */
+  getDepreciationRules(): DepreciationRules {
+    return CA_DEPRECIATION_RULES;
   },
 };
 

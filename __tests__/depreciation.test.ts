@@ -17,6 +17,7 @@ import {
   australiaPlugin,
   newZealandPlugin,
   singaporePlugin,
+  japanPlugin,
   GENERIC_DEPRECIATION_RULES,
   getDepreciationRules,
   AU_DEPRECIATION_RULES,
@@ -34,6 +35,11 @@ import {
   resolveWriteOffRow,
   sortWriteOffRowsNewestFirst,
   type AuWriteOffRow,
+  NZ_DEPRECIATION_RULES,
+  SG_DEPRECIATION_RULES,
+  ZA_DEPRECIATION_RULES,
+  UK_DEPRECIATION_RULES,
+  US_DEPRECIATION_RULES,
 } from '../src';
 
 const au: DepreciationRules = AU_DEPRECIATION_RULES;
@@ -527,8 +533,62 @@ describe('AU instant asset write-off — effective-dated, and null where the ATO
     const r = au.instantAssetWriteOff(new Date(date));
     expect(r.limit).toBe(20000);
     expect(r.verified).toBe(true);
+    // The ATO's wording is "cost less than $20,000" — exactly $20,000 misses.
+    // A host that offers the write-off at exactly the limit is over-claiming.
+    expect(r.boundary).toBe('under');
   });
 
+  it('an unverified year carries no boundary — there is nothing for one to describe', () => {
+    const r = au.instantAssetWriteOff(new Date('2026-07-01'));
+    expect(r.boundary).toBeUndefined();
+  });
+});
+
+describe('write-off boundary — which side of the limit qualifies is country law', () => {
+  const onDate = new Date('2026-06-30');
+
+  it("NZ is inclusive: s EE 38 is 'equal to or less than', so exactly $1,000 qualifies", () => {
+    // The trap this exists for: IRD's summary pages paraphrase the statute as
+    // "less than $1,000", which reads strict and is not. A host trusting the
+    // paraphrase sends a $1,000 asset to depreciation and defers a legitimate
+    // immediate deduction.
+    const r = NZ_DEPRECIATION_RULES.instantAssetWriteOff(onDate);
+    expect(r.limit).toBe(1000);
+    expect(r.boundary).toBe('up_to');
+    expect(r.note).toContain('or less');
+    expect(r.note).toContain('EE 38');
+  });
+
+  it("SG is inclusive: s.19A(10A) is 'no more than $5,000 each'", () => {
+    const r = SG_DEPRECIATION_RULES.instantAssetWriteOff(onDate);
+    expect(r.limit).toBe(5000);
+    expect(r.boundary).toBe('up_to');
+  });
+
+  it('SG before YA 2023 has no verified limit, and so no boundary', () => {
+    const r = SG_DEPRECIATION_RULES.instantAssetWriteOff(new Date('2021-06-30'));
+    expect(r.limit).toBeNull();
+    expect(r.boundary).toBeUndefined();
+  });
+
+  it("ZA is strict: SARS's wording is 'costing less than R7,000'", () => {
+    const r = ZA_DEPRECIATION_RULES.instantAssetWriteOff(onDate);
+    expect(r.limit).toBe(7000);
+    expect(r.boundary).toBe('under');
+  });
+
+  it('UK and US carry NO boundary — their figures are annual aggregates, not per-asset tests', () => {
+    // The AIA is a yearly pot across all qualifying additions (and excludes
+    // cars); §179 is a yearly dollar limit with its own phase-out. Comparing
+    // one asset's cost against either answers a different question, so the
+    // contract is silence: a host must not treat these as per-asset
+    // thresholds just because a number is present.
+    expect(UK_DEPRECIATION_RULES.instantAssetWriteOff(onDate).boundary).toBeUndefined();
+    expect(US_DEPRECIATION_RULES.instantAssetWriteOff(onDate).boundary).toBeUndefined();
+  });
+});
+
+describe('AU instant asset write-off — years the ATO has not published', () => {
   it('2026-27 has no published limit: null, verified false, and a note telling you to confirm it', () => {
     const r = au.instantAssetWriteOff(new Date('2026-07-01'));
     expect(r.limit).toBeNull();
@@ -711,9 +771,12 @@ describe('AU effective lives — the Commissioner\'s Table B, short and sourced'
 
 describe('Generic depreciation rules — every other country', () => {
   it('a country with no rules of its own falls back to the generic set', () => {
-    expect(newZealandPlugin.getDepreciationRules).toBeUndefined();
-    expect(getDepreciationRules(newZealandPlugin)).toBe(GENERIC_DEPRECIATION_RULES);
-    expect(getDepreciationRules(singaporePlugin)).toBe(GENERIC_DEPRECIATION_RULES);
+    expect(japanPlugin.getDepreciationRules).toBeUndefined();
+    expect(getDepreciationRules(japanPlugin)).toBe(GENERIC_DEPRECIATION_RULES);
+    // New Zealand has its own since 2.2.0 — see depreciationNZ.test.ts;
+    // Singapore since the SG/IE/ZA release — see depreciationSG.test.ts.
+    expect(getDepreciationRules(newZealandPlugin).countryCode).toBe('NZ');
+    expect(getDepreciationRules(singaporePlugin).countryCode).toBe('SG');
   });
 
   it('Australia gets its own', () => {

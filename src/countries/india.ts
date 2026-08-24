@@ -9,6 +9,8 @@
  */
 
 import { toCsv } from '../exportUtils';
+import { IN_DEPRECIATION_RULES } from './indiaDepreciation';
+import type { DepreciationRules } from '../depreciation';
 
 import type {
   TaxFilingPlugin,
@@ -581,6 +583,11 @@ const inPlugin: TaxFilingPlugin = {
         defaultFor: ['transfers', 'loan_principal', 'owner_drawings', 'dividends', 'tax_payments'],
       },
     ];
+  },
+
+  /** The CBDT's block-of-assets regime under the Income-tax Act 2025 — see ./indiaDepreciation. */
+  getDepreciationRules(): DepreciationRules {
+    return IN_DEPRECIATION_RULES;
   },
 };
 

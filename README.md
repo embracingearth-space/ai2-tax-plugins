@@ -140,12 +140,13 @@ Private use is not applied to the decline at all: it is computed on the full bas
 
 | Method | Available in | Rate |
 | --- | --- | --- |
-| `prime_cost` | every country | 100% ÷ effective life, applied to cost |
-| `diminishing_value` | every country | 200% ÷ effective life (150% before 10 May 2006), applied to the opening value |
-| `immediate_writeoff` | AU | the whole opening value, in year one, with no day apportionment |
+| `prime_cost` | every country | 100% ÷ effective life, applied to cost — or a published `annualRate` as-is (NZ straight line) |
+| `diminishing_value` | every country | 200% ÷ effective life (150% before 10 May 2006), applied to the opening value — or a published `annualRate` as-is (NZ) |
+| `immediate_writeoff` | AU, NZ, GB, CA, SG, IE, ZA | the whole opening value, in year one, with no day or month apportionment (NZ: a low value asset; SG: the one-year write-offs; IE: the accelerated capital allowance; ZA: a small item under R7,000) |
 | `pool` | AU | 15% in the allocation year, 30% each year after |
+| `pool` | GB | the writing-down allowance rate on the pool's written down value — `annualRate` from `wdaRate()`, or the whole HMRC order through `computePoolPeriod()` |
 
-Australia is the only jurisdiction with rules of its own today. Its effective lives are read from Table B of the Income Tax Assessment (Effective Life of Depreciating Assets) Determination 2025 (F2025L01097), which commenced on 16 September 2025 and replaced the withdrawn TR 2022/1 line of rulings; fifteen common categories ship, each carrying the exact Table B wording it came from. The list is short on purpose — an asset that could not be read straight out of the determination is left out for you to look up or self-assess, because a wrong effective life is a wrong deduction every year for the life of the asset. Everywhere else `effectiveLife()` returns null and `effectiveLifeCategories()` returns an empty list rather than a guess.
+Australia's effective lives are read from Table B of the Income Tax Assessment (Effective Life of Depreciating Assets) Determination 2025 (F2025L01097), which commenced on 16 September 2025 and replaced the withdrawn TR 2022/1 line of rulings; fifteen common categories ship, each carrying the exact Table B wording it came from. The list is short on purpose — an asset that could not be read straight out of the determination is left out for you to look up or self-assess, because a wrong effective life is a wrong deduction every year for the life of the asset. Everywhere else `effectiveLife()` returns null and `effectiveLifeCategories()` returns an empty list rather than a guess.
 
 `instantAssetWriteOff(date)` is effective-dated and stops at 30 June 2026 deliberately. The ATO states $20,000 per asset for the 2023-24, 2024-25 and 2025-26 income years and states nothing at all for 2026-27, so a 2026-27 date comes back as `{ limit: null, verified: false }` with a note asking you to confirm the current limit. $20,000 is not carried forward and the $1,000 statutory reversion is not assumed, because an unverified statutory threshold that looks confident is worse than a blank — nobody checks a number that looks sure of itself. Show the note, not a figure. The related low-pool-balance rule, which deducts the whole pool where the balance before deductions sits under the write-off limit, is exposed as `auSmallBusinessPoolWriteOff()` instead of being applied quietly inside `declineInValue`, and it answers `null` rather than `false` for a date whose limit is unverified.
 
@@ -171,6 +172,92 @@ rules.declineInValue({
 const writeOff = rules.instantAssetWriteOff(new Date('2026-07-01'));
 writeOff.limit;      // null
 writeOff.verified;   // false — render writeOff.note, never a number
+```
+
+### Depreciation regimes
+
+The countries do not share one model, and `rules.regime` says which one a plugin implements so a host can branch instead of printing one country's schedule everywhere. Australia is `effective_life`: the ATO publishes a life in years, the rate is 100% or 200% divided by that life, and a part year is days held over a fixed 365. New Zealand is `rate_per_asset`: Inland Revenue publishes the diminishing value and straight line rate for each asset in IR265, the rate is applied as-is with no multiplier and no life, and a part year is whole months over twelve with a part-month counted as a whole month — bought on 20 May in an April year is eleven months, so the IRD's $10,000 espresso machine at 30% claims $2,750 in year one rather than $3,000, and the rules refuse a days-based input rather than compute an ATO number for an IRD return. The United Kingdom is `pooled_allowance`, where the pool is the unit rather than the asset: HMRC groups plant and machinery into a main pool, a special rate pool and single-asset pools, and the writing-down allowance is a rate on each pool's written down value every accounting period — 18% on the main pool, falling to 14% from 1 April 2026 for Corporation Tax and 6 April 2026 for Income Tax with a day-weighted hybrid rate across a straddling period, and 6% on the special rate pool. The annual investment allowance (£1,000,000 from 1 January 2019, earlier rows effective-dated) and the £1,000 small pools allowance are both pro-rated by period length, nine months being nine twelfths, and the first-year allowances are effective-dated: full expensing and the 50% special-rate allowance for companies from 1 April 2023, the super-deduction for 2021–2023, the 40% allowance on new main-rate plant bought from 1 January 2026 with the remaining 60% written down from the following period, and 100% for new zero-emission cars. Cars are routed to a pool by CO₂ and purchase date from gov.uk's own table, so the same 100 g/km car is main rate in 2019 and special rate in 2026, and a sole trader on the cash basis can claim capital allowances on business cars and nothing else, which is the first line of the UK explainer because for most UK users it is the whole story. `computePoolPeriod` does one pool for one period in HMRC's order — additions, AIA and first-year allowances, disposals capped at cost, balancing charge, small pools allowance or writing-down allowance, closing written down value — and the host replays it period by period. Canada is `class_cca`, the class being the unit: the CRA groups depreciable property into numbered classes, each with a prescribed rate — 4% for class 1 buildings, 20% for class 8 furniture and equipment, 30% for class 10 vehicles, 100% for class 12 tools under $500 and software, 5% for class 14.1 goodwill, 55% for class 50 computers acquired after 18 March 2007, 30% and 40% for the class 54 and 55 zero-emission vehicles — and capital cost allowance is that rate on the class's undepreciated capital cost each year. A passenger vehicle that cost more than the prescribed amount before tax ($30,000 before 2022 rising to $38,000 for 2025, each year's figure read from the page and 2026 unverified because the page does not list it) goes in class 10.1 on its own with its cost capped, no recapture or terminal loss, and the half-year rule on sale. In the year of purchase the half-year rule normally allows CCA on half the net additions; the accelerated investment incentive, for property acquired after 20 November 2018 and available for use before 2028, suspends that rule and applies the rate to one-and-a-half times the net addition before 2024 and to the whole net addition with nothing added for 2024 to 2027, which is the page's own wording for the phase-out, while a zero-emission vehicle gets 100%, 75% or 55% of its cost in the first year by the year it becomes available for use. Claiming CCA is optional, any amount from zero to the maximum, and a short first fiscal period prorates the claim by days over 365. `computeClassPeriod` does one class for one year in the order of T2125 Area A — opening UCC, additions, dispositions at the lesser of proceeds and capital cost, recapture where the balance goes negative, terminal loss where the class empties, the first-year adjustment with dispositions offsetting the non-eligible additions first, CCA capped at the balance, closing UCC — and the host replays it year by year. Everything the classes page marks "under proposed changes" (a reinstated 100% for zero-emission vehicles acquired after 2024, a 100% first-year deduction for class 50 computers acquired after 15 April 2024) ships as a `verified: false` note beside the enacted figure, never as the rate.
+
+The United States is `macrs`, the one regime where the authority prints the schedule itself: Publication 946 assigns each asset a recovery period from Table B-1 — five years for computers, cars and trucks, seven for office furniture, fifteen for land improvements — a convention, and then publishes the exact percentage of the basis deductible each year, so the module ships Tables A-1 through A-5 verbatim rather than re-deriving them from the declining-balance arithmetic they encode. The convention is half-year unless more than 40% of the year's depreciable bases were placed in service in the fourth quarter, in which case every asset takes the mid-quarter table for its own quarter, and the bases for that test reflect the §179 reduction but not bonus. In practice most American small businesses never reach the tables at all, which is why the explainer leads with the ways out: the de minimis safe harbor expenses anything up to $2,500 per item or invoice ($5,000 with an applicable financial statement), the §179 election covers up to $2,560,000 for tax years beginning in 2026 ($2,500,000 for 2025), and the special depreciation allowance is back at 100% for property acquired and placed in service after 19 January 2025 — a cliff keyed on the acquisition date, because property acquired before 20 January 2025 keeps the old 40% phase-down figure for 2025 and any other combination comes back unverified rather than guessed. What survives all three lands on the schedule, and a passenger automobile stays there regardless, because the §280F caps ration its deduction to $20,300 in the first year for 2026 with bonus ($12,300 without) no matter how generous the elections were; `computeMacrsYear` runs one asset for one year in that order — §179 off the cost, bonus off what is left, the table figure on the remainder, the cap as a ceiling — and the host replays it year by year. India is `block_wdv` under the law in force since 1 April 2026 — section 33 of the Income-tax Act 2025 with the rates in Appendix I of the Income-tax Rules 2026, the 1961 Act and 1962 Rules having ceased on 31 March 2026 — and the block is the unit the way the Canadian class is: assets join a block at actual cost, sale proceeds come off the block rather than producing a per-asset profit or loss, and depreciation is the Appendix I rate on the block's written down value — 5% for residential buildings, 10% for other buildings and furniture, 15% for machinery and cars, 30% for hire vehicles, 40% for computers and software, 25% for the intangibles block, goodwill depreciating not at all. An asset acquired during the tax year (1 April to 31 March) and put to use for fewer than 180 days earns half the rate in that first year and the full rate thereafter, a manufacturer's new plant and machinery earns an additional 20% of cost in the year it is installed (10% now and 10% next year when used under 180 days, and never for office appliances or road transport vehicles), and proceeds that swallow the block — or a block left with nothing in it — end depreciation for the year and raise a `shortTermCapitalGainReview` flag, because the resulting gain or loss belongs on the return, not in a depreciation module. `computeBlockPeriod` does one block for one year in that order and the host replays it.
+Three more regimes are per-asset schedules again, each with arithmetic of its own. Singapore is `write_off_elective`: book depreciation is not deductible at all, capital allowances replace it, and the write-off method is elected per asset under sections 19 and 19A of the Income Tax Act 1947 — one-third of cost a year for three years, 100% in one year for computers and prescribed automation equipment, 100% in one year for a low-value asset costing $5,000 or less with $30,000 of such claims allowed per year of assessment across assets (the total runs across the register, so `lowValueCap(ya)` publishes both limits and the host enforces the second), a 75%/25% two-year write-off that existed only for the basis periods of YAs 2021, 2022 and 2024, or the working life of section 19, which pays an initial allowance of 20% of cost and spreads the remaining 80% over the streamlined election of 6 or 12 years (16 for a 16-year asset) available from YA 2023. `methodsFor(asset, ya)` lists the elections an asset actually has, `allowanceForYear` computes one year of one method with the final year absorbing any stranded cent, nothing is ever apportioned by days or months because an allowance belongs to a year of assessment whole, and an S-plated private passenger car gets nothing at all, which `eligibility(asset)` says in IRAS's own words. Ireland is `straight_line_fixed`, the simplest of them: one statutory rate for all plant and machinery, wear and tear at 12.5% of the allowable cost a year over 8 years, applied by `declineInValue` whatever rate the caller passed because section 284 leaves no rate to choose. The subtleties are the conditions around it — the asset must be in use for the trade at the end of the accounting period or the period claims nothing, which is why `inUseAtPeriodEnd` is a required field and a required input to `wearAndTear()`, a short accounting period pro-rates by months, and a car's allowable cost is banded by CO₂ against the €24,000 specified amount under sections 380K and 380L TCA 1997, deemed €24,000 in both directions for categories A and B up to 140 g/km, cut to the lesser of €12,000 and half the cost for category C from 141 to 155, and nil for D, E and F above that or where the emissions cannot be verified at all, in which case the car is deemed Category F. Section 33 Finance Act 2024 moves every rung down one category for expenditure incurred from 1 January 2027 — only 120 g/km and under keeps the full €24,000 then — so `allowableCost` takes the date the expenditure was incurred and returns which of the two regimes it applied. The six categories A to F are the ones section 14 Finance Act 2020 substituted for the earlier A to G table, which is why Tax and Duty Manual Part 11-00-01, stamped "last reviewed November 2019" and still describing 155 and 190 g/km thresholds, is not the source here: the statute as amended is. Energy-efficient equipment on the SEAI Triple E register claims 100% in year one instead, and disposals ship flagged rather than modelled: `IE_DISPOSAL_BALANCING` is `verified: false` until the Revenue mechanics are read. South Africa is `write_off_period`: SARS publishes a period in years per asset in the schedule to Interpretation Note 47 — a personal computer is 3 years, a tablet or cellphone 2, furniture 6, a passenger car 5, a standby generator 15 — and the taxpayer elects straight line or diminishing value over it on the cash cost excluding finance charges. Straight line at one over the period is the default and is apportioned by days for a part year, so a R10,000 computer brought into use for 100 days claims R913.24; diminishing value is allowed on the income tax value but SARS publishes no DV rate, so the rules demand your own `annualRate` rather than inventing one with another country's multiplier. An item costing less than R7,000 writes off in full in the year it is brought into use, for acquisitions on or after 1 March 2009 with a set bought together counting as one item, and the section 12C and 12E regimes that replace the wear-and-tear allowance for manufacturing plant and small business corporations ship as unverified notes, never as rates.
+
+Every rules object carries an `explainer()` in the authority's own vocabulary, with `readMore` links to official pages only and a `vocabulary` that drives the schedule's column labels, so the carried value prints as "Adjustable value" for the ATO and "Adjusted tax value" for Inland Revenue. `firstYearConcessions(date)` lists the concessions in force on a date with their `verified` state, and `extraAssetFields()` lists what the register must collect beyond the common fields — New Zealand needs `isNewAsset`, because Investment Boost (20% of the cost as an immediate expense for new assets bought from 22 May 2025, the remaining 80% depreciated) applies to new assets only and an unanswered field is not new. The low value asset threshold is effective-dated the way the Australian write-off is, $1,000 from 17 March 2021 with the temporary $5,000 window and the earlier $500 behind it, and seventeen IR265 rates ship with their page, heading and asset description as printed.
+
+```ts
+import {
+  getPluginForCountry,
+  getDepreciationRules,
+  nzWholeMonthsUsed,
+  nzInvestmentBoostSplit,
+  type RatePerAssetRules,
+} from '@ai2/tax-plugins';
+
+const nz = getDepreciationRules(getPluginForCountry('NZ')) as RatePerAssetRules;
+nz.regime;                               // 'rate_per_asset'
+nz.explainer().vocabulary.writtenDown;   // 'Adjusted tax value'
+
+const rate = nz.rateFor('coffee_maker');   // { dv: 0.3, sl: 0.21, source: 'IR265 … p.20 …' }
+const split = nzInvestmentBoostSplit({ cost: 10000, acquiredOn: '2025-06-01', isNewAsset: true });
+// → { applied: true, expensedNow: 2000, depreciableCost: 8000, percent: 20, verified: true }
+
+nz.declineInValue({
+  method: 'diminishing_value',
+  cost: split.depreciableCost,
+  openingAdjustableValue: split.depreciableCost,
+  annualRate: rate!.dv,
+  partYear: { kind: 'months', monthsUsed: nzWholeMonthsUsed('2025-06-01', '2026-03-31') }, // 10
+}); // → { declineInValue: 2000, closingAdjustableValue: 6000, rate: 0.3 }
+```
+
+```ts
+import { getPluginForCountry, getDepreciationRules, computeClassPeriod, type ClassCcaRules } from '@ai2/tax-plugins';
+
+const ca = getDepreciationRules(getPluginForCountry('CA')) as ClassCcaRules;
+ca.regime;                               // 'class_cca'
+ca.explainer().vocabulary.writtenDown;   // 'Undepreciated capital cost'
+
+const laptop = { cost: 3000, kind: 'computer' as const, acquiredDate: '2026-02-01' };
+const cls = ca.classFor(laptop);         // { cls: '50', rate: 0.55, verified: true, source: 'https://www.canada.ca/…' }
+const fy = ca.firstYear(laptop, '2026-02-01');
+// → { halfYear: false, aiiMultiplier: 1, baseMultiplier: 1, verified: true, note: 'Accelerated investment incentive, phase-out period: …' }
+
+computeClassPeriod({ openingUcc: 0, rate: cls.rate!, additions: [{ cost: 3000, baseMultiplier: fy.baseMultiplier }] });
+// → { baseAmount: 3000, maxCca: 1650, ccaClaimed: 1650, closingUcc: 1350, recapture: 0, terminalLoss: 0, … }
+
+ca.passengerVehicleCap(2025);            // { cap: 38000, verified: true, … }
+ca.passengerVehicleCap(2026);            // { cap: null, verified: false, note: '… not on the CRA's classes page yet …' }
+```
+
+```ts
+import { getPluginForCountry, getDepreciationRules, computeMacrsYear, type MacrsRules } from '@ai2/tax-plugins';
+
+const us = getDepreciationRules(getPluginForCountry('US')) as MacrsRules;
+us.regime;                               // 'macrs'
+
+const desk = us.propertyClass({ cost: 10000, kind: 'office_furniture' });
+// → { assetClass: '00.11', recoveryYears: 7, verified: true, source: 'https://www.irs.gov/… Table B-1' }
+const pct = us.tablePercent(7, 1, 'half_year');   // { percent: 14.29, table: 'Table A-1, Publication 946 (2025)', verified: true }
+computeMacrsYear({ cost: 10000, yearIndex: 1, tablePercent: pct.percent! });
+// → { deduction: 1429, tableDepreciation: 1429, depreciableBasis: 10000, … }
+
+us.bonusPercent('2026-03-01', '2026-03-15');      // { percent: 100, verified: true, … }
+us.section179(2026);                              // { limit: 2560000, phaseOutThreshold: 4090000, suvCap: 32000, verified: true }
+us.autoCap(2026, true);                           // { caps: [20300, 19800, 11900, 7160], verified: true, … }
+```
+
+```ts
+import { getPluginForCountry, getDepreciationRules, computeBlockPeriod, type BlockWdvRules } from '@ai2/tax-plugins';
+
+const ind = getDepreciationRules(getPluginForCountry('IN')) as BlockWdvRules;
+ind.regime;                              // 'block_wdv'
+ind.explainer().vocabulary.writtenDown;  // 'Written down value of the block'
+
+const block = ind.blockFor({ cost: 100000, kind: 'computer' });
+// → { block: 'computers_software', rate: 0.4, verified: true, source: 'Income-tax Rules 2026, Appendix I (rule 25), Part A, item III(5)' }
+ind.halfRate(100);                       // { half: true, factor: 0.5, note: '… section 33(4) … 50% of the prescribed rate …' }
+
+computeBlockPeriod({ openingWdv: 0, rate: block.rate!, additions: [{ cost: 100000, putToUseDays: 100 }] });
+// → { depreciation: 20000, closingWdv: 80000, shortTermCapitalGainReview: false, … }
 ```
 
 Annual reports are the ones lodged separately from the activity statement, and Australia declares the only one so far: the Taxable payments annual report, due 28 August for the financial year just ended. `getAnnualReports()` is absent on every other plugin, so a country-aware UI simply does not show the report.
