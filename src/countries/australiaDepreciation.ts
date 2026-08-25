@@ -210,31 +210,23 @@ export const AU_INSTANT_ASSET_WRITE_OFF_ROWS: AuWriteOffRow[] = [
     // offer at all (a real, if small, missed deduction) and a $15,000 asset
     // got no warning (an over-claim under the law as it currently stands).
     //
-    // The $20,000 permanent threshold announced in the 2026-27 Budget from
-    // 1 July 2026 is NOT YET LAW — the enabling bill was still before
-    // Parliament as at 2026-08-25, and the ATO's own new-legislation page
-    // says so. It is carried in `proposed`, never in `limit`: this package
-    // does not report an announcement as a rate. embracingearth.space
+    // PERMANENT, and law. Treasury Laws Amendment (Tax Reform No. 2) Bill 2026
+    // passed both Houses on 19 August 2026 and makes the $20,000 threshold
+    // permanent from 1 July 2026 — it is no longer a temporary increase with a
+    // reversion date, so there is no successor row to add.
+    //
+    // The threshold is "less than $20,000", so `boundary: 'under'`: an asset at
+    // exactly $20,000 does NOT qualify and goes to the small business pool.
     effectiveFrom: '2026-07-01',
-    limit: 1000,
+    limit: 20000,
     verified: true,
     boundary: 'under',
     note:
-      '$1,000 per asset — the standing threshold under the simplified depreciation rules, ' +
-      'which is what applies once a temporary increase ends. The $20,000 threshold for ' +
-      '2023-24 to 2025-26 ended on 30 June 2026. A permanent $20,000 threshold from ' +
-      '1 July 2026 was announced in the 2026-27 Budget but is NOT YET LAW, so it cannot be ' +
-      'relied on for an asset you are claiming now. Check the progress of the enabling ' +
-      'legislation with the ATO or your registered tax agent before you write off anything ' +
-      'above $1,000.',
-    proposed: {
-      limit: 20000,
-      note:
-        'Announced in the 2026-27 Federal Budget: a permanent $20,000 instant asset write-off ' +
-        'from 1 July 2026 for small businesses with an aggregated turnover under $10 million. ' +
-        'Before Parliament and not yet law as at 25 August 2026 — if it passes, assets costing ' +
-        'less than $20,000 first used or installed ready for use from 1 July 2026 would qualify.',
-    },
+      '$20,000 per asset, permanently, for assets first used or installed ready for use from ' +
+      '1 July 2026. Your business needs an aggregated annual turnover under $10 million. The ' +
+      'limit is per asset, so several items can each be written off in full. An asset costing ' +
+      '$20,000 or more cannot be written off immediately — it goes into the small business ' +
+      'pool and is deducted at 15% in the first year and 30% each year after.',
   },
   {
     effectiveFrom: '2023-07-01',

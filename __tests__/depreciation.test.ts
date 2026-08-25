@@ -505,16 +505,14 @@ describe('AU depreciation — the decline never exceeds the opening value', () =
     expect(unknown.verified).toBe(false);
   });
 
-  it('answers the pool question against the 2026-27 standing $1,000', () => {
-    // The flip side of correcting that year: a pool balance under the
-    // legislated threshold IS written off in full, and saying "unknown"
-    // there was itself a missed deduction.
-    const under = auSmallBusinessPoolWriteOff(900, '2026-09-01');
+  it('answers the pool question against the 2026-27 legislated $20,000', () => {
+    // A pool balance under the threshold is written off in full.
+    const under = auSmallBusinessPoolWriteOff(4_500, '2026-09-01');
     expect(under.deductWholeBalance).toBe(true);
-    expect(under.amount).toBe(900);
-    expect(under.limit).toBe(1000);
+    expect(under.amount).toBe(4_500);
+    expect(under.limit).toBe(20_000);
 
-    const over = auSmallBusinessPoolWriteOff(4500, '2026-09-01');
+    const over = auSmallBusinessPoolWriteOff(25_000, '2026-09-01');
     expect(over.deductWholeBalance).toBe(false);
     expect(over.amount).toBe(0);
   });
@@ -612,34 +610,38 @@ describe('write-off boundary — which side of the limit qualifies is country la
   });
 });
 
-describe('AU instant asset write-off — the 2026-27 legislated default', () => {
-  it('reverts to the standing $1,000 once the temporary $20,000 ends', () => {
-    // This used to report null/unverified — "not published". Wrong in both
-    // directions: a $900 asset got no offer (a real missed deduction) and a
-    // $15,000 one got no warning (an over-claim under the law as it stands).
+describe('AU instant asset write-off — the permanent $20,000', () => {
+  // Treasury Laws Amendment (Tax Reform No. 2) Bill 2026 passed both Houses on
+  // 19 August 2026 and makes the $20,000 threshold PERMANENT from 1 July 2026.
+  // These tests were briefly written the other way round, against the bill as
+  // it stood before it passed, which had the package telling small businesses
+  // their threshold was $1,000 — a twentyfold understatement of what they can
+  // actually write off.
+  it('is $20,000 from 1 July 2026, verified', () => {
     const r = au.instantAssetWriteOff(new Date('2026-07-01'));
-    expect(r.limit).toBe(1000);
+    expect(r.limit).toBe(20_000);
     expect(r.verified).toBe(true);
-    expect(r.boundary).toBe('under');
   });
 
-  it('carries the announced $20,000 as PROPOSED, never as the limit', () => {
-    // A budget announcement is not a rate. The bill can lapse, change, or
-    // commence from another date; reporting it as `limit` would have every
-    // host claiming against a law that does not exist.
-    const r = au.instantAssetWriteOff(new Date('2026-07-01'));
-    expect(r.proposed?.limit).toBe(20000);
-    expect(r.proposed?.note).toMatch(/not yet law/i);
-    // The relied-upon figure stays $1,000 — the two never merge.
-    expect(r.limit).toBe(1000);
-    // And the main note says plainly that the $20,000 cannot be relied on.
-    expect(r.note).toMatch(/NOT YET LAW/i);
+  it('excludes an asset at exactly $20,000 — the threshold is "less than"', () => {
+    // The boundary is the whole difference between a deduction and a pool
+    // entry for an asset priced right on it.
+    expect(au.instantAssetWriteOff(new Date('2026-07-01')).boundary).toBe('under');
   });
 
-  it('keeps the $1,000 default well into 2026-27 — $20,000 does not carry forward', () => {
-    const r = au.instantAssetWriteOff(new Date('2027-03-01'));
-    expect(r.limit).toBe(1000);
-    expect(r.verified).toBe(true);
+  it('carries no `proposed` figure, because it is law', () => {
+    const r = au.instantAssetWriteOff(new Date('2026-07-01'));
+    expect(r.proposed).toBeUndefined();
+    expect(r.note).not.toMatch(/not yet law/i);
+  });
+
+  it('is permanent — it still applies deep into later years', () => {
+    // A temporary threshold needs a successor row; a permanent one must not
+    // silently expire into whatever row sits below it.
+    for (const date of ['2027-03-01', '2029-01-01', '2035-06-30']) {
+      const r = au.instantAssetWriteOff(new Date(date));
+      expect({ date, limit: r.limit }).toEqual({ date, limit: 20_000 });
+    }
   });
 
   it('leaves the 2025-26 year untouched at $20,000', () => {
