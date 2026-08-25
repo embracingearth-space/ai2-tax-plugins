@@ -7,14 +7,19 @@
  * plugin disagrees with the ATO — do not "fix" the test.
  *
  * The instant-asset-write-off block is an honesty test, not an arithmetic one.
- * $20,000 is law for 2023-24 to 2025-26 and ENDED on 30 June 2026. From
- * 1 July 2026 the standing legislated threshold applies — $1,000 — and the
- * permanent $20,000 announced in the 2026-27 Budget is before Parliament and
- * NOT YET LAW. So a 2026-27 date must come back $1,000, with the announcement
- * carried in `proposed` and never in `limit`. A test that passes with $20,000
- * as the 2026-27 limit is a test that lets an unenacted number reach a tax
- * return; one that passes with null is a test that hides a real $1,000
- * deduction and suppresses the warning on everything above it.
+ * $20,000 is law for 2023-24 to 2025-26, and PERMANENT from 1 July 2026:
+ * Treasury Laws Amendment (Tax Reform No. 2) Bill 2026 passed both Houses on
+ * 19 August 2026. So a 2026-27 date must come back $20,000, verified, with no
+ * `proposed` figure beside it — and so must 2029 and 2035, because a
+ * permanent threshold that silently expires into the row beneath it is the
+ * failure this ledger is shaped to prevent.
+ *
+ * This block was briefly written the other way round, against the Bill as it
+ * stood before it passed, and had the package reporting $1,000 — a twentyfold
+ * understatement. The `proposed` field it introduced is still right and still
+ * used; it simply does not apply to THIS row. A test that passes with $1,000
+ * as the 2026-27 limit is a test that hides nineteen thousand dollars of
+ * deduction; one that passes with null hides all of it.
  */
 
 import {
@@ -498,7 +503,7 @@ describe('AU depreciation — the decline never exceeds the opening value', () =
     // Temporary full expensing (Oct 2020 - Jun 2023) carries no ordinary
     // threshold, so the pool question genuinely has no answer there. This
     // used to use a 2026-27 date, which stopped being unverified once that
-    // year was corrected to its standing $1,000 legislated default.
+    // year resolved to the legislated permanent $20,000.
     const unknown = auSmallBusinessPoolWriteOff(900, '2022-01-01');
     expect(unknown.deductWholeBalance).toBeNull();
     expect(unknown.amount).toBeNull();
@@ -625,8 +630,18 @@ describe('AU instant asset write-off — the permanent $20,000', () => {
 
   it('excludes an asset at exactly $20,000 — the threshold is "less than"', () => {
     // The boundary is the whole difference between a deduction and a pool
-    // entry for an asset priced right on it.
+    // entry for an asset priced right on it. Asserting the FLAG alone would
+    // pass even if the production comparison were `<=`, so the equality case
+    // is exercised through the arithmetic that actually consumes it.
     expect(au.instantAssetWriteOff(new Date('2026-07-01')).boundary).toBe('under');
+
+    const exactly = auSmallBusinessPoolWriteOff(20_000, '2026-09-01');
+    expect(exactly.deductWholeBalance).toBe(false);
+    expect(exactly.amount).toBe(0);
+
+    // And a cent under it does qualify — the pair is what pins the boundary.
+    const justUnder = auSmallBusinessPoolWriteOff(19_999.99, '2026-09-01');
+    expect(justUnder.deductWholeBalance).toBe(true);
   });
 
   it('carries no `proposed` figure, because it is law', () => {

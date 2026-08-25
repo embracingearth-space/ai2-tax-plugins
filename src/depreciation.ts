@@ -328,10 +328,10 @@ export interface InstantAssetWriteOffInfo {
    * claiming against a law that does not exist.
    *
    * It is published rather than dropped because the gap matters to the user:
-   * knowing that a $20,000 threshold is before Parliament is what tells them
-   * to check timing, or to ask their agent, instead of assuming last year's
+   * knowing that a higher threshold is before Parliament is what tells them to
+   * check timing, or to ask their agent, instead of assuming last year's
    * figure rolled over. A host should render it as pending — never as the
-   * threshold, and never added to it. embracingearth.space
+   * threshold, and never added to it.
    */
   proposed?: {
     /** The announced figure, or null where the announcement carries no number. */
