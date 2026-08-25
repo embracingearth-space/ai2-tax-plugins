@@ -648,6 +648,17 @@ export interface UsAssetInput {
 export interface UsPropertyClassAssignment {
   /** The GDS recovery period in years, or null where the class is not recorded here. */
   recoveryYears: number | null;
+  /**
+   * The ALTERNATIVE depreciation system recovery period in years, or null
+   * alongside `recoveryYears`.
+   *
+   * Never a copy of the GDS figure. Property that lands on ADS — listed
+   * property used 50% or less for business under section 280F(b)(1), or a
+   * section 168(g) election — writes off over THIS period, and a trailer is
+   * five years under GDS and six under ADS. A host that substitutes the GDS
+   * period there claims too much every year.
+   */
+  adsRecoveryYears: number | null;
   /** The Table B-1 asset class ('00.12'), or null where none applies. */
   assetClass: string | null;
   label: string;
