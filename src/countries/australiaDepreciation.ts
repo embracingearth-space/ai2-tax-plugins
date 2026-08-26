@@ -210,23 +210,49 @@ export const AU_INSTANT_ASSET_WRITE_OFF_ROWS: AuWriteOffRow[] = [
     // offer at all (a real, if small, missed deduction) and a $15,000 asset
     // got no warning (an over-claim under the law as it currently stands).
     //
-    // PERMANENT, and law. Treasury Laws Amendment (Tax Reform No. 2) Bill 2026
-    // passed both Houses on 19 August 2026 and makes the $20,000 threshold
-    // permanent from 1 July 2026 — it is no longer a temporary increase with a
-    // reversion date, so there is no successor row to add.
+    // The permanent $20,000 threshold is NOT LAW YET, and passage is not
+    // assent. Treasury Laws Amendment (Tax Reform No. 2) Bill 2026 passed both
+    // Houses on 19 August 2026, but as at 26 August 2026 it had not received
+    // Royal Assent: no corresponding Act appears on the Federal Register of
+    // Legislation. That check was run against a control so the absence means
+    // something — the register returns "Treasury Laws Amendment (Tax Reform
+    // No. 1) Act 2026" (No. 49, 2026) for the sibling bill, and returns nothing
+    // at all for No. 2.
     //
-    // The threshold is "less than $20,000", so `boundary: 'under'`: an asset at
-    // exactly $20,000 does NOT qualify and goes to the small business pool.
+    // So the figure belongs in `proposed`, never in `limit`: `limit` carries
+    // only what a taxpayer can rely on today. Reporting $20,000 as verified law
+    // would have every host claiming against an Act that does not exist, and of
+    // the two ways to be wrong here the over-claim is the expensive one — the
+    // ATO penalises a shortfall, whereas an under-claim can be amended.
+    //
+    // WHEN ASSENT IS CONFIRMED: set limit to 20000, drop `proposed`, and update
+    // the note. Commencement is already 1 July 2026, so this row still needs no
+    // successor. Re-check with:
+    //   https://api.prod.legislation.gov.au/v1/titles?$filter=contains(name,'Tax Reform No. 2')
+    //
+    // The standing threshold is "less than $1,000", so `boundary: 'under'`.
     effectiveFrom: '2026-07-01',
-    limit: 20000,
+    limit: 1000,
     verified: true,
     boundary: 'under',
     note:
-      '$20,000 per asset, permanently, for assets first used or installed ready for use from ' +
-      '1 July 2026. Your business needs an aggregated annual turnover under $10 million. The ' +
-      'limit is per asset, so several items can each be written off in full. An asset costing ' +
-      '$20,000 or more cannot be written off immediately — it goes into the small business ' +
-      'pool and is deducted at 15% in the first year and 30% each year after.',
+      '$1,000 per asset — the standing threshold under the simplified depreciation rules, ' +
+      'which is what applies once a temporary increase ends. The $20,000 threshold for ' +
+      '2023-24 to 2025-26 ended on 30 June 2026. A permanent $20,000 threshold from ' +
+      '1 July 2026 passed both Houses of Parliament on 19 August 2026 but had not received ' +
+      'Royal Assent as at 26 August 2026, so it is not yet law and cannot be relied on for an ' +
+      'asset you are claiming now. Check whether it has since become law with the ATO or your ' +
+      'registered tax agent before writing off anything above $1,000.',
+    proposed: {
+      limit: 20000,
+      note:
+        'A permanent $20,000 instant asset write-off from 1 July 2026, per asset, for small ' +
+        'businesses with an aggregated annual turnover under $10 million. Treasury Laws ' +
+        'Amendment (Tax Reform No. 2) Bill 2026 passed both Houses on 19 August 2026 and was ' +
+        'awaiting Royal Assent as at 26 August 2026. Once it is law, assets costing less than ' +
+        '$20,000 first used or installed ready for use from 1 July 2026 would qualify, and ' +
+        'an asset at exactly $20,000 would not.',
+    },
   },
   {
     effectiveFrom: '2023-07-01',
