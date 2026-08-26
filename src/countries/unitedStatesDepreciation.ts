@@ -99,6 +99,18 @@ export interface UsPropertyClassRow {
   label: string;
   /** GDS (MACRS) recovery period in years — the column the percentage tables key on. */
   recoveryYears: number;
+  /**
+   * The ALTERNATIVE depreciation system recovery period in years, from the
+   * same Rev. Proc. 87-56 row.
+   *
+   * It is not a copy of the GDS period and must not be defaulted to one. An
+   * automobile and a light truck are five years under both, but a trailer and
+   * a heavy truck are five under GDS and SIX under ADS. Anything that lands on
+   * ADS — listed property used 50% or less for business, under section
+   * 280F(b)(1), and an election under section 168(g) — writes off over THIS
+   * period, and using the shorter GDS figure there claims too much every year.
+   */
+  adsRecoveryYears: number;
   verified: true;
   note?: string;
 }
@@ -110,14 +122,14 @@ export interface UsPropertyClassRow {
  * unverified rather than guessed.
  */
 export const US_PROPERTY_CLASSES: readonly UsPropertyClassRow[] = [
-  { assetClass: '00.11', label: 'Office furniture, fixtures and equipment (7-year)', recoveryYears: 7, verified: true },
-  { assetClass: '00.12', label: 'Information systems — computers and peripheral equipment (5-year)', recoveryYears: 5, verified: true },
-  { assetClass: '00.13', label: 'Data handling equipment, except computers (5-year)', recoveryYears: 5, verified: true },
-  { assetClass: '00.22', label: 'Automobiles, taxis (5-year)', recoveryYears: 5, verified: true },
-  { assetClass: '00.241', label: 'Light general purpose trucks — under 13,000 pounds (5-year)', recoveryYears: 5, verified: true },
-  { assetClass: '00.242', label: 'Heavy general purpose trucks — 13,000 pounds or more (5-year)', recoveryYears: 5, verified: true },
-  { assetClass: '00.27', label: 'Trailers and trailer-mounted containers (5-year)', recoveryYears: 5, verified: true },
-  { assetClass: '00.3', label: 'Land improvements (15-year)', recoveryYears: 15, verified: true },
+  { assetClass: '00.11', label: 'Office furniture, fixtures and equipment (7-year)', recoveryYears: 7, adsRecoveryYears: 10, verified: true },
+  { assetClass: '00.12', label: 'Information systems — computers and peripheral equipment (5-year)', recoveryYears: 5, adsRecoveryYears: 5, verified: true },
+  { assetClass: '00.13', label: 'Data handling equipment, except computers (5-year)', recoveryYears: 5, adsRecoveryYears: 6, verified: true },
+  { assetClass: '00.22', label: 'Automobiles, taxis (5-year)', recoveryYears: 5, adsRecoveryYears: 5, verified: true },
+  { assetClass: '00.241', label: 'Light general purpose trucks — under 13,000 pounds (5-year)', recoveryYears: 5, adsRecoveryYears: 5, verified: true },
+  { assetClass: '00.242', label: 'Heavy general purpose trucks — 13,000 pounds or more (5-year)', recoveryYears: 5, adsRecoveryYears: 6, verified: true },
+  { assetClass: '00.27', label: 'Trailers and trailer-mounted containers (5-year)', recoveryYears: 5, adsRecoveryYears: 6, verified: true },
+  { assetClass: '00.3', label: 'Land improvements (15-year)', recoveryYears: 15, adsRecoveryYears: 20, verified: true },
 ];
 
 const CLASS_BY_KEY: ReadonlyMap<string, UsPropertyClassRow> = new Map(
@@ -143,6 +155,7 @@ const KIND_TO_CLASS: Readonly<Record<string, string>> = {
 function assignment(row: UsPropertyClassRow, verified = true, note?: string): UsPropertyClassAssignment {
   return {
     recoveryYears: row.recoveryYears,
+    adsRecoveryYears: row.adsRecoveryYears,
     assetClass: row.assetClass,
     label: row.label,
     source: `${IRS_P946} — Publication 946 (2025), Table B-1`,
@@ -165,6 +178,7 @@ export function usPropertyClass(asset: UsAssetInput): UsPropertyClassAssignment 
     if (row) return assignment(row);
     return {
       recoveryYears: null,
+      adsRecoveryYears: null,
       assetClass: String(asset.assetClass).trim(),
       label: `Asset class ${String(asset.assetClass).trim()}`,
       source: `${IRS_P946} — Publication 946 (2025), Table B-1`,
@@ -181,6 +195,9 @@ export function usPropertyClass(asset: UsAssetInput): UsPropertyClassAssignment 
 
   return {
     recoveryYears: 7,
+    // Section 168(g)(2)(C)(iii): property with no class life is twelve years
+    // under the alternative depreciation system, not seven.
+    adsRecoveryYears: 12,
     assetClass: null,
     label: '7-year property — no class life',
     source: `${IRS_P946} — Publication 946 (2025), chapter 4, "Which Property Class Applies"`,
