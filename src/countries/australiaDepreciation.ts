@@ -199,13 +199,60 @@ export interface AuWriteOffRow extends InstantAssetWriteOffInfo {
  */
 export const AU_INSTANT_ASSET_WRITE_OFF_ROWS: AuWriteOffRow[] = [
   {
+    // 2026-27: THE LEGISLATED FIGURE IS $1,000, and it is not "unpublished".
+    //
+    // This row used to read `limit: null, verified: false` — "the ATO has not
+    // published a limit". That was wrong in both directions. There IS a
+    // standing legislated threshold: absent a temporary increase, the
+    // simplified depreciation rules write off assets costing less than
+    // $1,000, and the $20,000 row above was one of those temporary increases,
+    // which ended 30 June 2026. Reporting null meant a $900 asset got no
+    // offer at all (a real, if small, missed deduction) and a $15,000 asset
+    // got no warning (an over-claim under the law as it currently stands).
+    //
+    // The permanent $20,000 threshold is NOT LAW YET, and passage is not
+    // assent. Treasury Laws Amendment (Tax Reform No. 2) Bill 2026 passed both
+    // Houses on 19 August 2026, but as at 26 August 2026 it had not received
+    // Royal Assent: no corresponding Act appears on the Federal Register of
+    // Legislation. That check was run against a control so the absence means
+    // something — the register returns "Treasury Laws Amendment (Tax Reform
+    // No. 1) Act 2026" (No. 49, 2026) for the sibling bill, and returns nothing
+    // at all for No. 2.
+    //
+    // So the figure belongs in `proposed`, never in `limit`: `limit` carries
+    // only what a taxpayer can rely on today. Reporting $20,000 as verified law
+    // would have every host claiming against an Act that does not exist, and of
+    // the two ways to be wrong here the over-claim is the expensive one — the
+    // ATO penalises a shortfall, whereas an under-claim can be amended.
+    //
+    // WHEN ASSENT IS CONFIRMED: set limit to 20000, drop `proposed`, and update
+    // the note. Commencement is already 1 July 2026, so this row still needs no
+    // successor. Re-check with:
+    //   https://api.prod.legislation.gov.au/v1/titles?$filter=contains(name,'Tax Reform No. 2')
+    //
+    // The standing threshold is "less than $1,000", so `boundary: 'under'`.
     effectiveFrom: '2026-07-01',
-    limit: null,
-    verified: false,
+    limit: 1000,
+    verified: true,
+    boundary: 'under',
     note:
-      'The ATO has not published an instant asset write-off limit for 2026-27 or later. ' +
-      'Confirm the current limit with the ATO or your registered tax agent before you write ' +
-      'an asset off — the 2025-26 limit does not carry forward on its own.',
+      '$1,000 per asset — the standing threshold under the simplified depreciation rules, ' +
+      'which is what applies once a temporary increase ends. The $20,000 threshold for ' +
+      '2023-24 to 2025-26 ended on 30 June 2026. A permanent $20,000 threshold from ' +
+      '1 July 2026 passed both Houses of Parliament on 19 August 2026 but had not received ' +
+      'Royal Assent as at 26 August 2026, so it is not yet law and cannot be relied on for an ' +
+      'asset you are claiming now. Check whether it has since become law with the ATO or your ' +
+      'registered tax agent before writing off anything above $1,000.',
+    proposed: {
+      limit: 20000,
+      note:
+        'A permanent $20,000 instant asset write-off from 1 July 2026, per asset, for small ' +
+        'businesses with an aggregated annual turnover under $10 million. Treasury Laws ' +
+        'Amendment (Tax Reform No. 2) Bill 2026 passed both Houses on 19 August 2026 and was ' +
+        'awaiting Royal Assent as at 26 August 2026. Once it is law, assets costing less than ' +
+        '$20,000 first used or installed ready for use from 1 July 2026 would qualify, and ' +
+        'an asset at exactly $20,000 would not.',
+    },
   },
   {
     effectiveFrom: '2023-07-01',
@@ -273,6 +320,7 @@ export function resolveWriteOffRow(
     verified: row.verified,
     note: row.note,
     ...(row.boundary ? { boundary: row.boundary } : {}),
+    ...(row.proposed ? { proposed: { ...row.proposed } } : {}),
   };
 }
 
