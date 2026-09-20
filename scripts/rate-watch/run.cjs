@@ -42,7 +42,48 @@ function pct(n) {
   return `${+(n * 100).toFixed(2)}%`;
 }
 
-function render(f, mode, external) {
+const DATASET = { incomeTax: 'income tax', retirement: 'retirement contributions', studentLoan: 'student loan' };
+const DATASET_FILE = { incomeTax: 'src/data/incomeTax.ts', retirement: 'src/data/superannuation.ts', studentLoan: 'src/data/studentLoan.ts' };
+
+// Annual schedules (income tax / super / student loan). Rollovers lead because
+// they are the silent failure: the resolver keeps answering with last year's
+// figures and nothing errors.
+function renderSchedules(L, s) {
+  if (!s) return;
+  const tag = (x) => `**${x.countryCode}** ${DATASET[x.dataset]}`;
+  if (s.rollovers.length) {
+    L.push("## ⛔ Tax year rolled over with NO new schedule (silently serving last year's figures)");
+    for (const r of s.rollovers) L.push(`- ${tag(r)} — newest set is ${r.latestLabel} (from ${r.latestEffectiveFrom}, ${r.ageDays} days ago). Append the current year's set in \`${DATASET_FILE[r.dataset]}\`.`);
+    L.push('');
+  }
+  if (s.recentlyActivated.length) {
+    L.push('## ✅ Schedules that just took effect (confirm the app and the Tax MCP picked them up)');
+    for (const r of s.recentlyActivated) L.push(`- ${tag(r)} → ${r.taxYearLabel} as of ${r.effectiveFrom}`);
+    L.push('');
+  }
+  if (s.staleCitations.length) {
+    L.push('## 🕸️ Stale schedule citations');
+    for (const c of s.staleCitations) L.push(`- ${tag(c)} — last verified ${c.citationDate} (${c.ageDays} days ago). Re-confirm against the authority.`);
+    L.push('');
+  }
+  if (s.unverified.length) {
+    L.push('## ❓ Unverified schedules');
+    for (const u of s.unverified) L.push(`- ${tag(u)} — not verified against the authority`);
+    L.push('');
+  }
+  if (s.upcoming.length) {
+    L.push('## 🗓️ Upcoming schedules — will activate automatically');
+    for (const r of s.upcoming) L.push(`- ${tag(r)} → ${r.taxYearLabel} on ${r.effectiveFrom}`);
+    L.push('');
+  }
+  if (s.undated.length) {
+    L.push('## 📎 Schedules with a source URL but no dated citation (cannot be staleness-checked yet)');
+    L.push(s.undated.map((u) => tag(u)).join(' · '));
+    L.push('');
+  }
+}
+
+function render(f, mode, external, sched) {
   const L = [];
   L.push(`# 🪙 Rate Watch — ${f.asOf} (${mode})`);
   L.push('');
@@ -75,6 +116,8 @@ function render(f, mode, external) {
     L.push('');
   }
 
+  renderSchedules(L, sched);
+
   L.push('## 🌐 External auto cross-check');
   L.push(external.available ? '- live source diff attached above' : `- _${external.reason}_`);
   L.push('');
@@ -97,17 +140,18 @@ async function main() {
   // Required INSIDE main() so a load failure (e.g. dist not built) is caught by the
   // failure handler below and opens a "runner failed" issue, instead of throwing at
   // module load and bypassing the report path entirely. embracingearth.space
-  const { analyzeLedger, hasActionableFindings } = require('../../dist/rateWatch');
+  const { analyzeLedger, hasActionableFindings, analyzeSchedules, hasActionableScheduleFindings } = require('../../dist/rateWatch');
   const mode = resolveMode();
   const findings = analyzeLedger(new Date());
   const external = await fetchExternalRates();
-  const report = render(findings, mode, external);
+  const schedules = analyzeSchedules(new Date());
+  const report = render(findings, mode, external, schedules);
 
   const outPath = path.join(process.cwd(), 'rate-watch-report.md');
   fs.writeFileSync(outPath, report);
 
   // quarterly always opens an issue (the review prompt); weekly only when actionable
-  const shouldOpen = mode === 'quarterly' || hasActionableFindings(findings);
+  const shouldOpen = mode === 'quarterly' || hasActionableFindings(findings) || hasActionableScheduleFindings(schedules);
   const title = `Rate Watch — ${findings.asOf} (${mode})`;
 
   console.log(report);
