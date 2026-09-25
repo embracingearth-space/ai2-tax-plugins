@@ -10,7 +10,7 @@ const fs = require('fs');
 const path = require('path');
 
 // Auto-detect quarterly window (first week of Jan/Apr/Jul/Oct) unless MODE is set.
-function resolveMode() {
+function resolveMode(now = new Date()) {
   const m = (process.env.MODE || '').trim();
   if (m) {
     if (m !== 'weekly' && m !== 'quarterly') {
@@ -18,7 +18,6 @@ function resolveMode() {
     }
     return m;
   }
-  const now = new Date();
   const quarterMonth = [0, 3, 6, 9].includes(now.getUTCMonth());
   return quarterMonth && now.getUTCDate() <= 7 ? 'quarterly' : 'weekly';
 }
@@ -136,15 +135,23 @@ function render(f, mode, external, sched) {
   return L.join('\n');
 }
 
-async function main() {
+// `deps` exists for tests only: `now` and `fetchExternal` are injectable so a suite
+// can prove both analyses share one timestamp even when the clock rolls over
+// during the awaited external check. Production callers pass nothing.
+async function main({ now = () => new Date(), fetchExternal = fetchExternalRates } = {}) {
   // Required INSIDE main() so a load failure (e.g. dist not built) is caught by the
   // failure handler below and opens a "runner failed" issue, instead of throwing at
   // module load and bypassing the report path entirely. embracingearth.space
   const { analyzeLedger, hasActionableFindings, analyzeSchedules, hasActionableScheduleFindings } = require('../../dist/rateWatch');
-  const mode = resolveMode();
-  const findings = analyzeLedger(new Date());
-  const external = await fetchExternalRates();
-  const schedules = analyzeSchedules(new Date());
+  // ONE timestamp for the whole run. The awaited external check sits between the
+  // two analyses; if the local date rolled over during it, the ledger and schedule
+  // findings would be computed against different days while the report title only
+  // shows findings.asOf. Capture once, pass everywhere.
+  const asOf = now();
+  const mode = resolveMode(asOf);
+  const findings = analyzeLedger(asOf);
+  const external = await fetchExternal();
+  const schedules = analyzeSchedules(asOf);
   const report = render(findings, mode, external, schedules);
 
   const outPath = path.join(process.cwd(), 'rate-watch-report.md');
@@ -164,7 +171,9 @@ async function main() {
   }
 }
 
-main().catch((e) => {
+module.exports = { main, resolveMode, render, fetchExternalRates };
+
+if (require.main === module) main().catch((e) => {
   // fail loud: a runner crash should open a "rate-watch broken" issue, not pass silently
   console.error('rate-watch runner failed:', e);
   if (process.env.GITHUB_OUTPUT) {
