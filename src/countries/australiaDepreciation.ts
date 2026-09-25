@@ -40,12 +40,22 @@ import {
   type EffectiveLifeCategory,
   type FirstYearConcession,
   type InstantAssetWriteOffInfo,
+  type LandlordSmallItemInfo,
+  type EffectiveDatedRow,
+  resolveEffectiveDated,
+  sortNewestFirst,
 } from '../depreciation';
 
 const ATO_GENERAL_DEPRECIATION =
   'https://www.ato.gov.au/businesses-and-organisations/income-deductions-and-concessions/depreciation-and-capital-expenses-and-allowances/general-depreciation-rules-capital-allowances/prime-cost-straight-line-and-diminishing-value-methods';
 const ATO_SIMPLER_DEPRECIATION =
   'https://www.ato.gov.au/businesses-and-organisations/income-deductions-and-concessions/depreciation-and-capital-expenses-and-allowances/simpler-depreciation-for-small-business';
+const ATO_RENTAL_DEPRECIATING_ASSETS =
+  'https://www.ato.gov.au/individuals-and-families/investments-and-assets/property-and-land/residential-rental-properties/rental-expenses/depreciating-assets-in-rental-properties';
+const ATO_NON_BUSINESS_300 =
+  'https://www.ato.gov.au/forms-and-instructions/depreciating-assets-guide-2017/deductions-for-the-cost-of-depreciating-assets/immediate-deduction-for-certain-non-business-depreciating-assets-costing-300-or-less';
+const ATO_LOW_VALUE_POOL =
+  'https://www.ato.gov.au/businesses-and-organisations/income-deductions-and-concessions/depreciation-and-capital-expenses-and-allowances/general-depreciation-rules-capital-allowances/low-value-assets-pool';
 
 /**
  * The Commissioner's effective life determination in force: the Income Tax
@@ -333,6 +343,113 @@ export function auInstantAssetWriteOff(onDate: Date | string): InstantAssetWrite
   return resolveWriteOffRow(AU_WRITE_OFF_ROWS_NEWEST_FIRST, onDate);
 }
 
+// ─── Landlord small items — s 40-80(2) and the low-value pool ───────────────
+
+/** 18.75% in the year a low-cost asset is allocated to the pool, 37.5% each year after. */
+export const AU_LOW_VALUE_POOL_RATES = { allocationYear: 0.1875, ongoing: 0.375 } as const;
+
+export interface AuLandlordSmallItemRow extends EffectiveDatedRow, LandlordSmallItemInfo {}
+
+/**
+ * The NON-BUSINESS rules. A landlord whose letting does not amount to carrying
+ * on a business cannot use the instant asset write-off above (it is for small
+ * business entities using the simplified depreciation rules). What applies
+ * instead is Div 40 of the ITAA 1997 as it reads for everyone:
+ *
+ *  1. s 40-80(2) — the decline in value of a depreciating asset costing $300
+ *     OR LESS is its cost: an immediate deduction in the year it is first used
+ *     to produce assessable income, INCLUDING rental income. The boundary is
+ *     inclusive ("$300 or less"), so `boundary: 'up_to'`. The three conditions
+ *     the ATO states are carried in the note: used mainly to produce assessable
+ *     income that is NOT from carrying on a business; not part of a set costing
+ *     more than $300 acquired in the year; not one of a number of identical or
+ *     substantially identical items that together cost more than $300.
+ *  2. Subdiv 40-E — the low-value pool. A "low-cost asset" is one costing LESS
+ *     THAN $1,000 (`boundary: 'under'`); pooled assets decline at 18.75% in the
+ *     allocation year and 37.5% after. Pooling is optional, but once a low-cost
+ *     asset is allocated every later low-cost asset must be pooled too.
+ *
+ * VERIFICATION (2026-09-26). The ATO's pages return HTTP 403 to non-browser
+ * clients, so the two rental/non-business pages above could not be fetched
+ * directly. The figures were confirmed from the ATO's own "Low-value pools"
+ * content (last updated 1 July 2024), read in full: "you can use low-value
+ * pools to calculate the decline in value of most depreciating assets with a
+ * cost or opening adjustable value of less than $1,000. The low-value pool
+ * rate is 37.5%. The rules also provide an immediate deduction for certain
+ * assets costing $300 or less"; "For the income year you first allocate a
+ * low-cost asset to the pool, your deduction is worked out at a rate of
+ * 18.75%"; "Once you allocate a low-cost asset to a low-value pool, you must
+ * pool all other low-cost assets you start to hold in that, and each later
+ * year." The three s 40-80(2) conditions were confirmed through the search
+ * index of the two ATO pages cited above, whose indexed text reads: "you used
+ * it mainly for the purpose of producing assessable income that was not income
+ * from carrying on a business (for example, rental income where your rental
+ * activities didn't amount to the carrying on of a business of letting rental
+ * properties); it was not part of a set of assets costing more than $300 that
+ * you started to hold in the income year; and it was not one of a number of
+ * identical, or substantially identical, assets that you started to hold in
+ * the income year that together cost more than $300."
+ *
+ * RE-READ BOTH ATO PAGES IN A BROWSER BEFORE THE NEXT RELEASE. The figures are
+ * long-standing statute (they have not changed since Div 40 commenced on
+ * 1 July 2001), but the rule here is that a number is re-read, not remembered.
+ *
+ * The row starts at 1 July 2001, when the uniform capital allowance system
+ * (Div 40) commenced. A date before that resolves to the unverified floor —
+ * the pre-UCA rules were not read this session.
+ */
+export const AU_LANDLORD_SMALL_ITEM_ROWS: AuLandlordSmallItemRow[] = [
+  {
+    effectiveFrom: '2001-07-01',
+    limit: 300,
+    verified: true,
+    boundary: 'up_to',
+    note:
+      'An item for a rental property costing $300 or less can be deducted in full in the year ' +
+      'you first use it to produce rental income (s 40-80(2) ITAA 1997), to the extent it is used ' +
+      'for that purpose. Three conditions: it is used mainly to produce assessable income that is ' +
+      'not from carrying on a business (rental income where your letting is not a business ' +
+      'qualifies); it is not part of a set costing more than $300 that you started to hold in the ' +
+      'year; and it is not one of a number of identical or substantially identical items that ' +
+      'together cost more than $300. A set — a table and chairs bought together — is tested as ' +
+      'a whole. The $20,000 instant asset write-off is for small businesses and does not apply.',
+    pool: {
+      limit: 1000,
+      verified: true,
+      boundary: 'under',
+      note:
+        'An item costing less than $1,000 (after GST credits) that does not qualify for the $300 ' +
+        'deduction can be allocated to a low-value pool instead of being depreciated over its ' +
+        'effective life: 18.75% of its cost in the year it is allocated and 37.5% of the pool ' +
+        'balance each year after. Pooling is your choice, but once you allocate one low-cost ' +
+        'asset you must allocate every later low-cost asset to the pool too.',
+    },
+  },
+  {
+    effectiveFrom: '1900-01-01',
+    limit: null,
+    verified: false,
+    note:
+      'The rules for an item bought for a rental property before 1 July 2001 are not recorded ' +
+      'here. Confirm the treatment for that year with the ATO or your registered tax agent.',
+  },
+];
+
+const AU_LANDLORD_SMALL_ITEM_ROWS_NEWEST_FIRST: readonly AuLandlordSmallItemRow[] = sortNewestFirst(
+  AU_LANDLORD_SMALL_ITEM_ROWS,
+);
+
+export function auLandlordSmallItemDeduction(onDate: Date | string): LandlordSmallItemInfo {
+  const row = resolveEffectiveDated(AU_LANDLORD_SMALL_ITEM_ROWS_NEWEST_FIRST, toYmd(onDate));
+  return {
+    limit: row.limit,
+    verified: row.verified,
+    note: row.note,
+    ...(row.boundary ? { boundary: row.boundary } : {}),
+    ...(row.pool ? { pool: { ...row.pool } } : {}),
+  };
+}
+
 // ─── General small business pool ────────────────────────────────────────────
 
 /** 15% in the year an asset is allocated to the pool, 30% each year after. */
@@ -486,6 +603,11 @@ export const AU_DEPRECIATION_RULES: DepreciationRules = {
     return auInstantAssetWriteOff(onDate);
   },
 
+  /** The non-business rules: $300 or less deducted in full; less than $1,000 poolable. */
+  landlordSmallItemDeduction(onDate: Date | string): LandlordSmallItemInfo {
+    return auLandlordSmallItemDeduction(onDate);
+  },
+
   balancingAdjustment(input: BalancingAdjustmentInput): BalancingAdjustmentOutcome {
     return computeBalancingAdjustment(input);
   },
@@ -525,6 +647,9 @@ export const AU_DEPRECIATION_AUTHORITY_URLS = {
   generalRules: ATO_GENERAL_DEPRECIATION,
   simplerRules: ATO_SIMPLER_DEPRECIATION,
   effectiveLifeDetermination: 'https://www.legislation.gov.au/F2025L01097/asmade',
+  rentalDepreciatingAssets: ATO_RENTAL_DEPRECIATING_ASSETS,
+  nonBusinessAssets300OrLess: ATO_NON_BUSINESS_300,
+  lowValuePool: ATO_LOW_VALUE_POOL,
 } as const;
 
 export default AU_DEPRECIATION_RULES;

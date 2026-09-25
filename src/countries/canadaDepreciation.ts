@@ -80,6 +80,7 @@ import {
   type EffectiveLifeCategory,
   type FirstYearConcession,
   type InstantAssetWriteOffInfo,
+  type LandlordSmallItemInfo,
 } from '../depreciation';
 
 const CRA_BASE =
@@ -89,6 +90,9 @@ const CRA_CLASSES = `${CRA_BASE}/classes-depreciable-property.html`;
 const CRA_AII = `${CRA_BASE}/accelerated-investment-incentive.html`;
 const CRA_BASIC = `${CRA_BASE}/basic-information-about-capital-cost-allowance.html`;
 const CRA_T4002_CH4 = 'https://www.canada.ca/en/revenue-agency/services/forms-publications/publications/t4002/t4002-6.html';
+const CRA_T4036_RENTAL =
+  'https://www.canada.ca/en/revenue-agency/services/forms-publications/publications/t4036/rental-income.html';
+
 
 /** The canada.ca pages these rules were read from. */
 export const CA_DEPRECIATION_AUTHORITY_URLS = {
@@ -97,6 +101,7 @@ export const CA_DEPRECIATION_AUTHORITY_URLS = {
   acceleratedInvestmentIncentive: CRA_AII,
   basicInformation: CRA_BASIC,
   t4002Chapter4: CRA_T4002_CH4,
+  t4036RentalIncome: CRA_T4036_RENTAL,
 } as const;
 
 // ─── Dates ──────────────────────────────────────────────────────────────────
@@ -660,6 +665,43 @@ const CA_EXTRA_ASSET_FIELDS: AssetFieldSpec[] = [
 
 // ─── Rules object ───────────────────────────────────────────────────────────
 
+/**
+ * Canada has no general small-item deduction for a rental property. Read
+ * 2026-09-26:
+ *  - CRA classes page (modified 2026-08-31): Class 12 "includes property such
+ *    as tools, medical or dental instruments, and kitchen utensils that cost
+ *    less than $500"; Class 8 (20%) includes "furniture, appliances, tools
+ *    costing $500 or more per tool".
+ *  - T4036 Rental Income (Rev. 25): "You cannot use CCA to create or increase a
+ *    rental loss."
+ *
+ * Class 12 IS a real 100% class, but it is a CATEGORY rule, not a cost
+ * threshold: a $400 chair is Class 8, not Class 12. This method takes only a
+ * date, so publishing the Class 12 figure as `limit` would have a host deduct
+ * any rental item under it, an over-claim for furniture and appliances. The
+ * category decision already lives in `classFor()`, which returns Class 12 for
+ * a qualifying tool or utensil. So the landlord answer is the honest note.
+ *
+ * WHY `verified: false` AND NOT `{ limit: 0, verified: true }`. The core app's
+ * `deductNowDecision` (client/src/utils/depreciation.ts) only acts on a rule
+ * that is verified with a non-null limit, and then compares the cost against
+ * it: a limit of 0 would send every item to "Over the $0 small-item limit ...
+ * depreciated over its effective life", which is wrong here. `verified: true,
+ * limit: null` is also read by that client as "unconfirmed". So the honest
+ * answer, in the shape every host already handles, is `verified: false` with
+ * the rule stated in words and no figure.
+ */
+const CA_LANDLORD_NO_SMALL_ITEM_RULE: LandlordSmallItemInfo = {
+  limit: null,
+  verified: false,
+  note:
+    'Canada has no small-item deduction for a rental property. Furniture and appliances are ' +
+    'Class 8 and claimed through capital cost allowance over the years. Only small tools, ' +
+    'instruments and kitchen utensils within Class 12 are claimed in full in the year you buy ' +
+    'them, which depends on what the item is and not just its cost, so pick the CCA class for ' +
+    'it. CCA cannot create or increase a rental loss. Check with the CRA or your accountant.',
+};
+
 const CA_NO_GENERAL_WRITE_OFF: InstantAssetWriteOffInfo = {
   limit: null,
   verified: false,
@@ -718,6 +760,11 @@ export const CA_DEPRECIATION_RULES: ClassCcaRules = {
 
   instantAssetWriteOff(): InstantAssetWriteOffInfo {
     return { ...CA_NO_GENERAL_WRITE_OFF };
+  },
+
+  /** No per-item rule for a rental: Class 12 is a category, decided by classFor(). */
+  landlordSmallItemDeduction(): LandlordSmallItemInfo {
+    return { ...CA_LANDLORD_NO_SMALL_ITEM_RULE };
   },
 
   classFor(asset: CaAssetInput): CaClassAssignment {

@@ -60,6 +60,7 @@ import {
   type EffectiveLifeCategory,
   type FirstYearConcession,
   type InstantAssetWriteOffInfo,
+  type LandlordSmallItemInfo,
   type RatePerAssetRules,
 } from '../depreciation';
 
@@ -367,6 +368,50 @@ export function nzLowValueThreshold(onDate: Date | string): InstantAssetWriteOff
   };
 }
 
+// ─── Landlord small items — the same s EE 38 threshold, for rental income ────
+
+const IRD_IR264_PDF =
+  'https://www.ird.govt.nz/-/media/project/ir/home/documents/forms-and-guides/ir200---ir299/ir264/ir264.pdf';
+
+/**
+ * New Zealand does NOT split the rule by who you are: s EE 38 applies to any
+ * person deriving income from the item, so a residential landlord takes the
+ * same low value asset threshold a business does. This is not an inference
+ * from the business page — it is IRD's own RENTAL guide. IR264 "Rental income"
+ * (March 2026), Part 2, "Low value items", read in full on 2026-09-26: "Where
+ * you purchase an asset that has a low value you can fully deduct the cost of
+ * that asset at the time of purchase ... up to 16 March 2020 - up to $500;
+ * 17 March 2020 to 16 March 2021 - up to $5,000; 17 March 2021 onwards - up
+ * to $1,000". "Up to" is inclusive, matching the statute's "equal to or less
+ * than the threshold value", so every row is `boundary: 'up_to'`.
+ *
+ * The figures are the business rows' figures, so they are derived from
+ * `NZ_LOW_VALUE_ASSET_ROWS` rather than restated: a correction to one cannot
+ * leave the other behind. Only the note differs — it names rental income.
+ */
+export const NZ_LANDLORD_SMALL_ITEM_ROWS: NzLowValueRow[] = NZ_LOW_VALUE_ASSET_ROWS.map((r) => ({
+  ...r,
+  note:
+    `For a rental property, an item costing $${(r.limit as number).toLocaleString('en-NZ')} or less ` +
+    `(bought ${r.effectiveFrom === '2021-03-17' ? 'from 17 March 2021' : r.effectiveFrom === '2020-03-17' ? 'from 17 March 2020 to 16 March 2021' : 'up to 16 March 2020'}) ` +
+    'is deducted in full from your rental income in the year you buy it, rather than depreciated ' +
+    '(IR264 Rental income; s EE 38: "equal to or less than the threshold value"). Items bought ' +
+    'together from the same supplier may have to be tested as a group — check before splitting ' +
+    'a set. Use the GST-exclusive cost if you are GST registered.',
+}));
+
+const NZ_LANDLORD_ROWS_NEWEST_FIRST: readonly NzLowValueRow[] = sortNewestFirst(NZ_LANDLORD_SMALL_ITEM_ROWS);
+
+export function nzLandlordSmallItemDeduction(onDate: Date | string): LandlordSmallItemInfo {
+  const row = resolveEffectiveDated(NZ_LANDLORD_ROWS_NEWEST_FIRST, toYmd(onDate));
+  return {
+    limit: row.limit,
+    verified: row.verified,
+    note: row.note,
+    ...(row.boundary ? { boundary: row.boundary } : {}),
+  };
+}
+
 // ─── Investment Boost — effective-dated ─────────────────────────────────────
 
 export interface NzInvestmentBoostInfo {
@@ -600,6 +645,11 @@ export const NZ_DEPRECIATION_RULES: RatePerAssetRules = {
     return nzLowValueThreshold(onDate);
   },
 
+  /** Same threshold as a business: s EE 38 applies to any person deriving income, rental included. */
+  landlordSmallItemDeduction(onDate: Date | string): LandlordSmallItemInfo {
+    return nzLandlordSmallItemDeduction(onDate);
+  },
+
   investmentBoost(onDate: Date | string) {
     return nzInvestmentBoost(onDate);
   },
@@ -655,6 +705,7 @@ export const NZ_DEPRECIATION_AUTHORITY_URLS = {
   straightLine: IRD_STRAIGHT_LINE,
   investmentBoost: IRD_INVESTMENT_BOOST,
   ir265: IRD_IR265_PDF,
+  ir264RentalIncome: IRD_IR264_PDF,
 } as const;
 
 export default NZ_DEPRECIATION_RULES;

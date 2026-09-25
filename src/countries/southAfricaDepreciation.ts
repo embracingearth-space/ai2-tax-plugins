@@ -46,6 +46,7 @@ import {
   type EffectiveLifeCategory,
   type FirstYearConcession,
   type InstantAssetWriteOffInfo,
+  type LandlordSmallItemInfo,
   type WriteOffPeriodRules,
   type ZaWriteOffPeriodOutcome,
 } from '../depreciation';
@@ -216,6 +217,38 @@ const ZA_EXPLAINER: DepreciationExplainer = {
 
 // ─── Rules object ───────────────────────────────────────────────────────────
 
+/**
+ * The R7,000 small-item write-off does NOT carry over to a landlord.
+ * Interpretation Note 47 (Issue 5, 9 February 2021), read in full on
+ * 2026-09-26, section on small items: "the 'small items' write-off does not
+ * apply to assets acquired by lessors for the purpose of letting", with
+ * footnote 33 recording that Issue 2 (11 November 2009) withdrew it from
+ * lessors for any asset acquired on or after that date. Furniture bought to
+ * furnish a let property is acquired for the purpose of letting, so it is
+ * claimed over its IN47 write-off period instead. (The design note assumed the
+ * opposite, that letting being a trade let the same figure apply. IN47 says
+ * otherwise, so the figure is not reused.)
+ *
+ * WHY `verified: false` AND NOT `{ limit: 0, verified: true }`. The core app's
+ * `deductNowDecision` (client/src/utils/depreciation.ts) only acts on a rule
+ * that is verified with a non-null limit, and then compares the cost against
+ * it: a limit of 0 would send every item to "Over the $0 small-item limit ...
+ * depreciated over its effective life", which is wrong here. `verified: true,
+ * limit: null` is also read by that client as "unconfirmed". So the honest
+ * answer, in the shape every host already handles, is `verified: false` with
+ * the rule stated in words and no figure.
+ */
+const ZA_LANDLORD_NO_SMALL_ITEM_RULE: LandlordSmallItemInfo = {
+  limit: null,
+  verified: false,
+  note:
+    'The small-item write-off does not apply to assets a lessor acquires for the purpose of ' +
+    'letting (SARS Interpretation Note 47, from 11 November 2009), so furniture and appliances ' +
+    'bought for a rental property are claimed as a wear-and-tear allowance over the write-off ' +
+    'period SARS publishes for them, not in full in the year of purchase. Confirm with SARS or ' +
+    'your tax practitioner.',
+};
+
 export const ZA_DEPRECIATION_RULES: WriteOffPeriodRules = {
   countryCode: 'ZA',
   regime: 'write_off_period',
@@ -342,6 +375,11 @@ export const ZA_DEPRECIATION_RULES: WriteOffPeriodRules = {
 
   smallItemThreshold(onDate: Date | string): InstantAssetWriteOffInfo {
     return zaSmallItemThreshold(onDate);
+  },
+
+  /** IN47: the small-item write-off does not apply to assets a lessor acquires for letting. */
+  landlordSmallItemDeduction(): LandlordSmallItemInfo {
+    return { ...ZA_LANDLORD_NO_SMALL_ITEM_RULE };
   },
 };
 

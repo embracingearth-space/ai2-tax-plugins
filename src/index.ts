@@ -153,6 +153,7 @@ export type {
   DeclineInValueOutcome,
   EffectiveLifeCategory,
   InstantAssetWriteOffInfo,
+  LandlordSmallItemInfo,
   BalancingAdjustmentInput,
   BalancingAdjustmentOutcome,
 } from './depreciation';
@@ -167,12 +168,15 @@ export {
   AU_DEPRECIATION_AUTHORITY_URLS,
   auInstantAssetWriteOff,
   auSmallBusinessPoolWriteOff,
+  auLandlordSmallItemDeduction,
+  AU_LANDLORD_SMALL_ITEM_ROWS,
+  AU_LOW_VALUE_POOL_RATES,
   resolveWriteOffRow,
   sortWriteOffRowsNewestFirst,
   AU_DAY_FRACTION_DENOMINATOR,
 } from './countries/australiaDepreciation';
 
-export type { AuWriteOffRow } from './countries/australiaDepreciation';
+export type { AuWriteOffRow, AuLandlordSmallItemRow } from './countries/australiaDepreciation';
 
 // New Zealand — Inland Revenue's rate-per-asset regime (IR265 rates, whole-month part years).
 export {
@@ -187,6 +191,8 @@ export {
   nzRateFor,
   nzWholeMonthsUsed,
   nzLowValueThreshold,
+  nzLandlordSmallItemDeduction,
+  NZ_LANDLORD_SMALL_ITEM_ROWS,
   nzInvestmentBoost,
   nzInvestmentBoostSplit,
 } from './countries/newZealandDepreciation';
@@ -203,6 +209,8 @@ export type {
 export {
   UK_DEPRECIATION_RULES,
   UK_AIA_ROWS,
+  UK_LANDLORD_SMALL_ITEM_ROWS,
+  ukLandlordSmallItemDeduction,
   UK_CAR_BAND_ROWS,
   UK_CASH_BASIS_RESTRICTION,
   UK_DEPRECIATION_AUTHORITY_URLS,
@@ -268,9 +276,11 @@ export {
   usBonusPercent,
   usAutoCap,
   usDeMinimis,
+  usLandlordSmallItemDeduction,
+  US_LANDLORD_SMALL_ITEM_ROWS,
 } from './countries/unitedStatesDepreciation';
 
-export type { UsPropertyClassRow } from './countries/unitedStatesDepreciation';
+export type { UsPropertyClassRow, UsLandlordSmallItemRow } from './countries/unitedStatesDepreciation';
 
 // India — the CBDT's block-of-assets regime (Income-tax Act 2025 s.33, Income-tax Rules 2026 Appendix I).
 export {

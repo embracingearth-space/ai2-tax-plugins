@@ -341,6 +341,37 @@ export interface InstantAssetWriteOffInfo {
   };
 }
 
+/**
+ * The small-item rule for a LANDLORD — someone deriving rental income who is
+ * not carrying on a business. It is a different rule set from
+ * `instantAssetWriteOff` in every jurisdiction surveyed: the business
+ * write-off is for businesses, and a host that offered it against a rental
+ * property would be offering a concession the taxpayer is not entitled to.
+ *
+ * `verified: false` with `limit: null` and a numberless `note` is the honest
+ * answer for any year or country where the plugin cannot confirm a per-item
+ * figure a host may compare a cost against — INCLUDING the countries where the
+ * authority's answer is "there is no such rule" (the UK's replacement-of-
+ * domestic-items relief, India's flat standard deduction, Singapore's
+ * non-deductible initial purchase, South Africa's lessor exclusion). Those
+ * notes state the rule in words; they never carry a threshold, because a
+ * limit of 0 would read to a host as "over the limit — depreciate it", which
+ * is wrong in each of them. A host prints the note and defaults nothing.
+ */
+export interface LandlordSmallItemInfo extends InstantAssetWriteOffInfo {
+  /**
+   * Present where the jurisdiction ALSO pools items above the immediate limit
+   * (Australia's low-value pool). Its `limit` is the pool's entry threshold,
+   * with the same `verified` / `boundary` contract as the parent.
+   */
+  pool?: {
+    limit: number | null;
+    verified: boolean;
+    note: string;
+    boundary?: 'under' | 'up_to';
+  };
+}
+
 export interface BalancingAdjustmentInput {
   /** Consideration received on disposal. */
   terminationValue: number;
@@ -387,6 +418,14 @@ export interface DepreciationRules {
   firstYearConcessions(onDate: Date | string): FirstYearConcession[];
   /** What the register must collect for THIS country beyond the common fields. */
   extraAssetFields(): AssetFieldSpec[];
+  /**
+   * The per-item deduction available to a landlord who is NOT carrying on a
+   * business, in force on a date. Optional: absent means "not published for
+   * this country", which a host treats exactly like `verified: false`. See
+   * `LandlordSmallItemInfo` for the contract, and each country module for the
+   * authority page the figure was read from.
+   */
+  landlordSmallItemDeduction?(onDate: Date | string): LandlordSmallItemInfo;
 }
 
 /**
