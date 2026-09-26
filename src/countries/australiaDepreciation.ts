@@ -405,10 +405,14 @@ export const AU_LANDLORD_SMALL_ITEM_ROWS: AuLandlordSmallItemRow[] = [
     verified: true,
     boundary: 'up_to',
     note:
-      'An item for a rental property costing $300 or less can be deducted in full in the income ' +
-      'year you first use it, or install it ready for use, to produce rental income (s 40-80(2) ' +
-      'ITAA 1997), not the year you buy it, to the extent it is used ' +
-      'for that purpose. Three conditions: it is used mainly to produce assessable income that is ' +
+      // Timing and extent in the ATO's own words ("Depreciating assets in rental
+      // properties", read 2026-09-26 UTC: "Assets costing $300 or less can be
+      // claimed as an immediate deduction (a full deduction) in the income year
+      // you used the asset for a taxable purpose"; depreciating assets guide:
+      // "to the extent that you used it for a taxable purpose").
+      'An item for a rental property costing $300 or less can be deducted in the income year ' +
+      'you use it to produce rental income (s 40-80(2) ITAA 1997), to the extent it is used ' +
+      'for that purpose; a private share is not deductible. Three conditions: it is used mainly to produce assessable income that is ' +
       'not from carrying on a business (rental income where your letting is not a business ' +
       'qualifies); it is not part of a set costing more than $300 that you started to hold in the ' +
       'year; and it is not one of a number of identical or substantially identical items that ' +

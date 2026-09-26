@@ -65,14 +65,15 @@ function landlord(rules: DepreciationRules, onDate: Date | string): LandlordSmal
 // ─── AU ─────────────────────────────────────────────────────────────────────
 
 describe('AU landlord note: when it is claimed, and the pool', () => {
-  // s 40-80(2): the deduction falls in the income year the item is first used
-  // or installed ready for use, not the year it is bought; and an item that
-  // qualifies for it cannot be allocated to a low-value pool.
-  it('names the year of first use, not the year of purchase', () => {
+  // s 40-80(2), in the ATO's words: claimed "in the income year you used the
+  // asset for a taxable purpose", "to the extent that you used it for a taxable
+  // purpose"; and an item that qualifies cannot be allocated to a low-value pool.
+  it('names the year of use and limits it to the income-producing share', () => {
     const { AU_LANDLORD_SMALL_ITEM_ROWS } = require('../src/countries/australiaDepreciation');
     const row = AU_LANDLORD_SMALL_ITEM_ROWS.find((r: any) => r.limit === 300);
-    expect(row.note).toMatch(/first use it, or install it ready for use/);
-    expect(row.note).toMatch(/not the year you buy it/);
+    expect(row.note).toMatch(/in the income year you use it to produce rental income/);
+    expect(row.note).toMatch(/to the extent it is used for that purpose; a private share is not deductible/);
+    expect(row.note).not.toMatch(/install it ready for use/);
   });
 
   it('says a qualifying item cannot be pooled', () => {
