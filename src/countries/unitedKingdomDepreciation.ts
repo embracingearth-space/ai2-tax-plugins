@@ -647,7 +647,7 @@ const HMRC_PIM3210 = `${GOV_UK}/hmrc-internal-manuals/property-income-manual/pim
 
 /**
  * A residential landlord in the UK has NO small-item deduction and no per-item
- * threshold. Read 2026-09-26 (both pages last updated 21 May 2026):
+ * threshold. Read 2026-09-25 (UTC; both pages last updated 21 May 2026):
  *  - PIM3010: "Other than furnished holiday lettings (FHL), capital allowances
  *    cannot be claimed on furniture and furnishings" in a dwelling-house.
  *  - PIM3210: replacement of domestic items relief (ITTOIA 2005 s 311A), from

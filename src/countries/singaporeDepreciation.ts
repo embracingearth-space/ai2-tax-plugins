@@ -429,7 +429,7 @@ const IRAS_DEEMED_RENTAL_EXPENSES =
  * CAPITAL ALLOWANCE, claimed against trade, business or profession income. An
  * individual deriving PASSIVE rental income does not claim capital allowances.
  *
- * Read 2026-09-26: the IRAS e-Tax Guide "Simplification of Claim of Rental
+ * Read 2026-09-25 (UTC): the IRAS e-Tax Guide "Simplification of Claim of Rental
  * Expenses for Individuals" (published 30 Jan 2026): rent on furniture and
  * fittings is part of "passive rental income" under s 10(1)(f), and an
  * individual may claim deemed expenses on a residential letting in lieu of

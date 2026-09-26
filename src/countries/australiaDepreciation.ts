@@ -369,7 +369,7 @@ export interface AuLandlordSmallItemRow extends EffectiveDatedRow, LandlordSmall
  *     allocation year and 37.5% after. Pooling is optional, but once a low-cost
  *     asset is allocated every later low-cost asset must be pooled too.
  *
- * VERIFICATION (2026-09-26). The ATO's pages return HTTP 403 to non-browser
+ * VERIFICATION (2026-09-25 UTC). The ATO's pages return HTTP 403 to non-browser
  * clients, so the two rental/non-business pages above could not be fetched
  * directly. The figures were confirmed from the ATO's own "Low-value pools"
  * content (last updated 1 July 2024), read in full: "you can use low-value

@@ -667,7 +667,7 @@ const CA_EXTRA_ASSET_FIELDS: AssetFieldSpec[] = [
 
 /**
  * Canada has no general small-item deduction for a rental property. Read
- * 2026-09-26:
+ * 2026-09-25 (UTC):
  *  - CRA classes page (modified 2026-08-31): Class 12 "includes property such
  *    as tools, medical or dental instruments, and kitchen utensils that cost
  *    less than $500"; Class 8 (20%) includes "furniture, appliances, tools
