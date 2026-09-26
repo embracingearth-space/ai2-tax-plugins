@@ -283,13 +283,22 @@ export function zaLandlordSmallItemDeduction(onDate: Date | string): LandlordSma
   if (ymd >= ZA_LESSOR_SMALL_ITEM_EXCLUDED_FROM) return { ...ZA_LANDLORD_NO_SMALL_ITEM_RULE };
   const threshold = zaSmallItemThreshold(ymd);
   if (!threshold.verified || threshold.limit == null) return threshold;
+  // NOT VERIFIED, deliberately, even though the figure is known. IN47 footnote
+  // 33 lets a lessor use it only in a year of assessment that BEGAN on or after
+  // 1 January 2009, and this method is given the acquisition date alone. A
+  // company whose year began on 1 December 2008 and bought on 1 March 2009
+  // would get a verified R7,000 it may not use, and a host acts on `verified`.
+  // Without the year-of-assessment start the honest answer is "confirm it".
+  // (CodeRabbit on #50.)
   return {
-    ...threshold,
+    limit: null,
+    verified: false,
     note:
-      threshold.note +
-      ' For a lessor, this applies to assets acquired before 11 November 2009 in a year of ' +
-      'assessment that began on or after 1 January 2009 (SARS Interpretation Note 47, footnote ' +
-      '33). Assets acquired for letting on or after 11 November 2009 get no small-item write-off.',
+      'For a lessor, the small-item write-off applies only to assets acquired before 11 ' +
+      'November 2009, and only in a year of assessment that began on or after 1 January 2009 ' +
+      '(SARS Interpretation Note 47, footnote 33). Whether it applies here depends on when your ' +
+      'year of assessment began; confirm it with SARS or a registered tax practitioner. Assets ' +
+      'acquired for letting on or after 11 November 2009 get no small-item write-off.',
   };
 }
 
