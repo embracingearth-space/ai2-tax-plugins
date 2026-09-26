@@ -509,7 +509,7 @@ export interface UsLandlordSmallItemRow extends EffectiveDatedRow, LandlordSmall
  * its own; what the IRS gives a rental activity is the de minimis safe harbor
  * election of §1.263(a)-1(f), the same one `usDeMinimis` publishes.
  *
- * Read 2026-09-26:
+ * Read 2026-09-25 (UTC):
  *  - Tangible property final regulations (page last reviewed 04-Aug-2026):
  *    "up to $2,500 ($500 prior to Jan. 1, 2016) per invoice or item" without
  *    an applicable financial statement; "Effective for taxable years beginning

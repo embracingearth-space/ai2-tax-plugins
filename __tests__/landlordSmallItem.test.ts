@@ -30,6 +30,8 @@ import {
   IN_DEPRECIATION_RULES,
   SG_DEPRECIATION_RULES,
   ZA_DEPRECIATION_RULES,
+  ZA_LESSOR_SMALL_ITEM_EXCLUDED_FROM,
+  zaLandlordSmallItemDeduction,
   GENERIC_DEPRECIATION_RULES,
   sortNewestFirst,
   resolveEffectiveDated,
@@ -39,7 +41,7 @@ import {
 
 /**
  * The host's gate, restated: a rule the host may act on is verified AND has a
- * limit. Anything else prints the note and defaults nothing. Mirrors
+ * limit. Anything else defaults nothing (the note is for the host to display). Mirrors
  * `landlordSmallItemRule` in the core app's client/src/utils/depreciation.ts.
  */
 function hostActsOn(info: LandlordSmallItemInfo | undefined): boolean {
@@ -61,6 +63,24 @@ function landlord(rules: DepreciationRules, onDate: Date | string): LandlordSmal
 }
 
 // ─── AU ─────────────────────────────────────────────────────────────────────
+
+describe('AU landlord note: when it is claimed, and the pool', () => {
+  // s 40-80(2): the deduction falls in the income year the item is first used
+  // or installed ready for use, not the year it is bought; and an item that
+  // qualifies for it cannot be allocated to a low-value pool.
+  it('names the year of first use, not the year of purchase', () => {
+    const { AU_LANDLORD_SMALL_ITEM_ROWS } = require('../src/countries/australiaDepreciation');
+    const row = AU_LANDLORD_SMALL_ITEM_ROWS.find((r: any) => r.limit === 300);
+    expect(row.note).toMatch(/first use it, or install it ready for use/);
+    expect(row.note).toMatch(/not the year you buy it/);
+  });
+
+  it('says a qualifying item cannot be pooled', () => {
+    const { AU_LANDLORD_SMALL_ITEM_ROWS } = require('../src/countries/australiaDepreciation');
+    const row = AU_LANDLORD_SMALL_ITEM_ROWS.find((r: any) => r.limit === 300);
+    expect(row.pool.note).toMatch(/an item that does qualify cannot be pooled/);
+  });
+});
 
 describe('AU landlord — $300 or less deducted in full (s 40-80(2)), under $1,000 poolable', () => {
   const au = AU_DEPRECIATION_RULES;
@@ -303,7 +323,7 @@ describe('SG landlord — passive rental income claims no capital allowances', (
   });
 });
 
-describe('ZA landlord — IN47: the small-item write-off does not apply to lessors', () => {
+describe('ZA landlord — IN47: no small-item write-off for lessors from 11 November 2009', () => {
   const za = ZA_DEPRECIATION_RULES;
 
   it('does NOT reuse the R7,000 business figure', () => {
@@ -321,6 +341,63 @@ describe('ZA landlord — IN47: the small-item write-off does not apply to lesso
     expect(note).toContain('Interpretation Note 47');
     expect(note).toContain('wear-and-tear allowance');
     expect(note).not.toMatch(CURRENCY_FIGURE);
+  });
+
+  // IN47 (Issue 5) footnote 33: the exclusion "applies to any asset acquired on
+  // or after" 11 November 2009; before that, lessors were not prevented from
+  // claiming the R7,000 write-off.
+  it('the lessor exclusion starts on 11 November 2009, inclusive', () => {
+    expect(ZA_LESSOR_SMALL_ITEM_EXCLUDED_FROM).toBe('2009-11-11');
+    const r = landlord(za, '2009-11-11');
+    expect(r).toMatchObject({ limit: null, verified: false });
+    expect(hostActsOn(r)).toBe(false);
+  });
+
+  // Between 1 March and 10 November 2009 the figure existed for a lessor, but
+  // only in a year of assessment that began on or after 1 January 2009 — and the
+  // method is given the acquisition date alone. So it answers "confirm it":
+  // unverified, no figure, the condition in words. (CodeRabbit on #50.)
+  it('1 March to 10 November 2009: unverified, because it turns on the year-of-assessment start', () => {
+    for (const onDate of ['2009-03-01', '2009-07-28', '2009-11-10']) {
+      const r = landlord(za, onDate);
+      expect(r).toMatchObject({ limit: null, verified: false });
+      expect(hostActsOn(r)).toBe(false);
+      expect(r.note).not.toMatch(CURRENCY_FIGURE);
+    }
+  });
+
+  it('that note states the lessor window and its year-of-assessment condition', () => {
+    const { note } = landlord(za, '2009-11-10');
+    expect(note).toContain('before 11 November 2009');
+    expect(note).toContain('year of assessment that began on or after 1 January 2009');
+    expect(note).toContain('footnote 33');
+    expect(note).toMatch(/confirm it/);
+  });
+
+  it('before 1 March 2009 the answer stays unverified, with no figure', () => {
+    const r = landlord(za, '2009-02-28');
+    expect(r).toMatchObject({ limit: null, verified: false });
+    expect(hostActsOn(r)).toBe(false);
+    expect(r.note).not.toMatch(CURRENCY_FIGURE);
+  });
+
+  it('dates are keyed by the local calendar day', () => {
+    expect(landlord(za, new Date(2009, 10, 11))).toMatchObject({ limit: null, verified: false });
+    expect(landlord(za, new Date(2009, 10, 10))).toMatchObject({ limit: null, verified: false });
+    expect(landlord(za, new Date(2009, 10, 10)).note).toContain('before 11 November 2009');
+  });
+
+  it('the rules method and the exported function agree, and each call returns a copy', () => {
+    for (const onDate of ['2009-02-28', '2009-11-10', '2009-11-11', '2026-06-01']) {
+      expect(za.landlordSmallItemDeduction!(onDate)).toEqual(zaLandlordSmallItemDeduction(onDate));
+    }
+    // The post-exclusion answer is a shared constant: mutating one result must
+    // not change the next.
+    const a = zaLandlordSmallItemDeduction('2026-06-01');
+    a.limit = 1;
+    a.note = 'x';
+    expect(zaLandlordSmallItemDeduction('2026-06-01')).toMatchObject({ limit: null, verified: false });
+    expect(zaLandlordSmallItemDeduction('2026-06-01').note).not.toBe('x');
   });
 });
 

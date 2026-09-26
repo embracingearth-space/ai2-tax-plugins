@@ -218,12 +218,26 @@ const ZA_EXPLAINER: DepreciationExplainer = {
 // ─── Rules object ───────────────────────────────────────────────────────────
 
 /**
+ * Assets a lessor acquires for letting on or after this date get no small-item
+ * write-off. IN47 (Issue 5), footnote 33, re-read in full 2026-09-26 (UTC):
+ * "Interpretation Note 47 dated 28 July 2009 did not prevent lessors from
+ * claiming the small items write-off of R7 000 for years of assessment
+ * commencing on or after 1 January 2009. Interpretation Note 47 (Issue 2)
+ * dated 11 November 2009 confirms that the small items write-off no longer
+ * applies to lessors and this modification took effect on the date of issue
+ * of that Note and applies to any asset acquired on or after that date."
+ */
+export const ZA_LESSOR_SMALL_ITEM_EXCLUDED_FROM = '2009-11-11';
+
+/**
  * The R7,000 small-item write-off does NOT carry over to a landlord.
  * Interpretation Note 47 (Issue 5, 9 February 2021), read in full on
- * 2026-09-26, section on small items: "the 'small items' write-off does not
+ * 2026-09-25 (UTC), section on small items: "the 'small items' write-off does not
  * apply to assets acquired by lessors for the purpose of letting", with
  * footnote 33 recording that Issue 2 (11 November 2009) withdrew it from
- * lessors for any asset acquired on or after that date. Furniture bought to
+ * lessors for any asset acquired on or after that date (see
+ * `ZA_LESSOR_SMALL_ITEM_EXCLUDED_FROM`; earlier acquisitions are handled by
+ * `zaLandlordSmallItemDeduction`). Furniture bought to
  * furnish a let property is acquired for the purpose of letting, so it is
  * claimed over its IN47 write-off period instead. (The design note assumed the
  * opposite, that letting being a trade let the same figure apply. IN47 says
@@ -248,6 +262,45 @@ const ZA_LANDLORD_NO_SMALL_ITEM_RULE: LandlordSmallItemInfo = {
     'period SARS publishes for them, not in full in the year of purchase. Confirm with SARS or ' +
     'your tax practitioner.',
 };
+
+/**
+ * The lessor's small-item answer, by acquisition date.
+ *
+ *  - On or after 11 November 2009: no small-item write-off (above).
+ *  - 1 March 2009 to 10 November 2009: IN47 footnote 33 says the note then in
+ *    force "did not prevent lessors from claiming the small items write-off of
+ *    R7 000 for years of assessment commencing on or after 1 January 2009", so
+ *    the business figure applies, taken from `zaSmallItemThreshold` rather than
+ *    restated. The year-of-assessment condition is carried in the note: an
+ *    individual's year of assessment starts on 1 March, so every acquisition in
+ *    this window falls in a year that qualifies; a company whose year began
+ *    before 1 January 2009 is not covered by that sentence.
+ *  - Before 1 March 2009: `zaSmallItemThreshold` has no verified limit, so the
+ *    answer stays unverified with no figure.
+ */
+export function zaLandlordSmallItemDeduction(onDate: Date | string): LandlordSmallItemInfo {
+  const ymd = toYmd(onDate);
+  if (ymd >= ZA_LESSOR_SMALL_ITEM_EXCLUDED_FROM) return { ...ZA_LANDLORD_NO_SMALL_ITEM_RULE };
+  const threshold = zaSmallItemThreshold(ymd);
+  if (!threshold.verified || threshold.limit == null) return threshold;
+  // NOT VERIFIED, deliberately, even though the figure is known. IN47 footnote
+  // 33 lets a lessor use it only in a year of assessment that BEGAN on or after
+  // 1 January 2009, and this method is given the acquisition date alone. A
+  // company whose year began on 1 December 2008 and bought on 1 March 2009
+  // would get a verified R7,000 it may not use, and a host acts on `verified`.
+  // Without the year-of-assessment start the honest answer is "confirm it".
+  // (CodeRabbit on #50.)
+  return {
+    limit: null,
+    verified: false,
+    note:
+      'For a lessor, the small-item write-off applies only to assets acquired before 11 ' +
+      'November 2009, and only in a year of assessment that began on or after 1 January 2009 ' +
+      '(SARS Interpretation Note 47, footnote 33). Whether it applies here depends on when your ' +
+      'year of assessment began; confirm it with SARS or a registered tax practitioner. Assets ' +
+      'acquired for letting on or after 11 November 2009 get no small-item write-off.',
+  };
+}
 
 export const ZA_DEPRECIATION_RULES: WriteOffPeriodRules = {
   countryCode: 'ZA',
@@ -377,9 +430,9 @@ export const ZA_DEPRECIATION_RULES: WriteOffPeriodRules = {
     return zaSmallItemThreshold(onDate);
   },
 
-  /** IN47: the small-item write-off does not apply to assets a lessor acquires for letting. */
-  landlordSmallItemDeduction(): LandlordSmallItemInfo {
-    return { ...ZA_LANDLORD_NO_SMALL_ITEM_RULE };
+  /** IN47: no small-item write-off for assets a lessor acquires for letting from 11 November 2009. */
+  landlordSmallItemDeduction(onDate: Date | string): LandlordSmallItemInfo {
+    return zaLandlordSmallItemDeduction(onDate);
   },
 };
 

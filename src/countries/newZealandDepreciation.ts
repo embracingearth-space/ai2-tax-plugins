@@ -378,7 +378,7 @@ const IRD_IR264_PDF =
  * person deriving income from the item, so a residential landlord takes the
  * same low value asset threshold a business does. This is not an inference
  * from the business page — it is IRD's own RENTAL guide. IR264 "Rental income"
- * (March 2026), Part 2, "Low value items", read in full on 2026-09-26: "Where
+ * (March 2026), Part 2, "Low value items", read in full on 2026-09-25 (UTC): "Where
  * you purchase an asset that has a low value you can fully deduct the cost of
  * that asset at the time of purchase ... up to 16 March 2020 - up to $500;
  * 17 March 2020 to 16 March 2021 - up to $5,000; 17 March 2021 onwards - up

@@ -353,10 +353,13 @@ export interface InstantAssetWriteOffInfo {
  * figure a host may compare a cost against — INCLUDING the countries where the
  * authority's answer is "there is no such rule" (the UK's replacement-of-
  * domestic-items relief, India's flat standard deduction, Singapore's
- * non-deductible initial purchase, South Africa's lessor exclusion). Those
+ * non-deductible initial purchase, South Africa's lessor exclusion for assets
+ * acquired from 11 November 2009). Those
  * notes state the rule in words; they never carry a threshold, because a
  * limit of 0 would read to a host as "over the limit — depreciate it", which
- * is wrong in each of them. A host prints the note and defaults nothing.
+ * is wrong in each of them. A host defaults nothing on such an answer; the
+ * note is provided for the host to display, and whether it does is the host's
+ * choice.
  */
 export interface LandlordSmallItemInfo extends InstantAssetWriteOffInfo {
   /**

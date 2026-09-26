@@ -345,6 +345,8 @@ export {
   ZA_SMALL_ITEM_LIMIT_FROM,
   zaWriteOffPeriod,
   zaSmallItemThreshold,
+  zaLandlordSmallItemDeduction,
+  ZA_LESSOR_SMALL_ITEM_EXCLUDED_FROM,
 } from './countries/southAfricaDepreciation';
 
 export type { ZaSmallItemRow } from './countries/southAfricaDepreciation';
