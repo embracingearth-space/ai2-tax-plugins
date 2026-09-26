@@ -78,3 +78,103 @@ describe('hasActionableFindings', () => {
     expect(hasActionableFindings({ ...empty, unverified: [{ countryCode: 'ZZ', countryName: 'Zedland', reason: 'no authority url' }] })).toBe(true);
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Annual schedules. The failure these exist to catch is SILENT: a tax year rolls
+// over, nobody appends the new set, and the resolver keeps serving last year's
+// brackets with no error. Fixtures are used for the edge cases so the assertions
+// do not rot when a real set is appended; the shipped data gets its own checks.
+// ─────────────────────────────────────────────────────────────────────────────
+import { analyzeSchedules, hasActionableScheduleFindings, shippedSchedules } from '../src/rateWatch';
+import type { ScheduleSeries } from '../src/rateWatch';
+
+const us = (sets: ScheduleSeries['sets'], citation = { citationDate: '2026-08-20', verified: true }): ScheduleSeries[] => [
+  { dataset: 'incomeTax', countryCode: 'US', sets, citation },
+];
+
+describe('analyzeSchedules — rollover', () => {
+  const only2026 = us([{ effectiveFrom: '2026-01-01', taxYearLabel: '2026' }]);
+
+  it('stays quiet through the year the newest set covers', () => {
+    expect(analyzeSchedules('2026-12-31', {}, only2026).rollovers).toEqual([]);
+  });
+
+  it('gives the authority a grace window to publish before flagging', () => {
+    expect(analyzeSchedules('2027-01-15', {}, only2026).rollovers).toEqual([]);
+  });
+
+  it('flags a year that rolled over with no successor set', () => {
+    const f = analyzeSchedules('2027-02-15', {}, only2026);
+    expect(f.rollovers).toEqual([
+      { dataset: 'incomeTax', countryCode: 'US', latestLabel: '2026', latestEffectiveFrom: '2026-01-01', ageDays: 410 },
+    ]);
+    expect(hasActionableScheduleFindings(f)).toBe(true);
+  });
+
+  it('keys off the NEWEST set — a future-dated set means the year is already covered', () => {
+    const covered = us([
+      { effectiveFrom: '2027-01-01', taxYearLabel: '2027' },
+      { effectiveFrom: '2026-01-01', taxYearLabel: '2026' },
+    ]);
+    expect(analyzeSchedules('2027-02-15', {}, covered).rollovers).toEqual([]);
+  });
+
+  it('honours a custom grace window', () => {
+    expect(analyzeSchedules('2027-01-15', { rolloverGraceDays: 0 }, only2026).rollovers).toHaveLength(1);
+  });
+});
+
+describe('analyzeSchedules — citations and activations', () => {
+  const sets = [{ effectiveFrom: '2026-07-01', taxYearLabel: '2026-27' }];
+
+  it('flags a verified citation older than the threshold, and not a day sooner', () => {
+    const s = us(sets, { citationDate: '2025-08-01', verified: true });
+    expect(analyzeSchedules('2026-08-01', {}, s).staleCitations).toEqual([]);
+    expect(analyzeSchedules('2026-08-02', {}, s).staleCitations).toEqual([
+      { dataset: 'incomeTax', countryCode: 'US', citationDate: '2025-08-01', ageDays: 366 },
+    ]);
+  });
+
+  it('reports an unverified schedule as unverified, never as stale', () => {
+    const f = analyzeSchedules('2030-01-01', {}, us(sets, { citationDate: '2020-01-01', verified: false }));
+    expect(f.unverified).toEqual([{ dataset: 'incomeTax', countryCode: 'US' }]);
+    expect(f.staleCitations).toEqual([]);
+  });
+
+  it('separates a set that just activated from one still to come', () => {
+    const s = us([
+      { effectiveFrom: '2027-07-01', taxYearLabel: '2027-28' },
+      { effectiveFrom: '2026-07-01', taxYearLabel: '2026-27' },
+    ]);
+    const f = analyzeSchedules('2026-07-10', {}, s);
+    expect(f.recentlyActivated.map((r) => r.taxYearLabel)).toEqual(['2026-27']);
+    expect(f.upcoming.map((r) => r.taxYearLabel)).toEqual(['2027-28']);
+  });
+
+  it('surfaces a dataset with no dated citation instead of passing it silently', () => {
+    const f = analyzeSchedules('2026-09-20', {}, [{ dataset: 'retirement', countryCode: 'AU', sets }]);
+    expect(f.undated).toEqual([{ dataset: 'retirement', countryCode: 'AU' }]);
+    expect(hasActionableScheduleFindings(f)).toBe(false);
+  });
+});
+
+describe('analyzeSchedules — the shipped data', () => {
+  it('covers every income, retirement and student-loan scheme the engine exports', () => {
+    const byDataset = (d: string) => shippedSchedules().filter((s) => s.dataset === d).map((s) => s.countryCode).sort();
+    expect(byDataset('incomeTax')).toEqual(['AU', 'GB', 'IN', 'NZ', 'US']);
+    expect(byDataset('retirement')).toEqual(['AU']);
+    expect(byDataset('studentLoan')).toEqual(['AU']);
+  });
+
+  it('has no rollover gap and no unverified income schedule as of the 2026-09 audit', () => {
+    const f = analyzeSchedules('2026-09-20');
+    expect(f.rollovers).toEqual([]);
+    expect(f.unverified).toEqual([]);
+    expect(f.staleCitations).toEqual([]);
+  });
+
+  it('WILL flag the US in early 2027 unless the 2027 brackets are appended — the point of the check', () => {
+    const f = analyzeSchedules('2027-03-01');
+    expect(f.rollovers.map((r) => `${r.dataset}:${r.countryCode}`)).toContain('incomeTax:US');
+  });
+});
