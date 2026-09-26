@@ -52,6 +52,7 @@ import {
   type EffectiveLifeCategory,
   type FirstYearConcession,
   type InstantAssetWriteOffInfo,
+  type LandlordSmallItemInfo,
   type SgAllowanceOutcome,
   type SgAssetInput,
   type SgEligibilityOutcome,
@@ -418,6 +419,47 @@ const SG_EXTRA_ASSET_FIELDS: AssetFieldSpec[] = [
 
 // ─── Rules object ───────────────────────────────────────────────────────────
 
+const IRAS_RENTED_OUT =
+  'https://www.iras.gov.sg/taxes/individual-income-tax/basics-of-individual-income-tax/what-is-taxable-what-is-not/income-from-property-rented-out';
+const IRAS_DEEMED_RENTAL_EXPENSES =
+  'https://www.iras.gov.sg/docs/default-source/e-tax/e-tax-guide_iit_simplification_of_claim_of_rental_expenses_for_individuals.pdf';
+
+/**
+ * The s.19A(10A) low-value write-off published by `instantAssetWriteOff` is a
+ * CAPITAL ALLOWANCE, claimed against trade, business or profession income. An
+ * individual deriving PASSIVE rental income does not claim capital allowances.
+ *
+ * Read 2026-09-26: the IRAS e-Tax Guide "Simplification of Claim of Rental
+ * Expenses for Individuals" (published 30 Jan 2026): rent on furniture and
+ * fittings is part of "passive rental income" under s 10(1)(f), and an
+ * individual may claim deemed expenses on a residential letting in lieu of
+ * actual expenses. The statement that the initial purchase and depreciation of
+ * furniture and fittings are NOT deductible is from the "Income from property
+ * rented out" page, whose article body did not come through a non-browser
+ * fetch; it was confirmed through the search index of that IRAS page. Re-read
+ * it in a browser before the next release.
+ *
+ * WHY `verified: false` AND NOT `{ limit: 0, verified: true }`. The core app's
+ * `deductNowDecision` (client/src/utils/depreciation.ts) only acts on a rule
+ * that is verified with a non-null limit, and then compares the cost against
+ * it: a limit of 0 would send every item to "Over the $0 small-item limit ...
+ * depreciated over its effective life", which is wrong here. `verified: true,
+ * limit: null` is also read by that client as "unconfirmed". So the honest
+ * answer, in the shape every host already handles, is `verified: false` with
+ * the rule stated in words and no figure.
+ */
+const SG_LANDLORD_NO_SMALL_ITEM_RULE: LandlordSmallItemInfo = {
+  limit: null,
+  verified: false,
+  note:
+    'The low-value capital allowance write-off is for a trade, business or profession, not for ' +
+    'passive rental income, so there is no small-item deduction for a landlord. The initial ' +
+    'purchase and depreciation of furniture and fittings are not deductible against rent; ' +
+    'expenses incurred during the tenancy, such as repairs and maintenance, are, or you can opt ' +
+    'for deemed expenses on a residential letting instead of actual expenses. If your letting is ' +
+    'a business, the capital allowance rules apply. Confirm with IRAS.',
+};
+
 export const SG_DEPRECIATION_RULES: WriteOffElectiveRules = {
   countryCode: 'SG',
   regime: 'write_off_elective',
@@ -507,6 +549,11 @@ export const SG_DEPRECIATION_RULES: WriteOffElectiveRules = {
     };
   },
 
+  /** Passive rental income claims no capital allowances, so the s.19A(10A) write-off does not apply. */
+  landlordSmallItemDeduction(): LandlordSmallItemInfo {
+    return { ...SG_LANDLORD_NO_SMALL_ITEM_RULE };
+  },
+
   balancingAdjustment(input: BalancingAdjustmentInput): BalancingAdjustmentOutcome {
     return computeBalancingAdjustment(input);
   },
@@ -577,6 +624,8 @@ export const SG_DEPRECIATION_RULES: WriteOffElectiveRules = {
 /** The page these rules were read from, for a "where does this come from" link. */
 export const SG_DEPRECIATION_AUTHORITY_URLS = {
   capitalAllowances: IRAS_CAPITAL_ALLOWANCES,
+  incomeFromPropertyRentedOut: IRAS_RENTED_OUT,
+  deemedRentalExpenses: IRAS_DEEMED_RENTAL_EXPENSES,
 } as const;
 
 export default SG_DEPRECIATION_RULES;

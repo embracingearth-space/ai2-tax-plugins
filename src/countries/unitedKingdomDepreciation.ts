@@ -77,6 +77,7 @@ import {
   type EffectiveLifeCategory,
   type FirstYearConcession,
   type InstantAssetWriteOffInfo,
+  type LandlordSmallItemInfo,
   type PooledAllowanceRules,
   type UkAiaOutcome,
   type UkAssetInput,
@@ -639,6 +640,66 @@ export function ukEligibility(asset: UkAssetInput): UkEligibilityOutcome {
  * cash-basis line is first because for most readers it is the whole story.
  * Links are gov.uk pages only.
  */
+// ─── Landlord small items — no per-item rule; replacement relief only ───────
+
+const HMRC_PIM3010 = `${GOV_UK}/hmrc-internal-manuals/property-income-manual/pim3010`;
+const HMRC_PIM3210 = `${GOV_UK}/hmrc-internal-manuals/property-income-manual/pim3210`;
+
+/**
+ * A residential landlord in the UK has NO small-item deduction and no per-item
+ * threshold. Read 2026-09-26 (both pages last updated 21 May 2026):
+ *  - PIM3010: "Other than furnished holiday lettings (FHL), capital allowances
+ *    cannot be claimed on furniture and furnishings" in a dwelling-house.
+ *  - PIM3210: replacement of domestic items relief (ITTOIA 2005 s 311A), from
+ *    6 April 2016 for income tax. The cost of REPLACING movable furniture,
+ *    furnishings, household appliances and kitchenware is deducted, capped at
+ *    a like-for-like replacement and less any proceeds from the old item. The
+ *    first purchase for a let property is capital: not deductible, and not
+ *    eligible for capital allowances.
+ *
+ * So whether an item is deductible turns on a FACT (is it a replacement?), not
+ * on its cost. The host does not collect that fact yet, which the note says.
+ *
+ * WHY `verified: false` AND NOT `{ limit: 0, verified: true }`. The core app's
+ * `deductNowDecision` (client/src/utils/depreciation.ts) only acts on a rule
+ * that is verified with a non-null limit, and then compares the cost against
+ * it: a limit of 0 would send every item to "Over the $0 small-item limit ...
+ * depreciated over its effective life", which is wrong here. `verified: true,
+ * limit: null` is also read by that client as "unconfirmed". So the honest
+ * answer, in the shape every host already handles, is `verified: false` with
+ * the rule stated in words and no figure.
+ */
+export const UK_LANDLORD_SMALL_ITEM_ROWS: Array<EffectiveDatedRow & LandlordSmallItemInfo> = [
+  {
+    effectiveFrom: '2016-04-06',
+    limit: null,
+    verified: false,
+    note:
+      'There is no small-item deduction for a residential landlord, and no cost limit to test ' +
+      'against. Buying furniture, furnishings, appliances or kitchenware for a let property for ' +
+      'the first time is not deductible, and capital allowances cannot be claimed on it. REPLACING ' +
+      'such an item is deductible in full as a rental expense (replacement of domestic items ' +
+      'relief), limited to a like-for-like replacement and less anything you got for the old ' +
+      'item. Fin does not yet ask whether an item is a replacement, so nothing is chosen for you. ' +
+      'Confirm the treatment with HMRC or your accountant.',
+  },
+  {
+    effectiveFrom: '1900-01-01',
+    limit: null,
+    verified: false,
+    note:
+      'The rules for furnishings bought for a let property before 6 April 2016 are not recorded ' +
+      'here. Confirm the treatment for that year with HMRC or your accountant.',
+  },
+];
+
+const UK_LANDLORD_ROWS_NEWEST_FIRST = sortNewestFirst(UK_LANDLORD_SMALL_ITEM_ROWS);
+
+export function ukLandlordSmallItemDeduction(onDate: Date | string): LandlordSmallItemInfo {
+  const row = resolveEffectiveDated(UK_LANDLORD_ROWS_NEWEST_FIRST, toYmd(onDate));
+  return { limit: row.limit, verified: row.verified, note: row.note };
+}
+
 const UK_EXPLAINER: DepreciationExplainer = {
   whatItIs:
     'Capital allowances let you deduct the cost of equipment you keep for more than a year — but ' +
@@ -771,6 +832,11 @@ export const UK_DEPRECIATION_RULES: PooledAllowanceRules = {
     return ukAiaOnDate(onDate);
   },
 
+  /** No per-item rule for a landlord: first purchase not deductible, replacement deductible in full. */
+  landlordSmallItemDeduction(onDate: Date | string): LandlordSmallItemInfo {
+    return ukLandlordSmallItemDeduction(onDate);
+  },
+
   poolFor(asset: UkAssetInput, onDate: Date | string): UkPoolAssignment {
     return ukPoolFor(asset, onDate);
   },
@@ -882,6 +948,8 @@ export const UK_DEPRECIATION_AUTHORITY_URLS = {
   businessCars: HMRC_BUSINESS_CARS,
   ratesAndPools: HMRC_RATES_AND_POOLS,
   workOutWhatYouCanClaim: HMRC_WHAT_YOU_CAN_CLAIM,
+  pim3010: HMRC_PIM3010,
+  pim3210ReplacementOfDomesticItems: HMRC_PIM3210,
 } as const;
 
 export default UK_DEPRECIATION_RULES;

@@ -46,15 +46,19 @@ import { toYmd } from '../data/rateLedger';
 import {
   computeBalancingAdjustment,
   computeDeclineInValue,
+  resolveEffectiveDated,
+  sortNewestFirst,
   type AssetFieldSpec,
   type BalancingAdjustmentInput,
   type BalancingAdjustmentOutcome,
   type DeclineInValueInput,
   type DeclineInValueOutcome,
   type DepreciationExplainer,
+  type EffectiveDatedRow,
   type EffectiveLifeCategory,
   type FirstYearConcession,
   type InstantAssetWriteOffInfo,
+  type LandlordSmallItemInfo,
   type MacrsRules,
   type UsAssetInput,
   type UsAutoCapOutcome,
@@ -73,6 +77,8 @@ const IRS_TOPIC_704 = 'https://www.irs.gov/taxtopics/tc704';
 const IRS_FORM_4562 = 'https://www.irs.gov/forms-pubs/about-form-4562';
 const IRS_TANGIBLE_PROPERTY =
   'https://www.irs.gov/businesses/small-businesses-self-employed/tangible-property-final-regulations';
+const IRS_P527 = 'https://www.irs.gov/publications/p527';
+
 
 /** The irs.gov pages these rules were read from. */
 export const US_DEPRECIATION_AUTHORITY_URLS = {
@@ -80,6 +86,7 @@ export const US_DEPRECIATION_AUTHORITY_URLS = {
   topic704: IRS_TOPIC_704,
   form4562: IRS_FORM_4562,
   tangiblePropertyRegulations: IRS_TANGIBLE_PROPERTY,
+  publication527: IRS_P527,
 } as const;
 
 // ─── Dates ──────────────────────────────────────────────────────────────────
@@ -493,6 +500,74 @@ export function usDeMinimis(hasAfs: boolean): UsDeMinimisOutcome {
   };
 }
 
+// ─── Landlord small items — the de minimis safe harbor for a rental activity ─
+
+export interface UsLandlordSmallItemRow extends EffectiveDatedRow, LandlordSmallItemInfo {}
+
+/**
+ * A residential landlord (Schedule E) has no per-item "small asset" rule of
+ * its own; what the IRS gives a rental activity is the de minimis safe harbor
+ * election of §1.263(a)-1(f), the same one `usDeMinimis` publishes.
+ *
+ * Read 2026-09-26:
+ *  - Tangible property final regulations (page last reviewed 04-Aug-2026):
+ *    "up to $2,500 ($500 prior to Jan. 1, 2016) per invoice or item" without
+ *    an applicable financial statement; "Effective for taxable years beginning
+ *    on or after Jan. 1, 2016"; the election is a statement titled "Section
+ *    1.263(a)-1(f) de minimis safe harbor election" attached to "the timely
+ *    filed original federal tax return including extensions".
+ *  - Publication 527 (2025): "If you elect this de minimis safe harbor for your
+ *    rental activity for the tax year, you aren't required to capitalize the
+ *    de minimis costs"; the amounts are deducted "as rental expenses on line 19
+ *    of Schedule E".
+ *
+ * "Up to" is inclusive, so `boundary: 'up_to'`. The figure assumes NO
+ * applicable financial statement, which is every individual landlord this
+ * host serves; the $5,000 AFS figure is in `usDeMinimis(true)`.
+ *
+ * Before 2016 the page states $500, but the date the safe harbor itself began
+ * was not read this session, so a pre-2016 date resolves to an unverified null
+ * rather than a figure backdated to a year it may not have applied.
+ */
+export const US_LANDLORD_SMALL_ITEM_ROWS: UsLandlordSmallItemRow[] = [
+  {
+    effectiveFrom: '2016-01-01',
+    limit: 2_500,
+    verified: true,
+    boundary: 'up_to',
+    note:
+      'For a rental activity, items costing $2,500 or less per item or per invoice can be deducted ' +
+      'as a rental expense (Schedule E, line 19) instead of depreciated — but only if you make the ' +
+      'de minimis safe harbor election for that tax year. It is an annual election, made with a ' +
+      'statement titled "Section 1.263(a)-1(f) de minimis safe harbor election" attached to your ' +
+      'timely filed return, and once made it covers every qualifying amount paid that year, not ' +
+      'the items you choose. The $2,500 figure is for taxpayers without an applicable financial ' +
+      'statement.',
+  },
+  {
+    effectiveFrom: '1900-01-01',
+    limit: null,
+    verified: false,
+    note:
+      'The de minimis safe harbor figure for a tax year beginning before 1 January 2016 is not ' +
+      'recorded here. Confirm the treatment for that year with the IRS or your tax professional.',
+  },
+];
+
+const US_LANDLORD_ROWS_NEWEST_FIRST: readonly UsLandlordSmallItemRow[] = sortNewestFirst(
+  US_LANDLORD_SMALL_ITEM_ROWS,
+);
+
+export function usLandlordSmallItemDeduction(onDate: Date | string): LandlordSmallItemInfo {
+  const row = resolveEffectiveDated(US_LANDLORD_ROWS_NEWEST_FIRST, toYmd(onDate));
+  return {
+    limit: row.limit,
+    verified: row.verified,
+    note: row.note,
+    ...(row.boundary ? { boundary: row.boundary } : {}),
+  };
+}
+
 // ─── Explainer ──────────────────────────────────────────────────────────────
 
 const US_EXPLAINER: DepreciationExplainer = {
@@ -652,6 +727,11 @@ export const US_DEPRECIATION_RULES: MacrsRules = {
 
   deMinimis(hasAfs: boolean): UsDeMinimisOutcome {
     return usDeMinimis(hasAfs);
+  },
+
+  /** A rental activity's small-item rule is the de minimis safe harbor election: $2,500 or less. */
+  landlordSmallItemDeduction(onDate: Date | string): LandlordSmallItemInfo {
+    return usLandlordSmallItemDeduction(onDate);
   },
 
   /** Proceeds less adjusted basis, weighted by business use. Gains up to depreciation taken are recaptured as ordinary income. */

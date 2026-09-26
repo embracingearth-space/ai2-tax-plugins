@@ -73,15 +73,19 @@ import {
   type InBlockKey,
   type InHalfRateOutcome,
   type InstantAssetWriteOffInfo,
+  type LandlordSmallItemInfo,
 } from '../depreciation';
 
 const IN_SECTION_33 = 'https://www.incometaxindia.gov.in/w/section-33-187';
 const IN_APPENDIX_I = 'https://www.incometaxindia.gov.in/w/appendix-i-1';
+const IN_HOUSE_PROPERTY = 'https://www.incometaxindia.gov.in/w/house-property';
+
 
 /** The incometaxindia.gov.in pages these rules were read from. */
 export const IN_DEPRECIATION_AUTHORITY_URLS = {
   section33: IN_SECTION_33,
   appendixI: IN_APPENDIX_I,
+  houseProperty: IN_HOUSE_PROPERTY,
 } as const;
 
 /** Section 33(4): an asset put to use for fewer days than this in its acquisition year earns half the rate. */
@@ -511,6 +515,43 @@ const IN_EXTRA_ASSET_FIELDS: AssetFieldSpec[] = [
 
 // ─── Rules object ───────────────────────────────────────────────────────────
 
+/**
+ * Income from house property is taxed on its annual value less only the
+ * statutory deductions: a flat standard deduction of a share of the annual
+ * value, and interest on borrowed capital. No actual expense (furniture,
+ * appliances, repairs) is deductible item by item, and no depreciation is
+ * allowed against house-property income; depreciation exists only where the
+ * letting is a business.
+ *
+ * NOT VERIFIED AGAINST THE AUTHORITY PAGE. incometaxindia.gov.in returns 403 to
+ * non-browser clients; the page above exists (search index) and the rule was
+ * confirmed only through the search index and secondary sources. The e-filing
+ * portal's house-property help (incometax.gov.in, AY 2026-27, updated 9 July
+ * 2026) was read and covers the interest deduction only. Re-read the
+ * house-property page in a browser before the next release. That is also why
+ * the note carries no rate: the one figure in the rule was not read from the
+ * authority this session, and nothing here is a limit to compare a cost to.
+ *
+ * WHY `verified: false` AND NOT `{ limit: 0, verified: true }`. The core app's
+ * `deductNowDecision` (client/src/utils/depreciation.ts) only acts on a rule
+ * that is verified with a non-null limit, and then compares the cost against
+ * it: a limit of 0 would send every item to "Over the $0 small-item limit ...
+ * depreciated over its effective life", which is wrong here. `verified: true,
+ * limit: null` is also read by that client as "unconfirmed". So the honest
+ * answer, in the shape every host already handles, is `verified: false` with
+ * the rule stated in words and no figure.
+ */
+const IN_LANDLORD_NO_SMALL_ITEM_RULE: LandlordSmallItemInfo = {
+  limit: null,
+  verified: false,
+  note:
+    'Rent from a let property is taxed as income from house property, where the only deductions ' +
+    'are the flat standard deduction on the annual value and interest on money borrowed for the ' +
+    'property. Furniture, appliances and repairs are not deducted or depreciated item by item: ' +
+    'the standard deduction stands in for them. If your letting is a business, the business ' +
+    'depreciation rules apply instead. Confirm with the Income Tax Department or your tax adviser.',
+};
+
 const IN_NO_GENERAL_WRITE_OFF: InstantAssetWriteOffInfo = {
   limit: null,
   verified: false,
@@ -566,6 +607,11 @@ export const IN_DEPRECIATION_RULES: BlockWdvRules = {
 
   instantAssetWriteOff(): InstantAssetWriteOffInfo {
     return { ...IN_NO_GENERAL_WRITE_OFF };
+  },
+
+  /** No per-item rule: house-property income takes a flat standard deduction instead. */
+  landlordSmallItemDeduction(): LandlordSmallItemInfo {
+    return { ...IN_LANDLORD_NO_SMALL_ITEM_RULE };
   },
 
   blockFor(asset: InAssetInput): InBlockAssignment {
