@@ -20,7 +20,9 @@ import type {
   ExportOutput,
   TaxTreatmentDefinition,
 } from '../types';
+import { GENERIC_DEPRECIATION_RULES, type DepreciationRules } from '../depreciation';
 import { getStandardRateAsOf } from '../data/rateLedger';
+import { IE_DEPRECIATION_RULES } from './irelandDepreciation';
 import { toCsv } from '../exportUtils';
 
 // Local tax names + a FALLBACK standard rate per country. The authoritative,
@@ -281,6 +283,27 @@ function createEUPlugin(code: string): TaxFilingPlugin {
     },
     taxFamily: 'VAT',
     isFullPlugin: true,
+
+    /**
+     * Capital allowances, where this factory has rules for the member state.
+     *
+     * Every EU country here shares one VAT return shape, which is why they
+     * share a factory — but depreciation is NOT harmonised, and each member
+     * state writes its own. Ireland's are written (s.284 TCA 1997: wear and
+     * tear at 12.5% a year over eight years, with no apportionment for a part
+     * year) and were unreachable, because this factory never offered the hook
+     * and `getDepreciationRules` therefore fell back to the generic rules for
+     * every EU country including Ireland. An Irish user's schedule was a
+     * straight line over whatever life they happened to enter, apportioned by
+     * days — neither the right rate nor the right shape.
+     *
+     * A member state whose rules are not written here gets the generic rules
+     * explicitly — the same fallback `getDepreciationRules` would have applied
+     * anyway, and the honest answer until someone writes them.
+     */
+    getDepreciationRules(): DepreciationRules {
+      return code === 'IE' ? IE_DEPRECIATION_RULES : GENERIC_DEPRECIATION_RULES;
+    },
 
     getFormSchema() {
       return [
