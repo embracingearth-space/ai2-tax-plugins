@@ -317,3 +317,48 @@ describe('US concessions, fields and the explainer', () => {
     expect(us.explainer().readMore.length).toBe(4);
   });
 });
+
+/**
+ * The alternative depreciation system periods.
+ *
+ * Anything that lands on ADS — listed property used 50% or less for business
+ * under section 280F(b)(1), or a section 168(g) election — writes off over the
+ * ADS period, which is NOT the GDS period. A host that substituted the GDS
+ * figure would claim too much every year on exactly the assets the restriction
+ * exists to slow down.
+ */
+describe('ADS recovery periods (Rev. Proc. 87-56)', () => {
+  const ads = (assetClass: string | null) =>
+    US_DEPRECIATION_RULES.propertyClass({ cost: 1, assetClass }).adsRecoveryYears;
+
+  it('matches GDS for a car and a light truck', () => {
+    expect(ads('00.22')).toBe(5);
+    expect(ads('00.241')).toBe(5);
+  });
+
+  it('is LONGER than GDS where the class life says so', () => {
+    // The whole reason this field exists: five years under GDS, six under ADS.
+    expect(ads('00.27')).toBe(6);
+    expect(ads('00.242')).toBe(6);
+    expect(ads('00.11')).toBe(10);
+    expect(ads('00.3')).toBe(20);
+  });
+
+  it('is twelve years for property with no class life', () => {
+    // Section 168(g)(2)(C)(iii) — not the seven years GDS gives it.
+    expect(ads(null)).toBe(12);
+    expect(US_DEPRECIATION_RULES.propertyClass({ cost: 1, assetClass: null }).recoveryYears).toBe(7);
+  });
+
+  it('is null where the class is not recorded, alongside the GDS period', () => {
+    const assigned = US_DEPRECIATION_RULES.propertyClass({ cost: 1, assetClass: '99.99' });
+    expect(assigned.recoveryYears).toBeNull();
+    expect(assigned.adsRecoveryYears).toBeNull();
+  });
+
+  it('never silently equals the GDS period across the whole table', () => {
+    // A guard against someone "fixing" a future row by copying the GDS figure.
+    const differing = US_PROPERTY_CLASSES.filter((c) => c.adsRecoveryYears !== c.recoveryYears);
+    expect(differing.length).toBeGreaterThan(0);
+  });
+});
