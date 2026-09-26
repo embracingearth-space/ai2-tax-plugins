@@ -405,8 +405,9 @@ export const AU_LANDLORD_SMALL_ITEM_ROWS: AuLandlordSmallItemRow[] = [
     verified: true,
     boundary: 'up_to',
     note:
-      'An item for a rental property costing $300 or less can be deducted in full in the year ' +
-      'you first use it to produce rental income (s 40-80(2) ITAA 1997), to the extent it is used ' +
+      'An item for a rental property costing $300 or less can be deducted in full in the income ' +
+      'year you first use it, or install it ready for use, to produce rental income (s 40-80(2) ' +
+      'ITAA 1997), not the year you buy it, to the extent it is used ' +
       'for that purpose. Three conditions: it is used mainly to produce assessable income that is ' +
       'not from carrying on a business (rental income where your letting is not a business ' +
       'qualifies); it is not part of a set costing more than $300 that you started to hold in the ' +
@@ -419,7 +420,7 @@ export const AU_LANDLORD_SMALL_ITEM_ROWS: AuLandlordSmallItemRow[] = [
       boundary: 'under',
       note:
         'An item costing less than $1,000 (after GST credits) that does not qualify for the $300 ' +
-        'deduction can be allocated to a low-value pool instead of being depreciated over its ' +
+        'deduction (an item that does qualify cannot be pooled) can be allocated to a low-value pool instead of being depreciated over its ' +
         'effective life: 18.75% of its cost in the year it is allocated and 37.5% of the pool ' +
         'balance each year after. Pooling is your choice, but once you allocate one low-cost ' +
         'asset you must allocate every later low-cost asset to the pool too.',

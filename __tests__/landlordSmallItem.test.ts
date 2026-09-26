@@ -65,6 +65,24 @@ function landlord(rules: DepreciationRules, onDate: Date | string): LandlordSmal
 
 // ─── AU ─────────────────────────────────────────────────────────────────────
 
+describe('AU landlord note: when it is claimed, and the pool', () => {
+  // s 40-80(2): the deduction falls in the income year the item is first used
+  // or installed ready for use, not the year it is bought; and an item that
+  // qualifies for it cannot be allocated to a low-value pool.
+  it('names the year of first use, not the year of purchase', () => {
+    const { AU_LANDLORD_SMALL_ITEM_ROWS } = require('../src/countries/australiaDepreciation');
+    const row = AU_LANDLORD_SMALL_ITEM_ROWS.find((r: any) => r.limit === 300);
+    expect(row.note).toMatch(/first use it, or install it ready for use/);
+    expect(row.note).toMatch(/not the year you buy it/);
+  });
+
+  it('says a qualifying item cannot be pooled', () => {
+    const { AU_LANDLORD_SMALL_ITEM_ROWS } = require('../src/countries/australiaDepreciation');
+    const row = AU_LANDLORD_SMALL_ITEM_ROWS.find((r: any) => r.limit === 300);
+    expect(row.pool.note).toMatch(/an item that does qualify cannot be pooled/);
+  });
+});
+
 describe('AU landlord — $300 or less deducted in full (s 40-80(2)), under $1,000 poolable', () => {
   const au = AU_DEPRECIATION_RULES;
 
