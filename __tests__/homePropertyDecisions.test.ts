@@ -339,6 +339,48 @@ describe('mainResidenceChoice', () => {
     expect(keep.homes.find((h) => h.name === 'Old')!.taxableDays).toBe(daysInclusive('2016-01-02', '2024-01-01'));
   });
 
+  it('new home sold first, former home still within its 6 years: only the post-overlap rule makes it taxable', () => {
+    // Worked by hand from the ATO rules, not from the code:
+    //  - Old: owned 1 Jan 2010, moved out and rented from 1 Jan 2020, so 6 years of cover run to 1 Jan 2026.
+    //    Sold 1 Jan 2024, inside the limit, so the 6-year rule alone never makes a day taxable.
+    //  - New: owned 1 Jan 2021 to 1 Jan 2022 (366 days inclusive). It is sold first.
+    //  Keep Old: Old is fully exempt. New is taxable for every day of the overlap while Old is covered, i.e. all
+    //    366 days. It was held less than 12 months after excluding both end days (it would need 2 Jan 2022), so
+    //    no discount: $50,000 × 32% = $16,000.
+    //  Take New: nominating New ends Old's absence choice ("choose when to stop the period"), so Old is taxable
+    //    for the overlap (366 days) and for every day after it until its sale: 2 Jan 2022 to 1 Jan 2024 = 730 days.
+    //    That is 1,096 of 5,114 days owned (14 years + 3 leap days + 1). Gain $400,000 × 1,096 ÷ 5,114 =
+    //    $85,725.46. The taxable days all fall after first letting, so the first-use rule applies; that is more
+    //    than 12 months before the sale, so the 50% discount applies: × 50% × 32% = $13,716.07.
+    const r = mrc({
+      homes: [
+        { name: 'Old', ownedFrom: '2010-01-01', movedOut: '2020-01-01', rentedFrom: '2020-01-01', expectedGrowth: 400_000 },
+        { name: 'New', ownedFrom: '2021-01-01', expectedGrowth: 50_000 },
+      ],
+      saleDates: { Old: '2024-01-01', New: '2022-01-01' },
+      marginalRatePct: 32,
+    });
+    expect(r.overlap).toEqual({ from: '2021-01-01', to: '2022-01-01', days: 366 });
+    expect(r.movingHouseDays).toBe(0);
+
+    const keep = r.options.find((o) => o.nominated === 'Old')!;
+    const keepOld = keep.homes.find((h) => h.name === 'Old')!;
+    const keepNew = keep.homes.find((h) => h.name === 'New')!;
+    expect(keepOld.taxableDays).toBe(0); // within 6 years: the limit alone taxes nothing
+    expect(keepNew).toMatchObject({ ownedDays: 366, taxableDays: 366, taxableGain: 50_000, discountApplies: false, tax: 16_000 });
+
+    const take = r.options.find((o) => o.nominated === 'New')!;
+    const takeOld = take.homes.find((h) => h.name === 'Old')!;
+    expect(takeOld.ownedDays).toBe(5114);
+    expect(takeOld.taxableDays).toBe(366 + 730); // overlap + every day after it
+    expect(takeOld.taxableGain).toBe(85_725.46);
+    expect(takeOld.discountApplies).toBe(true);
+    expect(takeOld.tax).toBe(13_716.07);
+    expect(take.homes.find((h) => h.name === 'New')!.taxableDays).toBe(0);
+
+    expect(r.better).toEqual({ nominated: 'New', saving: 2283.93, complete: true });
+  });
+
   it('counts the 6-year limit the ATO\'s way (Roya: 6,940 taxable days)', () => {
     expect(daysBeyondSixYears('1999-09-29', '2024-09-29')).toBe(6940);
     expect(daysBeyondSixYears('2020-01-01', '2026-01-01')).toBe(0);
