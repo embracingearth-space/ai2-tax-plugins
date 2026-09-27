@@ -275,6 +275,23 @@ Those six are exactly what the ATO's *TPAR contractor details to report* says th
 
 Amounts are whole dollars with no cents, and a contractor whose ABN changed during the year gets one row per ABN, so payee identity for the report is the ABN rather than the name. Two different tests decide whether you lodge, and each service carries the one that applies to it. Cleaning, courier and road freight, information technology, and security, investigation or surveillance use the ordinary 10% test — payments received for that service are 10% or more of your business income, with courier and road freight counted together. Building and construction is not exempt from a test; it has a different one. You primarily operate in building and construction services, and so lodge, if 50% or more of your current-year business income is earned from providing them, **or** 50% or more of your current-year business activity relates to them, **or** 50% or more of the immediately preceding year's business income was earned from providing them — that last limb catching a year that is itself under the threshold. `auTprsQualifies()` evaluates the applicable test, inclusive at the boundary, and throws rather than answering "no" when it is given nothing to test. The report is prepared here for you to check before lodging — it is not the ATO lodgment file, which needs an accredited SBR channel — so lodge it through ATO online services, compatible business software, or your registered tax or BAS agent.
 
+## Home and property decisions
+
+Three pure functions answer the home questions people ask, with the same numbers wherever they are asked: `homeBusinessSpaceTradeoff`, `mainResidenceChoice` and `roomOrPartnerArrangement`. They cover Australia; any other country returns `{ supported: false, authority }` with a link and no figures.
+
+```ts
+import { homeBusinessSpaceTradeoff } from '@ai2/tax-plugins';
+
+const r = homeBusinessSpaceTradeoff({
+  incomeYear: '2023-24', years: 4, businessSharePct: 35,
+  occupancyCostsPerYear: 9600, runningCostsPerYear: 1200, marginalRatePct: 32,
+  businessUseStart: '2023-07-01', saleDate: '2027-06-30', expectedGrowth: 50_000,
+});
+// r.extraDeductions.taxValue → 4300.8; r.cgt.currentLaw.tax → 2800; r.breakEvenGrowth.currentLaw → 76800
+```
+
+Every rule is a row in `AU_HOME_PROPERTY_RULES` with its ATO or legislation URL, the page's own last-updated date and the day it was read, and every result lists the notes and rules it used. Gains are assumed to accrue evenly by day, which is how the ATO apportions them. A sale on or after 1 July 2027 falls under the regime enacted by the Treasury Laws Amendment (Tax Reform No. 1) Act 2026: the gain to 30 June 2027 keeps the 50% discount, the later gain is indexed, and a 30% minimum tax applies. That result is computed only when you pass the home's value at first use and an inflation assumption; otherwise it says what is missing.
+
 ## Development
 
 ```bash

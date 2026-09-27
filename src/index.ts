@@ -178,6 +178,34 @@ export {
 
 export type { AuWriteOffRow, AuLandlordSmallItemRow } from './countries/australiaDepreciation';
 
+// Home and property decisions — pure decision maths shared by the app, the website and the Tax MCP (AU first).
+export {
+  homeBusinessSpaceTradeoff,
+  mainResidenceChoice,
+  roomOrPartnerArrangement,
+  daysBeyondSixYears,
+  AU_CGT_REGIME_2027_FROM,
+} from './decisions/homeProperty';
+export type {
+  UnsupportedCountry,
+  Regime2027Assumptions,
+  Regime2027Result,
+  HomeBusinessSpaceInput,
+  HomeBusinessSpaceResult,
+  SpaceOption,
+  HomeTimeline,
+  MainResidenceChoiceInput,
+  MainResidenceChoiceResult,
+  MainResidenceOption,
+  HomeOutcome,
+  DomesticArrangementInput,
+  LodgerArrangementInput,
+  DomesticArrangementResult,
+  LodgerArrangementResult,
+} from './decisions/homeProperty';
+export { AU_HOME_PROPERTY_RULES, AU_HOME_PROPERTY_URLS } from './decisions/homePropertyRules';
+export type { HomePropertyRule, HomePropertyRuleKey, DecisionNote } from './decisions/homePropertyRules';
+
 // New Zealand — Inland Revenue's rate-per-asset regime (IR265 rates, whole-month part years).
 export {
   NZ_DEPRECIATION_RULES,

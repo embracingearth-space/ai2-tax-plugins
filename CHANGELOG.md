@@ -8,6 +8,27 @@ member has a value on every rules object that ships, `declineInValue` still
 accepts `daysHeld` / `daysInYear` exactly as before, and a host on 2.1.0 keeps
 working untouched.
 
+### Added — home and property decisions (`src/decisions/homeProperty.ts`)
+
+Pure decision maths the app, the marketing site and the Tax MCP all call, so they show the same numbers. AU first. Any other country returns `{ supported: false, authority }` with the country's tax authority link and no numbers. Every rule is a row in `AU_HOME_PROPERTY_RULES` with its source URL, the page's own last-updated date, and the date it was read (27 September 2026). Every result lists the notes and rules it relied on.
+
+- `homeBusinessSpaceTradeoff` compares a desk or shared room with a place of business:
+  - running costs are claimable in both; occupancy costs only in a place of business, where the same floor-area share loses the main residence exemption;
+  - a co-owner who does not run the business keeps the full exemption;
+  - returns deductions per year and in total, their tax value, the CGT on the business share under the discount rules, the net result and the break-even growth;
+  - worked case: 35% share, $9,600 occupancy a year, 4 years, 32% → $4,300.80 of extra deduction value; CGT $2,800 / $5,600 / $14,000 at $50k / $100k / $250k growth; break-even $76,800.
+- The **1 July 2027 CGT regime is enacted, not just announced**. The Treasury Laws Amendment (Tax Reform No. 1) Act 2026 (No. 49) was assented 26 June 2026, and the ATO says "These measures are now law."
+  - How it works: a deemed sale and reacquisition at market value on 1 July 2027. The earlier gain keeps the 50% discount. The later gain uses a cost base indexed for inflation, with the Division 119 30% minimum tax.
+  - It is computed when the caller supplies the home's value at first use and an inflation assumption. Otherwise it returns `computable: false` and lists what is missing.
+- `mainResidenceChoice` works out which of two homes the exemption should cover while you own both. It applies:
+  - the 6-year rule (counted as in the ATO's Roya example);
+  - one main residence at a time;
+  - the 6-month moving-house rule (it reproduces the ATO's Jeneen and John example: 90 of 8,675 days);
+  - a note on the spouse rule.
+- `roomOrPartnerArrangement`:
+  - `domestic`: no income, no deductions, exemption unaffected.
+  - `lodger`: rent assessable, the let share of costs deductible, and the let share of the gain outside the exemption from first letting. It reproduces the ATO's Thomas example (35% share, $140,000 → $70,000 after the discount) and Fatima's days apportionment.
+
 ### Added — landlord small-item rules (`landlordSmallItemDeduction`)
 
 - `DepreciationRules.landlordSmallItemDeduction?(onDate)` — optional, returning `LandlordSmallItemInfo` (`InstantAssetWriteOffInfo` plus an optional `pool`). The per-item rule for a landlord who is **not** carrying on a business, which differs from the business `instantAssetWriteOff` in every country surveyed. Absent (the generic rules, IE) means "not published". A host should act only on `verified: true` with a non-null `limit`, and default nothing for any other answer. Every answer carries a `note` that the plugin provides for the host to display. Whether the note is shown depends on the host; the core app's current release does not call this method yet.
