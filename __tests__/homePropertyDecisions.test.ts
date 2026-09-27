@@ -317,6 +317,28 @@ describe('mainResidenceChoice', () => {
     expect(a).toBe(daysInclusive('2016-01-02', '2024-01-01'));
   });
 
+  it('new home sold first: nominating it leaves the former home taxable after the overlap too', () => {
+    // Rented from moving out in 2010 (6 years to 1 Jan 2016). New home owned 2018 to 2020; old home sold 2024.
+    const r = mrc({
+      homes: [
+        { name: 'Old', ownedFrom: '2005-01-01', movedOut: '2010-01-01', rentedFrom: '2010-01-01', expectedGrowth: 400_000 },
+        { name: 'New', ownedFrom: '2018-01-01', expectedGrowth: 50_000 },
+      ],
+      saleDates: { Old: '2024-01-01', New: '2020-01-01' },
+      marginalRatePct: 32,
+    });
+    const old = r.options.find((o) => o.nominated === 'New')!.homes.find((h) => h.name === 'Old')!;
+    // Beyond 6 years before the overlap + the overlap + everything after it, with no day counted twice.
+    expect(old.taxableDays).toBe(
+      daysInclusive('2016-01-02', '2017-12-31') + daysInclusive('2018-01-01', '2020-01-01') + daysInclusive('2020-01-02', '2024-01-01'),
+    );
+    expect(old.taxableDays).toBe(daysInclusive('2016-01-02', '2024-01-01'));
+    expect(old.taxableDays).toBeLessThanOrEqual(old.ownedDays);
+    // Keeping the old home: only its days beyond the 6-year limit are taxable, and New is taxable while Old is covered (none here).
+    const keep = r.options.find((o) => o.nominated === 'Old')!;
+    expect(keep.homes.find((h) => h.name === 'Old')!.taxableDays).toBe(daysInclusive('2016-01-02', '2024-01-01'));
+  });
+
   it('counts the 6-year limit the ATO\'s way (Roya: 6,940 taxable days)', () => {
     expect(daysBeyondSixYears('1999-09-29', '2024-09-29')).toBe(6940);
     expect(daysBeyondSixYears('2020-01-01', '2026-01-01')).toBe(0);

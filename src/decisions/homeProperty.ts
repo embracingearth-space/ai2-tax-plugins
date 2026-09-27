@@ -575,10 +575,20 @@ export function mainResidenceChoice(input: MainResidenceChoiceInput): MainReside
   // Clamped to the former home's sale: with no overlap (the new home bought after the old one was sold) the day
   // before the new purchase can fall after that sale, and the span must not count days the home was not owned.
   const preOverlapEnd = minYmd(addDays(overlapFrom, -1), saleF);
+  // If the new home is sold first, the former home is still owned after the overlap. Nominating the new home ended
+  // the absence choice for the former ("You can choose when to stop the period covered by your choice" — ATO,
+  // Treating former home as main residence), so its days after the overlap are taxable too, not only those beyond
+  // the 6-year limit. This result does not model moving back in.
+  const postOverlap: Span[] = overlap > 0 && overlapTo < saleF ? [{ from: addDays(overlapTo, 1), to: saleF }] : [];
   const takeNew: MainResidenceOption = {
     nominated: next.name,
     homes: [
-      outcome(former, saleF, [...(preOverlapEnd >= movedOut ? beyondSix(preOverlapEnd) : []), contested], former.rentedFrom ?? null),
+      outcome(
+        former,
+        saleF,
+        [...(preOverlapEnd >= movedOut ? beyondSix(preOverlapEnd) : []), contested, ...postOverlap],
+        former.rentedFrom ?? null,
+      ),
       outcome(next, saleN, [], null),
     ],
     totalTax: 0,
