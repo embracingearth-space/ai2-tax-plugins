@@ -40,6 +40,7 @@
  */
 
 import { getPluginInfo } from '../registry';
+import { AU_CGT_INDEXATION_FROM } from '../countries/australiaIncomeTax';
 import {
   addDays,
   addMonths,
@@ -65,10 +66,14 @@ export interface UnsupportedCountry {
   note: string;
 }
 
-/** 1 July 2027 — gains accruing from this day are taxed under the Tax Reform No. 1 Act (indexation, 30% minimum). */
-export const AU_CGT_REGIME_2027_FROM = '2027-07-01';
+/**
+ * 1 July 2027 — gains accruing from this day are taxed under the Tax Reform No. 1 Act (indexation, a possible
+ * 30% minimum). Defined once, in the AU income tax plugin, as AU_CGT_INDEXATION_FROM; re-exported here under
+ * this name so the decisions API reads naturally without a second copy of the date.
+ */
+export const AU_CGT_REGIME_2027_FROM = AU_CGT_INDEXATION_FROM;
 /** The last day whose gain keeps the 50% discount for a CGT event on or after 1 July 2027. */
-const LAST_DISCOUNT_DAY = '2027-06-30';
+const LAST_DISCOUNT_DAY = addDays(AU_CGT_REGIME_2027_FROM, -1);
 const DISCOUNT = 0.5;
 
 const cents = (n: number) => Math.round(n * 100) / 100;

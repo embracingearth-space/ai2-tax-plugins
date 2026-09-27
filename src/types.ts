@@ -299,7 +299,14 @@ export interface TaxFilingPlugin {
   taxFamily: 'GST' | 'VAT' | 'SALES_TAX' | 'HYBRID' | 'INCOME_TAX' | 'CONSUMPTION_TAX' | 'SST';
   isFullPlugin: boolean;
 
-  getFormSchema(opts?: { stateProvince?: string }): FormSection[];
+  /**
+   * `incomeYear` — the income/tax year the return is for, as the country
+   * labels it (AU: '2025-26') or any day inside it ('2026-03-31' or a Date).
+   * Optional and additive: a plugin whose help text quotes a year-specific
+   * rate builds it for that year, and falls back to the current year when it
+   * is omitted. Plugins with no year-specific text ignore it.
+   */
+  getFormSchema(opts?: { stateProvince?: string; incomeYear?: string | Date }): FormSection[];
   getFilingPeriods(): FilingPeriodConfig;
   getFinancialYearBounds(year: number): { start: Date; end: Date };
   getTerminology(): TaxTerminology;

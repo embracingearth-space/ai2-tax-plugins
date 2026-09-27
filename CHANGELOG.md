@@ -21,6 +21,7 @@ Pure decision maths the app, the marketing site and the Tax MCP all call, so the
   - For gains accruing after 1 July 2027 the Act generally replaces the 50% discount with cost-base indexation, for an Australian resident who held the asset at least 12 months (s 110-36(1A), Division 114). A 30% minimum tax may apply (Division 119). A qualifying new residential dwelling or affordable housing keeps at least 50% (s 115-102, s 115-125).
   - Every CGT result carries `preJuly2027`: current-law figures for the gain to 30 June 2027, measured by even growth by day or from supplied valuations.
   - Every CGT result also carries `postJuly2027: { computable: false, note }`. The 1 July 2027 apportioning method (s 112-185) is not yet published, and future CPI is unknown. Results with a sale after that date are flagged `complete: false`.
+- The 1 July 2027 date lives in one place: `AU_CGT_REGIME_2027_FROM` re-exports `AU_CGT_INDEXATION_FROM` from the AU income tax plugin (added in #52), and the last discount day is derived from it.
 - `mainResidenceChoice` works out which of two homes the exemption should cover while you own both. It applies:
   - the 6-year rule (counted as in the ATO's Roya example);
   - one main residence at a time;
@@ -29,6 +30,23 @@ Pure decision maths the app, the marketing site and the Tax MCP all call, so the
 - `roomOrPartnerArrangement`:
   - `domestic`: no income, no deductions, exemption unaffected.
   - `lodger`: rent assessable, the let share of costs deductible, and the let share of the gain outside the exemption from first letting. It reproduces the ATO's Thomas example (35% share, $140,000 → $70,000 after the discount) and Fatima's days apportionment.
+
+### Changed — AU instant asset write-off: $20,000 from 1 July 2023, no end date
+
+- The ATO's *Instant asset write-off for eligible businesses* page (last updated 28 August 2026, read 27 September 2026), Table 1: "On or after 1 July 2023 | $20,000". The Treasury Laws Amendment (Tax Reform No. 2) Act 2026 (No. 71, 2026, assented 26 August 2026 — confirmed on the Federal Register of Legislation) made the threshold permanent from 1 July 2026. The $20,000 row now runs on from 1 July 2023 with no successor; the 2026-27 row (enacted $1,000, `proposed` $20,000) is removed. The row carries `sourceUrl` and `readOn` (new optional fields on `AuWriteOffRow`). `AU_DEPRECIATION_AUTHORITY_URLS.instantAssetWriteOff` added.
+- `auSmallBusinessPoolWriteOff` reads the verified $20,000 for 2026-27 onwards (a pool balance under $20,000 is deducted in full) and now answers only against a *verified* limit.
+
+### Added — AU per-unit deduction rates, effective-dated by income year
+
+- `workFromHomeFixedRate(incomeYearOrDate)` and `centsPerKmRate(incomeYearOrDate)` → `{ rate, verified, incomeYear, sourceUrl, readOn, note, lastPublished? }`, over `AU_WFH_FIXED_RATE_ROWS` and `AU_CENTS_PER_KM_ROWS`. `auIncomeYear`, `formatAuCents`, `AU_CENTS_PER_KM_MAX_BUSINESS_KM` (5,000), `AU_WFH_REVISED_METHOD_FROM`, `AU_DEDUCTION_RATE_AUTHORITY_URLS` exported.
+- Fixed rate — ATO *Fixed rate method* (last updated 8 June 2026): 52c 2020-21 and 2021-22; 67c 2022-23 and 2023-24; 70c 2024-25 and 2025-26. **2026-27: not published** — `rate: null, verified: false`, and the note names 70c for 2025-26 without applying it.
+- Cents per km — the Commissioner's determinations under s 28-25(4) ITAA 1997, read from the Federal Register of Legislation: 68c 2018-19 and 2019-20 (F2018L01023); 72c 2020-21 and 2021-22 (F2020L00676); 78c 2022-23 (F2022L00813); 85c 2023-24 (F2023L00767); 88c 2024-25 and 2025-26 (F2024L00697); **91c 2026-27** (F2026L00785 — 89c base plus a one-off 2c uplift, for that year only). 2027-28 is a `null` row: the ATO will index the 89c base, so 91c must not run on.
+- AU-IT `getFormSchema({ incomeYear })` builds the car-expense and working-from-home help text from those rows for the return's income year (default: today's income year, the same default `calcAuTax` uses), replacing the hard-coded "67c/hour" and "88c/km 2025-26". `TaxFilingPlugin.getFormSchema` accepts an optional `incomeYear` (additive). `auWorkFromHomeHelpText` / `auCarExpensesHelpText` exported.
+- AU-IT capital gains help text: the old text ("After applying 50% CGT discount if held >12 months") gave the discount no end date. The Treasury Laws Amendment (Tax Reform No. 1) Act 2026 (No. 49, [legislation.gov.au/C2026A00049](https://www.legislation.gov.au/C2026A00049/latest)) is law — the ATO page, last updated 29 June 2026, says "These measures are now law". The text is now built for the return's income year by `auCapitalGainsHelpText`:
+  - up to 2026-27: the 50% discount for assets owned at least 12 months, not counting the acquisition and CGT-event days;
+  - from 2027-28: the discount generally only to 30 June 2027. After that date the cost base *may* be indexed, for an Australian resident who held the asset at least 12 months (s 110-36(1A), s 114-10(1), s 114-25). A qualifying new residential dwelling or affordable housing keeps a discount of at least 50% (s 115-102, s 115-125). A 30% minimum tax *may* apply to the later gain; it excludes those gains and anyone who received listed support payments such as the age pension (s 119-5(2), s 119-15). The return does not calculate it.
+  `AU_CGT_INDEXATION_FROM` (`'2027-07-01'`) and `AU_CGT_AUTHORITY_URLS` are exported.
+- Rate Watch: `analyzeDeductionRates()` / `hasActionableDeductionFindings()` / `shippedDeductionSeries()` watch the fixed rate, cents per km and the instant asset write-off — a current income year with no verified row and a citation older than 365 days are actionable; upcoming rows are FYI. The runner prints them and opens the issue when actionable.
 
 ### Added — landlord small-item rules (`landlordSmallItemDeduction`)
 
