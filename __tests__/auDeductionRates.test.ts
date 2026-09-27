@@ -307,11 +307,16 @@ describe('AU-IT capital gains help text follows the Tax Reform No. 1 Act', () =>
     expect(h).not.toMatch(/>12 months/);
   });
 
-  it('from 2027-28: the discount only to 30 June 2027, indexation after, and a 30% minimum tax — enacted, not announced', () => {
+  it('from 2027-28: the discount generally only to 30 June 2027, indexation after, a conditional 30% minimum — law, not announced', () => {
     const h = cgFor('2027-28');
-    expect(h).toMatch(/only to the gain up to 30 June 2027/);
+    expect(h).toMatch(/generally applies only to the gain up to 30 June 2027/);
     expect(h).toMatch(/indexed for inflation/);
-    expect(h).toMatch(/30% minimum tax/);
+    // s 115-102 / s 115-125: new residential dwellings and affordable housing keep at least 50%.
+    expect(h).toMatch(/new residential dwelling or affordable housing can still get a discount of at least 50%/);
+    // s 119-5(2), s 119-15: the minimum is conditional, never stated as applying to everyone.
+    expect(h).toMatch(/30% minimum tax may apply/);
+    expect(h).toMatch(/age pension/);
+    expect(h).not.toMatch(/minimum tax applies/);
     expect(h).toMatch(/Tax Reform No\. 1\) Act 2026/);
     expect(h).not.toMatch(/announced/i);
   });

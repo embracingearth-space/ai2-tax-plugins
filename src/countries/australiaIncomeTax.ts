@@ -128,10 +128,17 @@ export function auCapitalGainsHelpText(incomeYear: AuIncomeYearInput): string {
       `you acquired it or the day of the sale contract). ${year.label} is before the 1 July 2027 changes.`
     );
   }
+  // Qualified, as the Act is (read 27 September 2026):
+  // - a new residential dwelling (s 115-102) or affordable housing (s 115-125) keeps a discount of at least 50%
+  //   (s 115-1, s 115-100(a));
+  // - those gains are outside the minimum tax (s 119-5(2)(b)-(c)), and so is anyone who received a listed
+  //   support payment in the year, such as the age pension (s 119-15).
   return (
-    `For CGT events from 1 July 2027 the 50% discount applies only to the gain up to 30 June 2027; the gain after it ` +
-    `is worked out on a cost base indexed for inflation, and a 30% minimum tax applies to it (Treasury Laws Amendment ` +
-    `(Tax Reform No. 1) Act 2026). This return does not calculate the minimum tax.`
+    `For CGT events from 1 July 2027 the 50% discount generally applies only to the gain up to 30 June 2027, and ` +
+    `the gain after it is worked out on a cost base indexed for inflation (Treasury Laws Amendment (Tax Reform No. 1) ` +
+    `Act 2026). A qualifying new residential dwelling or affordable housing can still get a discount of at least 50%. ` +
+    `A 30% minimum tax may apply to the later gain, except on those assets or if you received certain support ` +
+    `payments such as the age pension. This return does not calculate the minimum tax.`
   );
 }
 
