@@ -310,7 +310,8 @@ describe('AU-IT capital gains help text follows the Tax Reform No. 1 Act', () =>
   it('from 2027-28: the discount generally only to 30 June 2027, indexation after, a conditional 30% minimum — law, not announced', () => {
     const h = cgFor('2027-28');
     expect(h).toMatch(/generally applies only to the gain up to 30 June 2027/);
-    expect(h).toMatch(/indexed for inflation/);
+    // s 110-36(1A), s 114-10(1), s 114-25: indexation is conditional on residency and 12 months held.
+    expect(h).toMatch(/may be indexed for inflation if you are an Australian resident and held the asset for at least 12 months/);
     // s 115-102 / s 115-125: new residential dwellings and affordable housing keep at least 50%.
     expect(h).toMatch(/new residential dwelling or affordable housing can still get a discount of at least 50%/);
     // s 119-5(2), s 119-15: the minimum is conditional, never stated as applying to everyone.

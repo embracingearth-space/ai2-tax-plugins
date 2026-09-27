@@ -132,11 +132,13 @@ export function auCapitalGainsHelpText(incomeYear: AuIncomeYearInput): string {
   // - a new residential dwelling (s 115-102) or affordable housing (s 115-125) keeps a discount of at least 50%
   //   (s 115-1, s 115-100(a));
   // - those gains are outside the minimum tax (s 119-5(2)(b)-(c)), and so is anyone who received a listed
-  //   support payment in the year, such as the age pension (s 119-15).
+  //   support payment in the year, such as the age pension (s 119-15);
+  // - indexation is conditional too: s 110-36(1A) requires Division 114 — the asset acquired at least 12 months
+  //   before the CGT event (s 114-10(1)) — and does not extend to foreign or temporary residents (s 114-25).
   return (
-    `For CGT events from 1 July 2027 the 50% discount generally applies only to the gain up to 30 June 2027, and ` +
-    `the gain after it is worked out on a cost base indexed for inflation (Treasury Laws Amendment (Tax Reform No. 1) ` +
-    `Act 2026). A qualifying new residential dwelling or affordable housing can still get a discount of at least 50%. ` +
+    `For CGT events from 1 July 2027 the 50% discount generally applies only to the gain up to 30 June 2027. For the ` +
+    `gain after it, the cost base may be indexed for inflation if you are an Australian resident and held the asset ` +
+    `for at least 12 months (Treasury Laws Amendment (Tax Reform No. 1) Act 2026). A qualifying new residential dwelling or affordable housing can still get a discount of at least 50%. ` +
     `A 30% minimum tax may apply to the later gain, except on those assets or if you received certain support ` +
     `payments such as the age pension. This return does not calculate the minimum tax.`
   );
