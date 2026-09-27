@@ -7,7 +7,7 @@
  * text. Every note a decision returns points at one of these keys, so a reader
  * (or the app, or the website) can show where a number comes from.
  *
- * All ATO pages below were read in full on 27 September 2026 (ato.gov.au
+ * All ATO pages below were read in full on 27 September 2026 (UTC) (ato.gov.au
  * refuses WebFetch but serves a browser user agent), and the Act through the
  * Federal Register of Legislation API the same day. Where a rule is only
  * paraphrased from a page's own worked example, the example is named.
@@ -27,6 +27,7 @@ export interface HomePropertyRule {
   verified: boolean;
 }
 
+/** UTC calendar day of the reads. */
 const READ_ON = '2026-09-27';
 
 export const AU_HOME_PROPERTY_URLS = {

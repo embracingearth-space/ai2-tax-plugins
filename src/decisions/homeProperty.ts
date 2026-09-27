@@ -256,8 +256,10 @@ export function homeBusinessSpaceTradeoff(input: HomeBusinessSpaceInput): HomeBu
   }
 
   const incomeYears: string[] = [];
-  incomeYearStart(input.incomeYear);
-  for (let y = input.incomeYear, i = 0; i < years; i++, y = nextIncomeYearLabel(y)) incomeYears.push(y);
+  // Normalise an en-dash label ('2023–24') to the hyphen form every label in the package uses.
+  const firstStart = incomeYearStart(input.incomeYear);
+  const firstLabel = `${firstStart}-${String((firstStart + 1) % 100).padStart(2, '0')}`;
+  for (let y = firstLabel, i = 0; i < years; i++, y = nextIncomeYearLabel(y)) incomeYears.push(y);
 
   const runsIt = input.ownerRunsBusiness ?? true;
   const notes: DecisionNote[] = [

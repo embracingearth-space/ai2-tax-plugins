@@ -296,7 +296,7 @@ Every rule is a row in `AU_HOME_PROPERTY_RULES`. Each row has its ATO or legisla
 
 The 1 July 2027 CGT changes are law: the Treasury Laws Amendment (Tax Reform No. 1) Act 2026 generally replaces the 50% discount with cost-base indexation (for an Australian resident who held the asset at least 12 months) and a possible 30% minimum tax for gains accruing after that date. A qualifying new residential dwelling or affordable housing keeps a discount of at least 50%. Every CGT figure is therefore split into two parts:
 - `preJuly2027` gives the current-law figures for the gain up to 30 June 2027 (the whole gain, for an earlier sale).
-- `postJuly2027` is `{ computable: false, note }`. The 1 July 2027 apportioning method is not yet published, and indexation needs CPI figures that have not been released.
+- `postJuly2027` is `{ applies: false, note }` for a sale before 1 July 2027, and `{ applies: true, computable: false, note }` for a sale from that date. The 1 July 2027 apportioning method is not yet published, and indexation needs CPI figures that have not been released.
 
 ## Development
 

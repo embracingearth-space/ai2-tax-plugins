@@ -57,6 +57,10 @@ describe('decision dates', () => {
   it('clamps month arithmetic to the month end and rejects impossible days', () => {
     expect(addMonths('2025-08-31', 6)).toBe('2026-02-28');
     expect(() => parseYmd('2026-02-30')).toThrow(RangeError);
+    // Untrimmed input is rejected: callers compare the raw strings.
+    expect(() => parseYmd(' 2026-01-01')).toThrow(RangeError);
+    expect(() => space({ incomeYear: '2023-24 ' })).toThrow(RangeError);
+    expect(space({ incomeYear: '2023–24' }).incomeYears[0]).toBe('2023-24');
     expect(nextIncomeYearLabel('2099-00')).toBe('2100-01');
   });
 });

@@ -14,7 +14,8 @@ const YMD = /^(\d{4})-(\d{2})-(\d{2})$/;
 
 /** Parse 'YYYY-MM-DD' strictly (no rollover: '2026-02-30' throws). */
 export function parseYmd(ymd: string, field = 'date'): number {
-  const m = YMD.exec(String(ymd ?? '').trim());
+  // No trimming: callers compare the raw strings, so ' 2026-01-01' must be rejected, not accepted and mis-ordered.
+  const m = YMD.exec(String(ymd ?? ''));
   if (!m) throw new RangeError(`${field}: expected a calendar day 'YYYY-MM-DD', got "${ymd}"`);
   const [y, mo, d] = [Number(m[1]), Number(m[2]), Number(m[3])];
   const t = Date.UTC(y, mo - 1, d);
@@ -77,7 +78,7 @@ export function nextIncomeYearLabel(label: string): string {
 
 /** The first calendar year of an Australian-style income-year label ('2025-26' → 2025). */
 export function incomeYearStart(label: string): number {
-  const m = /^(\d{4})[-–](\d{2})$/.exec(String(label ?? '').trim());
+  const m = /^(\d{4})[-–](\d{2})$/.exec(String(label ?? ''));
   if (!m || Number(m[2]) !== (Number(m[1]) + 1) % 100) {
     throw new RangeError(`incomeYear: expected a label like "2025-26", got "${label}"`);
   }
