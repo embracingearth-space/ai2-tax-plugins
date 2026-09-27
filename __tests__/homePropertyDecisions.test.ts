@@ -298,6 +298,25 @@ describe('mainResidenceChoice', () => {
     expect(old.discountApplies).toBe(true);
   });
 
+  it('no overlap (new home bought after the old one is sold): taxable days never exceed days owned', () => {
+    const r = mrc({
+      homes: [
+        { name: 'Old', ownedFrom: '2005-01-01', movedOut: '2010-01-01', rentedFrom: '2010-01-01', expectedGrowth: 400_000 },
+        { name: 'New', ownedFrom: '2024-06-01', expectedGrowth: 50_000 },
+      ],
+      saleDates: { Old: '2024-01-01', New: '2030-01-01' },
+      marginalRatePct: 32,
+    });
+    expect(r.overlap.days).toBe(0);
+    for (const o of r.options) {
+      for (const h of o.homes) expect(h.taxableDays).toBeLessThanOrEqual(h.ownedDays);
+    }
+    // Both options agree: rented from 2010, the days after 1 January 2016 are taxable either way.
+    const [a, b] = r.options.map((o) => o.homes.find((h) => h.name === 'Old')!.taxableDays);
+    expect(a).toBe(b);
+    expect(a).toBe(daysInclusive('2016-01-02', '2024-01-01'));
+  });
+
   it('counts the 6-year limit the ATO\'s way (Roya: 6,940 taxable days)', () => {
     expect(daysBeyondSixYears('1999-09-29', '2024-09-29')).toBe(6940);
     expect(daysBeyondSixYears('2020-01-01', '2026-01-01')).toBe(0);

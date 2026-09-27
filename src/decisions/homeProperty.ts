@@ -570,7 +570,9 @@ export function mainResidenceChoice(input: MainResidenceChoiceInput): MainReside
   };
   // Option 2: the new home from the day it was acquired; the former home is taxable for the overlap, plus any
   // income-producing absence days beyond 6 years before it.
-  const preOverlapEnd = addDays(overlapFrom, -1);
+  // Clamped to the former home's sale: with no overlap (the new home bought after the old one was sold) the day
+  // before the new purchase can fall after that sale, and the span must not count days the home was not owned.
+  const preOverlapEnd = minYmd(addDays(overlapFrom, -1), saleF);
   const takeNew: MainResidenceOption = {
     nominated: next.name,
     homes: [
