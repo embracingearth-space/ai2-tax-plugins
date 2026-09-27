@@ -281,6 +281,23 @@ describe('mainResidenceChoice', () => {
     expect(old.postJuly2027).toMatchObject({ applies: false });
   });
 
+  it('vacant, then rented shortly before sale: taxable days before the letting keep the original 12-month test', () => {
+    // Moved out and left vacant; new home bought; the old one let only 3 months before its sale. Nominating the
+    // new home makes the vacant overlap days taxable, so the old home was not fully exempt up to first income use
+    // and the first-use reset (with its "no discount within 12 months" consequence) does not apply.
+    const r = mrc({
+      homes: [
+        { name: 'Old', ownedFrom: '2010-01-01', movedOut: '2024-01-01', rentedFrom: '2025-10-01', expectedGrowth: 300_000 },
+        { name: 'New', ownedFrom: '2024-01-01', expectedGrowth: 50_000 },
+      ],
+      saleDates: { Old: '2026-01-01', New: '2035-01-01' },
+      marginalRatePct: 32,
+    });
+    const old = r.options.find((o) => o.nominated === 'New')!.homes.find((h) => h.name === 'Old')!;
+    expect(old.taxableDays).toBeGreaterThan(0);
+    expect(old.discountApplies).toBe(true);
+  });
+
   it('counts the 6-year limit the ATO\'s way (Roya: 6,940 taxable days)', () => {
     expect(daysBeyondSixYears('1999-09-29', '2024-09-29')).toBe(6940);
     expect(daysBeyondSixYears('2020-01-01', '2026-01-01')).toBe(0);

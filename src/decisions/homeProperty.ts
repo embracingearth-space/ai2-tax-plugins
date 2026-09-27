@@ -528,8 +528,12 @@ export function mainResidenceChoice(input: MainResidenceChoiceInput): MainReside
     const g = Math.max(0, h.expectedGrowth);
     const taxableDays = spanDays(taxable);
     const taxableGain = ownedDays > 0 ? (g * taxableDays) / ownedDays : 0;
-    // No discount where the first-use rule applies and income use began within 12 months of the sale.
-    const acquired = firstIncomeUse && taxableDays > 0 ? firstIncomeUse : h.ownedFrom;
+    // The first-use rule resets the acquisition date only if the home was fully exempt until income use began —
+    // i.e. every taxable day falls on or after it. If some taxable days come earlier (the home was not your main
+    // residence while vacant), the rule does not apply ("claimed the exemption for another property for the
+    // period"), and the 12-month test runs from the original acquisition.
+    const firstUseApplies = firstIncomeUse !== null && taxableDays > 0 && taxable.every((s) => s.to < s.from || s.from >= firstIncomeUse);
+    const acquired = firstUseApplies ? (firstIncomeUse as string) : h.ownedFrom;
     const discountApplies = heldAtLeast12Months(acquired, sale);
     const factor = discountApplies ? DISCOUNT : 1;
     const beforeRegime = sale < AU_CGT_REGIME_2027_FROM;
