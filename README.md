@@ -171,9 +171,9 @@ rules.declineInValue({
   daysInYear: 365,   // AU fixes the denominator at 365; the rules enforce it
 }); // → { declineInValue: 66.85, closingAdjustableValue: 1933.15, rate: 0.1 }
 
-const writeOff = rules.instantAssetWriteOff(new Date('2026-07-01'));
-writeOff.limit;      // null
-writeOff.verified;   // false — render writeOff.note, never a number
+const writeOff = rules.instantAssetWriteOff(new Date(2026, 6, 1)); // 1 July 2026, local day
+writeOff.limit;      // 20000
+writeOff.verified;   // true — boundary 'under': the asset must cost less than $20,000
 ```
 
 ### Depreciation regimes

@@ -642,8 +642,8 @@ describe('AU instant asset write-off — $20,000 from 1 July 2023, with no end d
   // updated 28 August 2026, read 27 September 2026): "On or after 1 July 2023
   // | $20,000". Treasury Laws Amendment (Tax Reform No. 2) Act 2026 (No. 71).
   it('is $20,000, verified, on both sides of 1 July 2026', () => {
-    for (const date of ['2026-06-30', '2026-07-01']) {
-      const r = au.instantAssetWriteOff(new Date(date));
+    for (const [date, d] of [['2026-06-30', new Date(2026, 5, 30)], ['2026-07-01', new Date(2026, 6, 1)]] as const) {
+      const r = au.instantAssetWriteOff(d);
       expect({ date, limit: r.limit, verified: r.verified }).toEqual({ date, limit: 20_000, verified: true });
     }
   });
@@ -656,8 +656,10 @@ describe('AU instant asset write-off — $20,000 from 1 July 2023, with no end d
   });
 
   it('starts on 1 July 2023: 30 June 2023 is still the previous regime', () => {
-    expect(au.instantAssetWriteOff(new Date('2023-06-30')).verified).toBe(false);
-    expect(au.instantAssetWriteOff(new Date('2023-07-01')).limit).toBe(20_000);
+    // Local-part Dates: new Date('2023-07-01') parses as UTC midnight, which is
+    // still 30 June on the calendar of any zone west of UTC.
+    expect(au.instantAssetWriteOff(new Date(2023, 5, 30)).verified).toBe(false);
+    expect(au.instantAssetWriteOff(new Date(2023, 6, 1)).limit).toBe(20_000);
   });
 
   it('excludes an asset at exactly $20,000 — the threshold is "less than"', () => {
