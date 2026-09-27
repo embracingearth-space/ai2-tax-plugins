@@ -170,8 +170,10 @@ describe('homeBusinessSpaceTradeoff — CGT from 1 July 2027 is law, and only th
     const post = r.cgt.postJuly2027;
     if (post.applies) {
       expect(post.note).toMatch(/Tax Reform No\. 1\) Act 2026/);
-      expect(post.note).toMatch(/indexed for inflation/);
-      expect(post.note).toMatch(/30% minimum tax/);
+      // Conditional, as the Act is: s 110-36(1A) / Div 114 for indexation, Div 119 exceptions for the minimum.
+      expect(post.note).toMatch(/may be indexed for inflation instead if you are an Australian resident and held the asset at least 12 months/);
+      expect(post.note).toMatch(/30% minimum tax may apply/);
+      expect(post.note).toMatch(/new dwelling or affordable housing/);
       expect(post.note).toMatch(/not yet published/);
       expect(post.note).not.toMatch(/announced/i);
     }

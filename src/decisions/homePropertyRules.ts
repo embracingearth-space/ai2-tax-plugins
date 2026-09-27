@@ -253,7 +253,9 @@ export const AU_HOME_PROPERTY_RULES: Record<HomePropertyRuleKey, HomePropertyRul
   cgtFrom1July2027: {
     rule:
       'LAW, not announced: Treasury Laws Amendment (Tax Reform No. 1) Act 2026 (No. 49, assented 26 June 2026). The 50% ' +
-      'discount is replaced by cost-base indexation and a 30% minimum tax for gains accruing after 1 July 2027; the gain to ' +
+      'discount is generally replaced, for gains accruing after 1 July 2027, by cost-base indexation (s 110-36(1A): Australian ' +
+      'residents, asset held at least 12 months) and a possible 30% minimum tax; a qualifying new residential dwelling or ' +
+      'affordable housing keeps a discount of at least 50% (s 115-102, s 115-125). The gain to ' +
       '30 June 2027 keeps the discount. An individual is taken to sell just before, and reacquire on, 1 July 2027 at market ' +
       'value or under an apportioning method the Commissioner determines (s 112-155, s 112-185). No such method is ' +
       'published — none is on the Federal Register of Legislation as at the read date — so the portion after 30 June 2027 ' +

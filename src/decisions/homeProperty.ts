@@ -22,8 +22,9 @@
  * under the wrong country's rules is worse than none.
  *
  * CGT FROM 1 JULY 2027 IS LAW, AND ONLY HALF OF IT IS COMPUTABLE TODAY. The
- * Treasury Laws Amendment (Tax Reform No. 1) Act 2026 replaces the 50%
- * discount with cost-base indexation and a 30% minimum tax for gains accruing
+ * Treasury Laws Amendment (Tax Reform No. 1) Act 2026 generally replaces the
+ * 50% discount with cost-base indexation (for a resident who held the asset
+ * 12 months) and a possible 30% minimum tax for gains accruing
  * after 1 July 2027. The gain to 30 June 2027 keeps the discount, so every
  * CGT figure is split: `preJuly2027` carries current-law figures for the gain
  * to 30 June 2027, and `postJuly2027` is `{ computable: false, note }`. The
@@ -123,8 +124,11 @@ export type PostJuly2027Cgt =
   | { applies: true; computable: false; note: string };
 
 const POST_JULY_2027_NOTE =
-  'Gains accruing after 1 July 2027 are taxed under the Treasury Laws Amendment (Tax Reform No. 1) Act 2026: ' +
-  'a cost base indexed for inflation in place of the 50% discount, and a 30% minimum tax. The Act takes the home ' +
+  'Gains accruing after 1 July 2027 are taxed under the Treasury Laws Amendment (Tax Reform No. 1) Act 2026. The ' +
+  '50% discount generally stops; the cost base may be indexed for inflation instead if you are an Australian ' +
+  'resident and held the asset at least 12 months (s 110-36(1A), Division 114); and a 30% minimum tax may apply ' +
+  '(Division 119 — not for a qualifying new dwelling or affordable housing, or if you received certain support ' +
+  'payments such as the age pension). The Act takes the home ' +
   'to be sold and reacquired on 1 July 2027 at market value, or under an apportioning method the Commissioner ' +
   'determines; that method is not yet published, and indexation depends on CPI figures not yet released. This ' +
   'portion is therefore not computed — only the gain to 30 June 2027 is, under the current rules.';
@@ -141,7 +145,7 @@ function notes2027(saleDate: string): DecisionNote[] {
     ? []
     : [
         note('cgtFrom1July2027', 'The sale is on or after 1 July 2027: only the gain to 30 June 2027 is worked out here, under the current rules. The rest is not computed.'),
-        note('minimumTax30', 'A 30% minimum tax applies to gains accruing after 1 July 2027.'),
+        note('minimumTax30', 'A 30% minimum tax may apply to gains accruing after 1 July 2027, unless an exception in Division 119 applies.'),
       ];
 }
 
