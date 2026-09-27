@@ -38,11 +38,34 @@ async function fetchExternalRates() {
   return { available: false, reason: 'live external auto-diff not yet wired — verify via the authority checklist below' };
 }
 
+// Deduction rates (AU WFH fixed rate, cents per km, instant asset write-off).
+// Findings come from analyzeDeductionRates() in src/rateWatch.ts; this only prints
+// them. Like everything here it never edits a rate.
+function renderDeductions(L, d) {
+  if (!d) return;
+  const tag = (x) => `**${x.countryCode}** ${x.label}`;
+  if (d.unverifiedCurrent.length) {
+    L.push('## ❓ Deduction rates with no verified figure for the current income year');
+    for (const u of d.unverifiedCurrent) L.push(`- ${tag(u)} — ${u.incomeYear}: ${u.reason} (row from ${u.effectiveFrom}). Edit \`${u.file}\` once confirmed.`);
+    L.push('');
+  }
+  if (d.staleCitations.length) {
+    L.push('## 🕸️ Stale deduction-rate citations');
+    for (const s of d.staleCitations) L.push(`- ${tag(s)} — last read ${s.readOn} (${s.ageDays} days ago). Re-read ${s.sourceUrl} and update \`readOn\` in \`${s.file}\`.`);
+    L.push('');
+  }
+  if (d.upcoming.length) {
+    L.push('## 🗓️ Upcoming deduction-rate rows');
+    for (const r of d.upcoming) L.push(`- ${tag(r)} → ${r.incomeYear} from ${r.effectiveFrom}: ${r.value ?? 'no rate published yet'}`);
+    L.push('');
+  }
+}
+
 function pct(n) {
   return `${+(n * 100).toFixed(2)}%`;
 }
 
-function render(f, mode, external) {
+function render(f, mode, external, deductions) {
   const L = [];
   L.push(`# 🪙 Rate Watch — ${f.asOf} (${mode})`);
   L.push('');
@@ -75,6 +98,8 @@ function render(f, mode, external) {
     L.push('');
   }
 
+  renderDeductions(L, deductions);
+
   L.push('## 🌐 External auto cross-check');
   L.push(external.available ? '- live source diff attached above' : `- _${external.reason}_`);
   L.push('');
@@ -97,17 +122,20 @@ async function main() {
   // Required INSIDE main() so a load failure (e.g. dist not built) is caught by the
   // failure handler below and opens a "runner failed" issue, instead of throwing at
   // module load and bypassing the report path entirely. embracingearth.space
-  const { analyzeLedger, hasActionableFindings } = require('../../dist/rateWatch');
+  const { analyzeLedger, hasActionableFindings, analyzeDeductionRates, hasActionableDeductionFindings } = require('../../dist/rateWatch');
   const mode = resolveMode();
-  const findings = analyzeLedger(new Date());
+  // One timestamp for both analyses, so they cannot straddle midnight.
+  const asOf = new Date();
+  const findings = analyzeLedger(asOf);
+  const deductions = analyzeDeductionRates(asOf);
   const external = await fetchExternalRates();
-  const report = render(findings, mode, external);
+  const report = render(findings, mode, external, deductions);
 
   const outPath = path.join(process.cwd(), 'rate-watch-report.md');
   fs.writeFileSync(outPath, report);
 
   // quarterly always opens an issue (the review prompt); weekly only when actionable
-  const shouldOpen = mode === 'quarterly' || hasActionableFindings(findings);
+  const shouldOpen = mode === 'quarterly' || hasActionableFindings(findings) || hasActionableDeductionFindings(deductions);
   const title = `Rate Watch — ${findings.asOf} (${mode})`;
 
   console.log(report);

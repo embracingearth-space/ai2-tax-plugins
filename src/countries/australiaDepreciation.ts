@@ -12,17 +12,25 @@
  *    updated 9 December 2025): the instant asset write-off, and the general
  *    small business pool at 15% in the allocation year and 30% after.
  *
- * THE WRITE-OFF LIMIT IS EFFECTIVE-DATED AND STOPS AT 30 JUNE 2026 ON PURPOSE.
- * The ATO states $20,000 for 2023-24, 2024-25 and 2025-26. It states nothing
- * for 2026-27, so this file states nothing either: the row for 2026-27 onwards
- * carries `limit: null, verified: false` and a note telling you to confirm the
- * current limit. It does NOT carry $20,000 forward and does NOT assume the
- * $1,000 statutory reversion — printing an unverified statutory threshold in a
- * tax product is worse than printing nothing, because nobody checks a number
- * that looks confident.
+ * THE WRITE-OFF LIMIT IS EFFECTIVE-DATED, AND EVERY FIGURE IN IT IS READ, NOT
+ * REMEMBERED. The ATO's "Instant asset write-off for eligible businesses" page
+ * (last updated 28 August 2026, read 27 September 2026) states, in Table 1 for
+ * an aggregated turnover under $10 million applying the simplified depreciation
+ * rules: "On or after 1 July 2023 | $20,000" — with no end date. That is the
+ * Treasury Laws Amendment (Tax Reform No. 2) Act 2026 (No. 71, 2026, assented
+ * 26 August 2026) making the $20,000 threshold permanent from 1 July 2026, so
+ * the $20,000 row runs on from 1 July 2023 with no successor.
+ *
+ * A window the authority states nothing for is still a row — `limit: null,
+ * verified: false` with a note — never a number carried forward from the row
+ * before. Printing an unverified statutory threshold in a tax product is worse
+ * than printing nothing, because nobody checks a number that looks confident.
+ * When a future change is announced, append a dated row; do not edit a row
+ * that was law for its own window.
  *
  * Reference: https://www.ato.gov.au/businesses-and-organisations/income-deductions-and-concessions/depreciation-and-capital-expenses-and-allowances/general-depreciation-rules-capital-allowances/prime-cost-straight-line-and-diminishing-value-methods
  * Reference: https://www.ato.gov.au/businesses-and-organisations/income-deductions-and-concessions/depreciation-and-capital-expenses-and-allowances/simpler-depreciation-for-small-business
+ * Reference: https://www.ato.gov.au/businesses-and-organisations/income-deductions-and-concessions/depreciation-and-capital-expenses-and-allowances/simpler-depreciation-for-small-business/instant-asset-write-off
  * Reference: https://www.legislation.gov.au/F2025L01097/asmade
  */
 
@@ -50,6 +58,8 @@ const ATO_GENERAL_DEPRECIATION =
   'https://www.ato.gov.au/businesses-and-organisations/income-deductions-and-concessions/depreciation-and-capital-expenses-and-allowances/general-depreciation-rules-capital-allowances/prime-cost-straight-line-and-diminishing-value-methods';
 const ATO_SIMPLER_DEPRECIATION =
   'https://www.ato.gov.au/businesses-and-organisations/income-deductions-and-concessions/depreciation-and-capital-expenses-and-allowances/simpler-depreciation-for-small-business';
+const ATO_INSTANT_ASSET_WRITE_OFF =
+  'https://www.ato.gov.au/businesses-and-organisations/income-deductions-and-concessions/depreciation-and-capital-expenses-and-allowances/simpler-depreciation-for-small-business/instant-asset-write-off';
 const ATO_RENTAL_DEPRECIATING_ASSETS =
   'https://www.ato.gov.au/individuals-and-families/investments-and-assets/property-and-land/residential-rental-properties/rental-expenses/depreciating-assets-in-rental-properties';
 const ATO_NON_BUSINESS_300 =
@@ -193,6 +203,10 @@ const EFFECTIVE_LIFE_BY_KEY = new Map(
 export interface AuWriteOffRow extends InstantAssetWriteOffInfo {
   /** YYYY-MM-DD, inclusive. The row runs until the next row's effectiveFrom. */
   effectiveFrom: string;
+  /** The page the limit was read from. Watched by Rate Watch for staleness. */
+  sourceUrl?: string;
+  /** YYYY-MM-DD the page was last read against this row. */
+  readOn?: string;
 }
 
 /**
@@ -209,73 +223,31 @@ export interface AuWriteOffRow extends InstantAssetWriteOffInfo {
  */
 export const AU_INSTANT_ASSET_WRITE_OFF_ROWS: AuWriteOffRow[] = [
   {
-    // 2026-27: THE LEGISLATED FIGURE IS $1,000, and it is not "unpublished".
+    // "On or after 1 July 2023 | $20,000" — ATO, Instant asset write-off for
+    // eligible businesses, Table 1 (last updated 28 August 2026), read
+    // 27 September 2026. No end date: the Treasury Laws Amendment (Tax Reform
+    // No. 2) Act 2026 (No. 71, 2026) made the threshold permanent from
+    // 1 July 2026. Its assent (26 August 2026) was confirmed on the Federal
+    // Register of Legislation API the same day this row was re-read.
     //
-    // This row used to read `limit: null, verified: false` — "the ATO has not
-    // published a limit". That was wrong in both directions. There IS a
-    // standing legislated threshold: absent a temporary increase, the
-    // simplified depreciation rules write off assets costing less than
-    // $1,000, and the $20,000 row above was one of those temporary increases,
-    // which ended 30 June 2026. Reporting null meant a $900 asset got no
-    // offer at all (a real, if small, missed deduction) and a $15,000 asset
-    // got no warning (an over-claim under the law as it currently stands).
-    //
-    // The permanent $20,000 threshold is NOT LAW YET, and passage is not
-    // assent. Treasury Laws Amendment (Tax Reform No. 2) Bill 2026 passed both
-    // Houses on 19 August 2026, but as at 26 August 2026 it had not received
-    // Royal Assent: no corresponding Act appears on the Federal Register of
-    // Legislation. That check was run against a control so the absence means
-    // something — the register returns "Treasury Laws Amendment (Tax Reform
-    // No. 1) Act 2026" (No. 49, 2026) for the sibling bill, and returns nothing
-    // at all for No. 2.
-    //
-    // So the figure belongs in `proposed`, never in `limit`: `limit` carries
-    // only what a taxpayer can rely on today. Reporting $20,000 as verified law
-    // would have every host claiming against an Act that does not exist, and of
-    // the two ways to be wrong here the over-claim is the expensive one — the
-    // ATO penalises a shortfall, whereas an under-claim can be amended.
-    //
-    // WHEN ASSENT IS CONFIRMED: set limit to 20000, drop `proposed`, and update
-    // the note. Commencement is already 1 July 2026, so this row still needs no
-    // successor. Re-check with:
-    //   https://api.prod.legislation.gov.au/v1/titles?$filter=contains(name,'Tax Reform No. 2')
-    //
-    // The standing threshold is "less than $1,000", so `boundary: 'under'`.
-    effectiveFrom: '2026-07-01',
-    limit: 1000,
-    verified: true,
-    boundary: 'under',
-    note:
-      '$1,000 per asset — the standing threshold under the simplified depreciation rules, ' +
-      'which is what applies once a temporary increase ends. The $20,000 threshold for ' +
-      '2023-24 to 2025-26 ended on 30 June 2026. A permanent $20,000 threshold from ' +
-      '1 July 2026 passed both Houses of Parliament on 19 August 2026 but had not received ' +
-      'Royal Assent as at 26 August 2026, so it is not yet law and cannot be relied on for an ' +
-      'asset you are claiming now. Check whether it has since become law with the ATO or your ' +
-      'registered tax agent before writing off anything above $1,000.',
-    proposed: {
-      limit: 20000,
-      note:
-        'A permanent $20,000 instant asset write-off from 1 July 2026, per asset, for small ' +
-        'businesses with an aggregated annual turnover under $10 million. Treasury Laws ' +
-        'Amendment (Tax Reform No. 2) Bill 2026 passed both Houses on 19 August 2026 and was ' +
-        'awaiting Royal Assent as at 26 August 2026. Once it is law, assets costing less than ' +
-        '$20,000 first used or installed ready for use from 1 July 2026 would qualify, and ' +
-        'an asset at exactly $20,000 would not.',
-    },
-  },
-  {
+    // This row used to stop at 30 June 2026, with a 2026-27 row carrying the
+    // standing $1,000 and the then-pending $20,000 in `proposed`. That was true
+    // while the Bill awaited assent; it is not true now, and the 2026-27 row
+    // has been removed rather than edited so this row runs on unbroken.
     effectiveFrom: '2023-07-01',
     limit: 20000,
     verified: true,
-    // The ATO's wording is "cost less than $20,000" — exactly $20,000 misses.
+    // The ATO's wording is "an asset's full cost must be less than the
+    // relevant limit" — exactly $20,000 misses.
     boundary: 'under',
+    sourceUrl: ATO_INSTANT_ASSET_WRITE_OFF,
+    readOn: '2026-09-27',
     note:
-      '$20,000 per asset for the 2023-24, 2024-25 and 2025-26 income years, for small ' +
-      'businesses with an aggregated turnover under $10 million using the simplified ' +
-      'depreciation rules. The asset must cost less than $20,000 and be first used or ' +
-      'installed ready for use for a taxable purpose within the income year. The limit ' +
-      'applies per asset, so more than one asset can be written off.',
+      '$20,000 per asset for assets first used or installed ready for use on or after ' +
+      '1 July 2023, for small businesses with an aggregated turnover under $10 million using ' +
+      'the simplified depreciation rules. The asset must cost less than $20,000, and the ' +
+      'limit applies per asset, so more than one asset can be written off. From 1 July 2026 ' +
+      'the $20,000 threshold is permanent.',
   },
   {
     effectiveFrom: '2020-10-06',
@@ -466,11 +438,17 @@ export const AU_SMALL_BUSINESS_POOL_RATES = { allocationYear: 0.15, ongoing: 0.3
  * limit, the whole balance is deducted.
  *
  * This is deliberately a separate call rather than something declineInValue()
- * does quietly. It depends on the write-off limit, which is unverified for
- * 2026-27 onwards, and a rule that silently zeroes a pool is exactly the kind
- * of thing that should be shown to the person lodging before it is applied.
- * `deductWholeBalance: null` means the limit for that date is not known, so the
- * question cannot be answered — not that the answer is no.
+ * does quietly: a rule that silently zeroes a pool should be shown to the
+ * person lodging before it is applied. It reads the effective-dated write-off
+ * limit for the date, so from 1 July 2023 onwards — including 2026-27 and
+ * later, now that the ATO states $20,000 with no end date — it tests the
+ * balance against the verified $20,000. The comparison is "less than", the
+ * same boundary as the write-off itself.
+ *
+ * It answers only against a VERIFIED limit. `deductWholeBalance: null` means
+ * the limit for that date is not known (temporary full expensing, or a year
+ * not recorded here), so the question cannot be answered — not that the
+ * answer is no.
  */
 export function auSmallBusinessPoolWriteOff(
   poolBalanceBeforeDeductions: number,
@@ -478,7 +456,7 @@ export function auSmallBusinessPoolWriteOff(
 ): { deductWholeBalance: boolean | null; amount: number | null } & InstantAssetWriteOffInfo {
   const writeOff = auInstantAssetWriteOff(onDate);
   const balance = Number(poolBalanceBeforeDeductions) || 0;
-  if (writeOff.limit === null) {
+  if (writeOff.limit === null || !writeOff.verified) {
     return { ...writeOff, deductWholeBalance: null, amount: null };
   }
   const deductWholeBalance = balance > 0 && balance < writeOff.limit;
@@ -651,6 +629,7 @@ export const AU_DEPRECIATION_RULES: DepreciationRules = {
 export const AU_DEPRECIATION_AUTHORITY_URLS = {
   generalRules: ATO_GENERAL_DEPRECIATION,
   simplerRules: ATO_SIMPLER_DEPRECIATION,
+  instantAssetWriteOff: ATO_INSTANT_ASSET_WRITE_OFF,
   effectiveLifeDetermination: 'https://www.legislation.gov.au/F2025L01097/asmade',
   rentalDepreciatingAssets: ATO_RENTAL_DEPRECIATING_ASSETS,
   nonBusinessAssets300OrLess: ATO_NON_BUSINESS_300,

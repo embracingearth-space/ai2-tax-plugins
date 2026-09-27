@@ -178,6 +178,27 @@ export {
 
 export type { AuWriteOffRow, AuLandlordSmallItemRow } from './countries/australiaDepreciation';
 
+// Australia — per-unit deduction rates (WFH fixed rate, cents per km), effective-dated by income year.
+export {
+  workFromHomeFixedRate,
+  centsPerKmRate,
+  auIncomeYear,
+  formatAuCents,
+  AU_WFH_FIXED_RATE_ROWS,
+  AU_WFH_REVISED_METHOD_FROM,
+  AU_CENTS_PER_KM_ROWS,
+  AU_CENTS_PER_KM_MAX_BUSINESS_KM,
+  AU_DEDUCTION_RATE_AUTHORITY_URLS,
+} from './countries/australiaDeductions';
+
+export type {
+  AuDeductionRateRow,
+  AuDeductionRate,
+  AuIncomeYear,
+  AuIncomeYearInput,
+  AuRateUnit,
+} from './countries/australiaDeductions';
+
 // New Zealand — Inland Revenue's rate-per-asset regime (IR265 rates, whole-month part years).
 export {
   NZ_DEPRECIATION_RULES,
@@ -499,4 +520,12 @@ export { default as australiaIncomeTaxPlugin } from './countries/australiaIncome
 // Ground truth for the AU-IT legislated first-bracket-rate cuts — exported so
 // tests assert against real logic instead of re-deriving it inline.
 export { calcAuTax, currentFyStartYear, firstBracketRate } from './countries/australiaIncomeTax';
+// Year-specific help text, built from the deduction-rate rows above.
+export {
+  auWorkFromHomeHelpText,
+  auCarExpensesHelpText,
+  auCapitalGainsHelpText,
+  AU_CGT_INDEXATION_FROM,
+  AU_CGT_AUTHORITY_URLS,
+} from './countries/australiaIncomeTax';
 export { default as canadaIncomeTaxPlugin } from './countries/canadaIncomeTax';
