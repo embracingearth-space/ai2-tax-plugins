@@ -339,6 +339,7 @@ describe('mainResidenceChoice', () => {
     const h = { name: 'X', ownedFrom: '2020-01-01', expectedGrowth: 1 };
     expect(() => mainResidenceChoice({ homes: [h], saleDates: { X: '2021-01-01' }, marginalRatePct: 30 })).toThrow(/exactly two/);
     expect(() => mainResidenceChoice({ homes: [h, { ...h, name: 'Y' }], saleDates: { X: '2021-01-01', Y: '2021-01-01' }, marginalRatePct: 30 })).toThrow(/movedOut/);
+    expect(() => mainResidenceChoice({ homes: [{ ...h, movedOut: '2020-06-01' }, h], saleDates: { X: '2021-01-01' }, marginalRatePct: 30 })).toThrow(/different names/);
   });
 });
 

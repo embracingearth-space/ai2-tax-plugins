@@ -476,6 +476,8 @@ export function mainResidenceChoice(input: MainResidenceChoiceInput): MainReside
   const former = input.homes.find((h) => h.movedOut !== undefined);
   const next = input.homes.find((h) => h.movedOut === undefined);
   if (!former || !next) throw new RangeError('homes: exactly one home must have movedOut (the former home)');
+  // Sale dates are keyed by name, so two homes with one name would silently share a sale date.
+  if (former.name === next.name) throw new RangeError(`homes: the two homes need different names, both are "${former.name}"`);
   const marginal = pct(input.marginalRatePct, 'marginalRatePct');
 
   const saleOf = (h: HomeTimeline) => {
