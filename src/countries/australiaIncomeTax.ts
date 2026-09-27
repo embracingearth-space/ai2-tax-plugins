@@ -97,6 +97,44 @@ export function auCarExpensesHelpText(incomeYear: AuIncomeYearInput): string {
   return `Cents per km: ${unpublished(r, 'per km')} ${cap[0].toUpperCase()}${cap.slice(1)}. Or logbook.`;
 }
 
+// ─── Capital gains: the discount has an end date ────────────────────────────
+//
+// The 50% CGT discount does NOT run on indefinitely. The Treasury Laws
+// Amendment (Tax Reform No. 1) Act 2026 (No. 49, assented 26 June 2026) is
+// law — the ATO: "These measures are now law" (page last updated 29 June
+// 2026, read 27 September 2026). For CGT events from 1 July 2027 the discount
+// applies only to the gain that accrued to 30 June 2027; the gain after it is
+// worked out on a cost base indexed for inflation, with a 30% minimum tax
+// (Division 119 ITAA 1997). Help text that says "50% discount if held 12
+// months" with no date would be wrong for every 2027-28 return.
+
+/** The first day CGT events fall under the indexation and minimum-tax rules. */
+export const AU_CGT_INDEXATION_FROM = '2027-07-01';
+
+export const AU_CGT_AUTHORITY_URLS = {
+  cgtDiscount: 'https://www.ato.gov.au/individuals-and-families/investments-and-assets/capital-gains-tax/cgt-discount',
+  taxReform2027:
+    'https://www.ato.gov.au/about-ato/new-legislation/in-detail/individuals/tax-reform-boosting-home-ownership-reforming-negative-gearing-and-capital-gains-tax',
+  taxReformAct: 'https://www.legislation.gov.au/C2026A00049/latest',
+} as const;
+
+/** The capital-gains help text for an income year. */
+export function auCapitalGainsHelpText(incomeYear: AuIncomeYearInput): string {
+  const year = auIncomeYear(incomeYear);
+  if (year.startYmd < AU_CGT_INDEXATION_FROM) {
+    // "you owned the asset for at least 12 months ... You exclude the day of acquisition and the day of the CGT event"
+    return (
+      `After applying the 50% CGT discount to gains on assets you owned for at least 12 months (not counting the day ` +
+      `you acquired it or the day of the sale contract). ${year.label} is before the 1 July 2027 changes.`
+    );
+  }
+  return (
+    `For CGT events from 1 July 2027 the 50% discount applies only to the gain up to 30 June 2027; the gain after it ` +
+    `is worked out on a cost base indexed for inflation, and a 30% minimum tax applies to it (Treasury Laws Amendment ` +
+    `(Tax Reform No. 1) Act 2026). This return does not calculate the minimum tax.`
+  );
+}
+
 const auItPlugin: TaxFilingPlugin = {
   countryCode: 'AU-IT',
   displayName: 'Individual Tax Return (ITR)',
@@ -128,7 +166,7 @@ const auItPlugin: TaxFilingPlugin = {
           { id: 'franked_dividends', label: 'Franked dividends (grossed up)', type: 'currency', editable: true, required: false, helpText: 'Include franking credits as income' },
           { id: 'franking_credits', label: 'Franking credits', type: 'currency', editable: true, required: false },
           { id: 'rental_income', label: 'Net rental income', type: 'currency', editable: true, required: false },
-          { id: 'capital_gains', label: 'Net capital gains', type: 'currency', editable: true, required: false, helpText: 'After applying 50% CGT discount if held >12 months' },
+          { id: 'capital_gains', label: 'Net capital gains', type: 'currency', editable: true, required: false, helpText: auCapitalGainsHelpText(year) },
           { id: 'other_income', label: 'Other income', type: 'currency', editable: true, required: false },
           { id: 'reportable_super', label: 'Reportable super contributions', type: 'currency', editable: true, required: false, helpText: 'Salary-sacrifice + personal deductible super. Not assessable income, but counts toward study/training loan repayment income.' },
           { id: 'reportable_fringe_benefits', label: 'Reportable fringe benefits', type: 'currency', editable: true, required: false, helpText: 'From your payment summary/income statement. Not assessable income, but counts toward study/training loan repayment income.' },

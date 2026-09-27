@@ -521,5 +521,11 @@ export { default as australiaIncomeTaxPlugin } from './countries/australiaIncome
 // tests assert against real logic instead of re-deriving it inline.
 export { calcAuTax, currentFyStartYear, firstBracketRate } from './countries/australiaIncomeTax';
 // Year-specific help text, built from the deduction-rate rows above.
-export { auWorkFromHomeHelpText, auCarExpensesHelpText } from './countries/australiaIncomeTax';
+export {
+  auWorkFromHomeHelpText,
+  auCarExpensesHelpText,
+  auCapitalGainsHelpText,
+  AU_CGT_INDEXATION_FROM,
+  AU_CGT_AUTHORITY_URLS,
+} from './countries/australiaIncomeTax';
 export { default as canadaIncomeTaxPlugin } from './countries/canadaIncomeTax';

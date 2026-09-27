@@ -292,3 +292,34 @@ describe('AU-IT help text is built from the rows for the return\'s income year',
     expect(auCarExpensesHelpText('2024-25')).toBe(helpFor('2024-25').car);
   });
 });
+
+// ─── Capital gains help text: the 50% discount has an end date ─────────────
+
+describe('AU-IT capital gains help text follows the Tax Reform No. 1 Act', () => {
+  const cgFor = (incomeYear: string) =>
+    australiaIncomeTaxPlugin.getFormSchema({ incomeYear }).flatMap((s) => s.fields).find((f) => f.id === 'capital_gains')!.helpText as string;
+
+  it('up to 2026-27: the 50% discount, at least 12 months, the ATO\'s own counting rule', () => {
+    const h = cgFor('2026-27');
+    expect(h).toMatch(/50% CGT discount/);
+    expect(h).toMatch(/at least 12 months/);
+    expect(h).toMatch(/not counting the day/);
+    expect(h).not.toMatch(/>12 months/);
+  });
+
+  it('from 2027-28: the discount only to 30 June 2027, indexation after, and a 30% minimum tax — enacted, not announced', () => {
+    const h = cgFor('2027-28');
+    expect(h).toMatch(/only to the gain up to 30 June 2027/);
+    expect(h).toMatch(/indexed for inflation/);
+    expect(h).toMatch(/30% minimum tax/);
+    expect(h).toMatch(/Tax Reform No\. 1\) Act 2026/);
+    expect(h).not.toMatch(/announced/i);
+  });
+
+  it('switches on 1 July 2027 exactly', () => {
+    expect(pkg.auCapitalGainsHelpText('2027-06-30')).toBe(cgFor('2026-27'));
+    expect(pkg.auCapitalGainsHelpText('2027-07-01')).toBe(cgFor('2027-28'));
+    expect(pkg.AU_CGT_INDEXATION_FROM).toBe('2027-07-01');
+    expect(pkg.AU_CGT_AUTHORITY_URLS.taxReformAct).toBe('https://www.legislation.gov.au/C2026A00049/latest');
+  });
+});
