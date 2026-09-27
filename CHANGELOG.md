@@ -8,6 +8,29 @@ member has a value on every rules object that ships, `declineInValue` still
 accepts `daysHeld` / `daysInYear` exactly as before, and a host on 2.1.0 keeps
 working untouched.
 
+### Added — home and property decisions (`src/decisions/homeProperty.ts`)
+
+Pure decision maths the app, the marketing site and the Tax MCP all call, so they show the same numbers. AU first. Any other country returns `{ supported: false, authority }` with the country's tax authority link and no numbers. Every rule is a row in `AU_HOME_PROPERTY_RULES` with its source URL, the page's own last-updated date, and the date it was read (27 September 2026). Every result lists the notes and rules it relied on.
+
+- `homeBusinessSpaceTradeoff` compares a desk or shared room with a place of business:
+  - running costs are claimable in both; occupancy costs only in a place of business, where the same floor-area share loses the main residence exemption;
+  - a co-owner who does not run the business keeps the full exemption;
+  - returns deductions per year and in total, their tax value, the CGT on the business share under the discount rules, the net result and the break-even growth;
+  - worked case: 35% share, $9,600 occupancy a year, 4 years, 32% → $4,300.80 of extra deduction value; CGT $2,800 / $5,600 / $14,000 at $50k / $100k / $250k growth; break-even $76,800.
+- The **1 July 2027 CGT changes are law, not announced**. The Treasury Laws Amendment (Tax Reform No. 1) Act 2026 (No. 49, https://www.legislation.gov.au/C2026A00049/latest) was assented 26 June 2026, and the ATO page (updated 29 June 2026) says "These measures are now law".
+  - For gains accruing after 1 July 2027 the Act generally replaces the 50% discount with cost-base indexation, for an Australian resident who held the asset at least 12 months (s 110-36(1A), Division 114). A 30% minimum tax may apply (Division 119). A qualifying new residential dwelling or affordable housing keeps at least 50% (s 115-102, s 115-125).
+  - Every CGT result carries `preJuly2027`: current-law figures for the gain to 30 June 2027, measured by even growth by day or from supplied valuations.
+  - Every CGT result also carries `postJuly2027`: `{ applies: false, note }` for a sale before 1 July 2027, and `{ applies: true, computable: false, note }` for a sale from that date. The 1 July 2027 apportioning method (s 112-185) is not yet published, and future CPI is unknown. Results with a sale after that date are flagged `complete: false`.
+- The 1 July 2027 date lives in one place: `AU_CGT_REGIME_2027_FROM` re-exports `AU_CGT_INDEXATION_FROM` from the AU income tax plugin (added in #52), and the last discount day is derived from it.
+- `mainResidenceChoice` works out which of two homes the exemption should cover while you own both. It applies:
+  - the 6-year rule (counted as in the ATO's Roya example);
+  - one main residence at a time;
+  - the 6-month moving-house rule (it reproduces the ATO's Jeneen and John example: 90 of 8,675 days);
+  - a note on the spouse rule.
+- `roomOrPartnerArrangement`:
+  - `domestic`: no income, no deductions, exemption unaffected.
+  - `lodger`: rent assessable, the let share of costs deductible, and the let share of the gain outside the exemption from first letting. It reproduces the ATO's Thomas example (35% share, $140,000 → $70,000 after the discount) and Fatima's days apportionment.
+
 ### Changed — AU instant asset write-off: $20,000 from 1 July 2023, no end date
 
 - The ATO's *Instant asset write-off for eligible businesses* page (last updated 28 August 2026, read 27 September 2026), Table 1: "On or after 1 July 2023 | $20,000". The Treasury Laws Amendment (Tax Reform No. 2) Act 2026 (No. 71, 2026, assented 26 August 2026 — confirmed on the Federal Register of Legislation) made the threshold permanent from 1 July 2026. The $20,000 row now runs on from 1 July 2023 with no successor; the 2026-27 row (enacted $1,000, `proposed` $20,000) is removed. The row carries `sourceUrl` and `readOn` (new optional fields on `AuWriteOffRow`). `AU_DEPRECIATION_AUTHORITY_URLS.instantAssetWriteOff` added.
