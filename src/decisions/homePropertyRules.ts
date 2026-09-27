@@ -47,7 +47,7 @@ export const AU_HOME_PROPERTY_URLS = {
     'https://www.ato.gov.au/individuals-and-families/investments-and-assets/property-and-land/residential-rental-properties/rental-income-you-must-declare',
   taxReform2027:
     'https://www.ato.gov.au/about-ato/new-legislation/in-detail/individuals/tax-reform-boosting-home-ownership-reforming-negative-gearing-and-capital-gains-tax',
-  taxReformAct: 'https://www.legislation.gov.au/C2026A00049/asmade',
+  taxReformAct: 'https://www.legislation.gov.au/C2026A00049/latest',
 } as const;
 
 const U = AU_HOME_PROPERTY_URLS;
@@ -252,10 +252,12 @@ export const AU_HOME_PROPERTY_RULES: Record<HomePropertyRuleKey, HomePropertyRul
   },
   cgtFrom1July2027: {
     rule:
-      'ENACTED, not announced: Treasury Laws Amendment (Tax Reform No. 1) Act 2026 (No. 49, 2026). For CGT events on or after ' +
-      '1 July 2027 an individual is taken to sell just before and reacquire on 1 July 2027 at market value (or a ' +
-      'Commissioner-determined apportioning method); the gain to 30 June 2027 keeps the 50% discount, and the cost base is ' +
-      'indexed for inflation from 1 July 2027 in place of the discount for the gain after it.',
+      'LAW, not announced: Treasury Laws Amendment (Tax Reform No. 1) Act 2026 (No. 49, assented 26 June 2026). The 50% ' +
+      'discount is replaced by cost-base indexation and a 30% minimum tax for gains accruing after 1 July 2027; the gain to ' +
+      '30 June 2027 keeps the discount. An individual is taken to sell just before, and reacquire on, 1 July 2027 at market ' +
+      'value or under an apportioning method the Commissioner determines (s 112-155, s 112-185). No such method is ' +
+      'published — none is on the Federal Register of Legislation as at the read date — so the portion after 30 June 2027 ' +
+      'is not computed.',
     authority: 'Federal Register of Legislation',
     sourceUrl: U.taxReformAct,
     pageLastUpdated: null,

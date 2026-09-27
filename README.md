@@ -290,7 +290,11 @@ const r = homeBusinessSpaceTradeoff({
 // r.extraDeductions.taxValue → 4300.8; r.cgt.currentLaw.tax → 2800; r.breakEvenGrowth.currentLaw → 76800
 ```
 
-Every rule is a row in `AU_HOME_PROPERTY_RULES` with its ATO or legislation URL, the page's own last-updated date and the day it was read, and every result lists the notes and rules it used. Gains are assumed to accrue evenly by day, which is how the ATO apportions them. A sale on or after 1 July 2027 falls under the regime enacted by the Treasury Laws Amendment (Tax Reform No. 1) Act 2026: the gain to 30 June 2027 keeps the 50% discount, the later gain is indexed, and a 30% minimum tax applies. That result is computed only when you pass the home's value at first use and an inflation assumption; otherwise it says what is missing.
+Every rule is a row in `AU_HOME_PROPERTY_RULES`. Each row has its ATO or legislation URL, the page's own last-updated date and the day it was read. Every result lists the notes and rules it used. Gains are assumed to accrue evenly by day, which is how the ATO apportions them.
+
+The 1 July 2027 CGT changes are law: the Treasury Laws Amendment (Tax Reform No. 1) Act 2026 replaces the 50% discount with cost-base indexation and a 30% minimum tax for gains accruing after that date. Every CGT figure is therefore split into two parts:
+- `preJuly2027` gives the current-law figures for the gain up to 30 June 2027 (the whole gain, for an earlier sale).
+- `postJuly2027` is `{ computable: false, note }`. The 1 July 2027 apportioning method is not yet published, and indexation needs CPI figures that have not been released.
 
 ## Development
 

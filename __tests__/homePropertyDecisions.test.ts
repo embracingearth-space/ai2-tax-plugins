@@ -153,71 +153,55 @@ describe('homeBusinessSpaceTradeoff — owners and dates', () => {
   });
 });
 
-describe('homeBusinessSpaceTradeoff — the regime enacted from 1 July 2027', () => {
-  it('does not apply to a sale before 1 July 2027', () => {
+describe('homeBusinessSpaceTradeoff — CGT from 1 July 2027 is law, and only the pre-2027 part is computed', () => {
+  it('a sale before 1 July 2027: the whole gain is current law, and nothing is post-2027', () => {
     const r = space();
     expect(r.cgt.currentLaw.appliesToThisSale).toBe(true);
-    expect(r.cgt.from1July2027).toMatchObject({ status: 'enacted', applies: false });
+    expect(r.cgt.preJuly2027).toEqual({ gain: 17_500, discountApplies: true, taxableGain: 8750, tax: 2800, basis: 'whole gain — sale before 1 July 2027' });
+    expect(r.cgt.postJuly2027).toMatchObject({ applies: false });
+    expect(r.net.complete).toBe(true);
+    expect(r.notes.map((n) => n.rule)).not.toContain('cgtFrom1July2027');
   });
 
-  it('applies from 1 July 2027 but is not computable without a cost base and an inflation assumption', () => {
+  it('a sale on 1 July 2027: post-2027 is { computable: false } with the reason, never a guess', () => {
     const r = space({ saleDate: AU_CGT_REGIME_2027_FROM });
     expect(r.cgt.currentLaw.appliesToThisSale).toBe(false);
-    expect(r.cgt.from1July2027).toMatchObject({ applies: true, computable: false, missing: ['homeValueAtFirstUse', 'assumedInflationPct'] });
-    expect(r.net.from1July2027).toBeNull();
-    expect(r.breakEvenGrowth.from1July2027).toBeNull();
+    expect(r.cgt.postJuly2027).toMatchObject({ applies: true, computable: false });
+    const post = r.cgt.postJuly2027;
+    if (post.applies) {
+      expect(post.note).toMatch(/Tax Reform No\. 1\) Act 2026/);
+      expect(post.note).toMatch(/indexed for inflation/);
+      expect(post.note).toMatch(/30% minimum tax/);
+      expect(post.note).toMatch(/not yet published/);
+      expect(post.note).not.toMatch(/announced/i);
+    }
+    expect(r.net.complete).toBe(false);
+    expect(r.notes.map((n) => n.rule)).toEqual(expect.arrayContaining(['cgtFrom1July2027', 'minimumTax30']));
   });
 
-  it('business use starting after 1 July 2027: all indexed, and the 30% minimum tops up a low marginal rate', () => {
-    // $800,000 → $900,000 over exactly 4 years at 2% CPI: factor 1.02^4 = 1.0824 → 1.082,
-    // indexed cost $865,600, real gain $34,400 × 35% = $12,040.
-    const common = {
-      businessUseStart: '2027-07-01',
-      saleDate: '2031-07-01',
-      expectedGrowth: 100_000,
-      homeValueAtFirstUse: 800_000,
-      assumedInflationPct: 2,
-    };
-    const r = space({ ...common, marginalRatePct: 18, medicareLevyPct: 2 });
-    const x = r.cgt.from1July2027;
-    if (!(x.applies && x.computable)) throw new Error('expected a computed result');
-    expect(x.deferredGain).toBe(0);
-    expect(x.indexationFactor).toBe(1.082);
-    expect(x.indexedGain).toBe(12_040);
-    expect(x.taxAtMarginal).toBeCloseTo(2167.2, 2);
-    // Division 119: 30% × 12,040 − 16% (income tax, excluding the levy) × 12,040 = 1,685.60 → 1,685.
-    expect(x.minimumTaxTopUp).toBe(1685);
-    expect(x.tax).toBeCloseTo(3852.2, 2);
-
-    // At a 30% income tax rate the minimum adds nothing.
-    const high = space({ ...common, marginalRatePct: 32, medicareLevyPct: 2 }).cgt.from1July2027;
-    expect(high.applies && high.computable && high.minimumTaxTopUp).toBe(0);
+  it('pre-2027 portion by even growth: two years of four accrued by 30 June 2027 — half the gain, discounted', () => {
+    // First use 1 July 2025, sale 30 June 2029: 730 of 1,461 days fall on or before 30 June 2027.
+    const r = space({ businessUseStart: '2025-07-01', saleDate: '2029-06-30', expectedGrowth: 100_000 });
+    const pre = r.cgt.preJuly2027;
+    expect(pre.basis).toBe('even growth by day to 30 June 2027');
+    expect(pre.gain).toBeCloseTo((100_000 * 0.35 * 730) / 1461, 2);
+    expect(pre.discountApplies).toBe(true);
+    expect(pre.tax).toBeCloseTo(pre.gain * 0.5 * 0.32, 2);
+    // The whole-gain figure is still returned, as a comparison, and says it is not the law for this sale.
+    expect(r.cgt.currentLaw.tax).toBe(5600);
+    expect(r.cgt.currentLaw.appliesToThisSale).toBe(false);
   });
 
-  it('business use starting before: the gain to 30 June 2027 keeps the discount, the rest is indexed', () => {
-    const r = space({
-      businessUseStart: '2025-07-01',
-      saleDate: '2029-07-01',
-      expectedGrowth: 100_000,
-      homeValueAtFirstUse: 800_000,
-      valueAt30June2027: 850_000,
-      assumedInflationPct: 2,
-      medicareLevyPct: 2,
-    });
-    const x = r.cgt.from1July2027;
-    if (!(x.applies && x.computable)) throw new Error('expected a computed result');
-    expect(x.deferredGain).toBe(17_500); // (850,000 − 800,000) × 35%
-    expect(x.deferredDiscountApplies).toBe(true);
-    expect(x.indexationFactor).toBe(1.04);
-    expect(x.indexedGain).toBe(5600); // (900,000 − 850,000 × 1.04) × 35%
-    expect(x.tax).toBeCloseTo((8750 + 5600) * 0.32, 2);
-    expect(r.breakEvenGrowth.from1July2027).toEqual(expect.any(Number));
+  it('pre-2027 portion from valuations, when both are supplied', () => {
+    const r = space({ businessUseStart: '2025-07-01', saleDate: '2029-06-30', homeValueAtFirstUse: 800_000, valueAt30June2027: 850_000 });
+    expect(r.cgt.preJuly2027).toMatchObject({ basis: 'valuations supplied', gain: 17_500, taxableGain: 8750, tax: 2800 });
+    expect(() => space({ saleDate: '2029-06-30', homeValueAtFirstUse: 800_000 })).toThrow(/both or neither/);
   });
 
-  it('a real gain wiped out by indexation is no gain, not a loss', () => {
-    const r = space({ businessUseStart: '2027-07-01', saleDate: '2031-07-01', expectedGrowth: 100_000, homeValueAtFirstUse: 800_000, assumedInflationPct: 3 });
-    const x = r.cgt.from1July2027;
-    expect(x.applies && x.computable && x.indexedGain).toBe(0);
+  it('business use that starts after 30 June 2027 has no pre-2027 portion', () => {
+    const r = space({ businessUseStart: '2027-07-01', saleDate: '2031-07-01' });
+    expect(r.cgt.preJuly2027.gain).toBe(0);
+    expect(r.cgt.postJuly2027).toMatchObject({ applies: true, computable: false });
   });
 });
 
@@ -271,6 +255,23 @@ describe('mainResidenceChoice', () => {
     expect(r.options.find((o) => o.nominated === r.better.nominated)!.totalTax).toBe(cheaper);
     expect(r.better.saving).toBeCloseTo(Math.abs(keep.totalTax - take.totalTax), 2);
     expect(r.notes.map((n) => n.rule)).toEqual(expect.arrayContaining(['sixYearRule', 'oneMainResidence', 'spouseDifferentHomes', 'movingHouseSixMonths']));
+  });
+
+  it('before 1 July 2027 the comparison is complete; after it, pre-2027 figures only and better.complete is false', () => {
+    const homes = [
+      { name: 'Old', ownedFrom: '2002-01-01', movedOut: '2025-01-01', expectedGrowth: 867_500 },
+      { name: 'New', ownedFrom: '2025-01-01', expectedGrowth: 100_000 },
+    ];
+    const early = mrc({ homes, saleDates: { Old: '2025-10-01', New: '2026-06-30' }, marginalRatePct: 32 });
+    expect(early.better.complete).toBe(true);
+    const late = mrc({ homes, saleDates: { Old: '2025-10-01', New: '2035-01-01' }, marginalRatePct: 32 });
+    expect(late.better.complete).toBe(false);
+    const nw = late.options.find((o) => o.nominated === 'Old')!.homes.find((h) => h.name === 'New')!;
+    // New's 90 taxable days all fall before 30 June 2027, so the whole taxable gain is pre-2027.
+    expect(nw.preJuly2027.gain).toBe(nw.taxableGain);
+    expect(nw.postJuly2027).toMatchObject({ applies: true, computable: false });
+    const old = late.options.find((o) => o.nominated === 'Old')!.homes.find((h) => h.name === 'Old')!;
+    expect(old.postJuly2027).toMatchObject({ applies: false });
   });
 
   it('counts the 6-year limit the ATO\'s way (Roya: 6,940 taxable days)', () => {
@@ -343,6 +344,22 @@ describe('roomOrPartnerArrangement', () => {
       expectedGrowth: 100_000,
     }) as LodgerArrangementResult;
     expect(Math.floor(r.cgt.taxableGain)).toBe(20_007);
+  });
+
+  it('a sale after 1 July 2027: the let-share gain to 30 June 2027 under current rules, the rest not computed', () => {
+    const r = roomOrPartnerArrangement({
+      kind: 'lodger',
+      weeklyRent: 300,
+      letSharePct: 25,
+      homeCostsPerYear: 12_000,
+      marginalRatePct: 32,
+      firstLetDate: '2025-07-01',
+      saleDate: '2029-06-30',
+      expectedGrowth: 146_100,
+    }) as LodgerArrangementResult;
+    expect(r.cgt.appliesToThisSale).toBe(false);
+    expect(r.cgt.preJuly2027.gain).toBeCloseTo((146_100 * 0.25 * 730) / 1461, 2);
+    expect(r.cgt.postJuly2027).toMatchObject({ applies: true, computable: false });
   });
 
   it('flags a rental loss against the new-builds negative gearing limit', () => {

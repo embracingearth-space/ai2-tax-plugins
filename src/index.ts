@@ -188,8 +188,8 @@ export {
 } from './decisions/homeProperty';
 export type {
   UnsupportedCountry,
-  Regime2027Assumptions,
-  Regime2027Result,
+  PreJuly2027Cgt,
+  PostJuly2027Cgt,
   HomeBusinessSpaceInput,
   HomeBusinessSpaceResult,
   SpaceOption,

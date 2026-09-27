@@ -21,6 +21,16 @@
  * link to that country's tax authority and NO numbers — a number computed
  * under the wrong country's rules is worse than none.
  *
+ * CGT FROM 1 JULY 2027 IS LAW, AND ONLY HALF OF IT IS COMPUTABLE TODAY. The
+ * Treasury Laws Amendment (Tax Reform No. 1) Act 2026 replaces the 50%
+ * discount with cost-base indexation and a 30% minimum tax for gains accruing
+ * after 1 July 2027. The gain to 30 June 2027 keeps the discount, so every
+ * CGT figure is split: `preJuly2027` carries current-law figures for the gain
+ * to 30 June 2027, and `postJuly2027` is `{ computable: false, note }`. The
+ * method for valuing or apportioning a home at 1 July 2027 (the Commissioner's
+ * determination under s 112-185) is not yet published, and indexation needs
+ * CPI figures that do not exist yet — so the later portion is never guessed.
+ *
  * MONEY: results are in the input currency, rounded to cents. Gains are
  * assumed to accrue EVENLY BY DAY between the dates given; the ATO's own
  * apportionment is by days, so with even growth the "home first used to
@@ -54,14 +64,13 @@ export interface UnsupportedCountry {
   note: string;
 }
 
-/** 1 July 2027 — the first day CGT events fall under the Tax Reform No. 1 Act regime. */
+/** 1 July 2027 — gains accruing from this day are taxed under the Tax Reform No. 1 Act (indexation, 30% minimum). */
 export const AU_CGT_REGIME_2027_FROM = '2027-07-01';
-const MINIMUM_TAX_RATE = 0.3;
+/** The last day whose gain keeps the 50% discount for a CGT event on or after 1 July 2027. */
+const LAST_DISCOUNT_DAY = '2027-06-30';
 const DISCOUNT = 0.5;
 
 const cents = (n: number) => Math.round(n * 100) / 100;
-/** 250000 → "$250,000" — grouped by hand so the text does not depend on the host's ICU build. */
-const dollars = (n: number) => `$${String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}`;
 const pct = (n: number, field: string, { max = 100 } = {}) => {
   const v = Number(n);
   if (!Number.isFinite(v) || v < 0 || v > max) throw new RangeError(`${field}: expected a percentage from 0 to ${max}, got ${n}`);
@@ -95,162 +104,50 @@ function rulesFor(notes: DecisionNote[]): Array<HomePropertyRule & { key: HomePr
   return keys.map((key) => ({ key, ...AU_HOME_PROPERTY_RULES[key] }));
 }
 
-// ─── The 1 July 2027 CGT regime ─────────────────────────────────────────────
+// ─── The 1 July 2027 split ──────────────────────────────────────────────────
 
-export interface Regime2027Assumptions {
-  /** Market value of the whole home when business use (or letting) first started — the cost base under the first-use rule. */
-  homeValueAtFirstUse?: number;
-  /** Assumed annual CPI inflation, in percent, for the indexation factor. */
-  assumedInflationPct?: number;
-  /** Whole-home market value just before 1 July 2027. Default: even growth by day between first use and sale. */
-  valueAt30June2027?: number;
-  /**
-   * The part of `marginalRatePct` that is Medicare levy. Division 119 compares against income tax only, so a
-   * marginal rate that includes the 2% levy would understate the top-up. Default 0.
-   */
-  medicareLevyPct?: number;
+/** Current-law CGT on the gain that accrued to 30 June 2027 (or the whole gain, for an earlier sale). */
+export interface PreJuly2027Cgt {
+  /** Your taxable share of the gain in this portion, before the discount. */
+  gain: number;
+  discountApplies: boolean;
+  /** After the 50% discount, where it applies. */
+  taxableGain: number;
+  tax: number;
+  /** How the portion was measured. */
+  basis: 'whole gain — sale before 1 July 2027' | 'even growth by day to 30 June 2027' | 'valuations supplied';
 }
 
-export type Regime2027Result =
-  | { status: 'enacted'; applies: false; note: string }
-  | { status: 'enacted'; applies: true; computable: false; note: string; missing: string[] }
-  | {
-      status: 'enacted';
-      applies: true;
-      computable: true;
-      /** Gain to 30 June 2027 (your taxable share), before the discount. */
-      deferredGain: number;
-      deferredDiscountApplies: boolean;
-      /** Gain from 1 July 2027 on the indexed cost base (your taxable share). */
-      indexedGain: number;
-      indexationFactor: number;
-      /** Income tax at your marginal rate on both parts. */
-      taxAtMarginal: number;
-      /** Division 119 extra tax so the indexed gain bears at least 30%. */
-      minimumTaxTopUp: number;
-      tax: number;
-      assumptions: string[];
-    };
+export type PostJuly2027Cgt =
+  | { applies: false; note: string }
+  | { applies: true; computable: false; note: string };
 
-interface RegimeInputs {
-  firstUse: string;
-  saleDate: string;
-  /** Your taxable fraction of the whole-home gain (share × ownership × days factor). */
-  taxableFraction: number;
-  expectedGrowth: number;
-  marginal: number;
-  a: Regime2027Assumptions;
+const POST_JULY_2027_NOTE =
+  'Gains accruing after 1 July 2027 are taxed under the Treasury Laws Amendment (Tax Reform No. 1) Act 2026: ' +
+  'a cost base indexed for inflation in place of the 50% discount, and a 30% minimum tax. The Act takes the home ' +
+  'to be sold and reacquired on 1 July 2027 at market value, or under an apportioning method the Commissioner ' +
+  'determines; that method is not yet published, and indexation depends on CPI figures not yet released. This ' +
+  'portion is therefore not computed — only the gain to 30 June 2027 is, under the current rules.';
+
+function postJuly2027(saleDate: string): PostJuly2027Cgt {
+  return saleDate < AU_CGT_REGIME_2027_FROM
+    ? { applies: false, note: 'The sale is before 1 July 2027, so the current rules (the 50% discount) apply to the whole gain.' }
+    : { applies: true, computable: false, note: POST_JULY_2027_NOTE };
 }
 
-/**
- * The enacted regime for a CGT event on or after 1 July 2027, for the taxable
- * slice of a home. Computable only with a first-use value and an inflation
- * assumption: indexation multiplies a cost base, so growth alone is not
- * enough, and the statutory factor uses CPI figures that do not exist yet.
- */
-function regime2027({ firstUse, saleDate, taxableFraction, expectedGrowth, marginal, a }: RegimeInputs): Regime2027Result {
-  if (saleDate < AU_CGT_REGIME_2027_FROM) {
-    return {
-      status: 'enacted',
-      applies: false,
-      note: 'The sale is before 1 July 2027, so the 50% discount rules apply in full and this regime does not.',
-    };
-  }
-  const missing: string[] = [];
-  if (a.homeValueAtFirstUse === undefined) missing.push('homeValueAtFirstUse');
-  if (a.assumedInflationPct === undefined) missing.push('assumedInflationPct');
-  if (missing.length) {
-    return {
-      status: 'enacted',
-      applies: true,
-      computable: false,
-      missing,
-      note:
-        'The sale falls under the rules enacted by the Treasury Laws Amendment (Tax Reform No. 1) Act 2026: the gain to ' +
-        '30 June 2027 keeps the 50% discount, and the gain after it is worked out on a cost base indexed for inflation, with ' +
-        'a 30% minimum tax on it. Indexation multiplies the cost base, so it needs the home\'s value when first used to ' +
-        'produce income and an inflation assumption: pass ' + missing.join(' and ') + '.',
-    };
-  }
-  const v0 = money(a.homeValueAtFirstUse as number, 'homeValueAtFirstUse');
-  const inflation = pct(a.assumedInflationPct as number, 'assumedInflationPct', { max: 50 });
-  const medicare = pct(a.medicareLevyPct ?? 0, 'medicareLevyPct', { max: 10 });
-  const vSale = v0 + expectedGrowth;
-  const assumptions: string[] = [
-    `Cost base: the home's value when first used to produce income, ${dollars(v0)}.`,
-    `Indexation: ${(inflation * 100).toFixed(2)}% a year compounded by day. The Act uses published CPI figures (Subdivision 960-M), which do not exist yet for future quarters.`,
-    'Your taxable share (floor area × ownership × days used) is applied to the gain before and after 1 July 2027 alike.',
-    'Division 119 is applied with your marginal rate as a flat rate on the gain; the Act compares tax with and without the gain across your whole taxable income.',
-  ];
-
-  let deferredGain = 0;
-  let deferredDiscountApplies = false;
-  let reacquired = firstUse;
-  let costBase = v0;
-  if (firstUse < AU_CGT_REGIME_2027_FROM) {
-    // Deemed sale just before, and reacquisition on, 1 July 2027 at market value.
-    const v2027 =
-      a.valueAt30June2027 !== undefined
-        ? money(a.valueAt30June2027, 'valueAt30June2027')
-        : v0 + expectedGrowth * (daysInclusive(firstUse, '2027-06-30') / daysInclusive(firstUse, saleDate));
-    if (a.valueAt30June2027 === undefined) {
-      assumptions.push('Value just before 1 July 2027: even growth by day between first use and sale (the Act uses market value, or a method the Commissioner determines).');
-    }
-    deferredGain = Math.max(0, (v2027 - v0) * taxableFraction);
-    // The 12-month test for the deferred gain is applied as if the deemed event happened on the sale date.
-    deferredDiscountApplies = heldAtLeast12Months(firstUse, saleDate);
-    reacquired = AU_CGT_REGIME_2027_FROM;
-    costBase = v2027;
-  }
-  const years = (parseYmd(saleDate) - parseYmd(reacquired)) / (365.25 * 86_400_000);
-  // Indexation needs the asset held 12 months from the (deemed) acquisition; the statutory factor is rounded to 3 places.
-  const indexationFactor = heldAtLeast12Months(reacquired, saleDate) ? Math.round((1 + inflation) ** years * 1000) / 1000 : 1;
-  const indexedGain = Math.max(0, (vSale - costBase * indexationFactor) * taxableFraction);
-
-  const deferredTaxable = deferredGain * (deferredDiscountApplies ? DISCOUNT : 1);
-  const taxAtMarginal = (deferredTaxable + indexedGain) * marginal;
-  // Division 119, with a flat marginal rate: 30% of the gain less the income tax on it, rounded down.
-  const incomeTaxRate = Math.max(0, marginal - medicare);
-  const minimumTaxTopUp = Math.max(0, Math.floor(indexedGain * MINIMUM_TAX_RATE - indexedGain * incomeTaxRate));
-  return {
-    status: 'enacted',
-    applies: true,
-    computable: true,
-    deferredGain: cents(deferredGain),
-    deferredDiscountApplies,
-    indexedGain: cents(indexedGain),
-    indexationFactor,
-    taxAtMarginal: cents(taxAtMarginal),
-    minimumTaxTopUp,
-    tax: cents(taxAtMarginal + minimumTaxTopUp),
-    assumptions,
-  };
-}
-
-/** Bisection on a tax curve that rises with growth; null where the curve never reaches the target. */
-function solveGrowth(target: number, taxAt: (growth: number) => number | null): number | null {
-  if (!(target > 0)) return null;
-  let lo = 0;
-  let hi = 1;
-  for (let i = 0; i < 60; i++) {
-    const t = taxAt(hi);
-    if (t === null) return null;
-    if (t >= target) break;
-    hi *= 2;
-    if (hi > 1e12) return null;
-  }
-  for (let i = 0; i < 100; i++) {
-    const mid = (lo + hi) / 2;
-    const t = taxAt(mid) as number;
-    if (t >= target) hi = mid;
-    else lo = mid;
-  }
-  return Math.round(hi);
+/** The 2027 notes every CGT result carries when the sale is on or after 1 July 2027. */
+function notes2027(saleDate: string): DecisionNote[] {
+  return saleDate < AU_CGT_REGIME_2027_FROM
+    ? []
+    : [
+        note('cgtFrom1July2027', 'The sale is on or after 1 July 2027: only the gain to 30 June 2027 is worked out here, under the current rules. The rest is not computed.'),
+        note('minimumTax30', 'A 30% minimum tax applies to gains accruing after 1 July 2027.'),
+      ];
 }
 
 // ─── 1. Desk or shared room vs place of business ────────────────────────────
 
-export interface HomeBusinessSpaceInput extends Regime2027Assumptions {
+export interface HomeBusinessSpaceInput {
   /** ISO country code; anything but AU is unsupported. Default 'AU'. */
   country?: string;
   /** The first income year the claim covers, e.g. '2025-26'. */
@@ -277,6 +174,12 @@ export interface HomeBusinessSpaceInput extends Regime2027Assumptions {
   businessUseEnd?: string;
   /** YYYY-MM-DD of the sale contract (the CGT event). */
   saleDate: string;
+  /**
+   * Optional valuations for a sale on or after 1 July 2027: the whole home's value when business use began and
+   * just before 1 July 2027. Both or neither; without them the gain to 30 June 2027 assumes even growth by day.
+   */
+  homeValueAtFirstUse?: number;
+  valueAt30June2027?: number;
 }
 
 export interface SpaceOption {
@@ -284,7 +187,7 @@ export interface SpaceOption {
   deductionsTotal: number;
   /** Deductions × marginal rate. */
   taxValue: number;
-  /** CGT on the business share when the home is sold, under the discount rules. */
+  /** Current-law CGT on the business share — the whole gain (see `cgt.currentLaw.appliesToThisSale`). */
   cgtCurrentLaw: number;
   /** taxValue − cgtCurrentLaw. */
   net: number;
@@ -298,21 +201,19 @@ export interface HomeBusinessSpaceResult {
   /** What a place of business adds: the occupancy share. */
   extraDeductions: { perYear: number; total: number; taxValue: number };
   cgt: {
-    currentLaw: {
-      /** Your taxable share of the whole-home growth, before the discount. */
-      businessShareGain: number;
-      discountApplies: boolean;
-      taxableGain: number;
-      tax: number;
-      /** false when the sale is on or after 1 July 2027 — shown for comparison, the 2027 regime applies. */
-      appliesToThisSale: boolean;
-    };
-    from1July2027: Regime2027Result;
+    /** The whole gain under the 50% discount rules. The law for a sale before 1 July 2027; a comparison after it. */
+    currentLaw: { businessShareGain: number; discountApplies: boolean; taxableGain: number; tax: number; appliesToThisSale: boolean };
+    /** Current-law figures for the gain to 30 June 2027 (the whole gain, for an earlier sale). */
+    preJuly2027: PreJuly2027Cgt;
+    postJuly2027: PostJuly2027Cgt;
   };
-  /** Place of business minus desk: extra deduction value less CGT. Positive favours a place of business. */
-  net: { currentLaw: number; from1July2027: number | null };
-  /** Growth at which the extra deductions exactly pay for the CGT. Above it, the desk wins. */
-  breakEvenGrowth: { currentLaw: number | null; from1July2027: number | null };
+  /**
+   * Place of business minus desk: extra deduction value less CGT. Positive favours a place of business.
+   * `complete` is false for a sale on or after 1 July 2027, where the CGT on the later gain is not computed.
+   */
+  net: { currentLaw: number; complete: boolean };
+  /** Growth at which the extra deductions exactly pay for the CGT under the current rules. Above it, the desk wins. */
+  breakEvenGrowth: { currentLaw: number | null };
   notes: DecisionNote[];
   rules: Array<HomePropertyRule & { key: HomePropertyRuleKey }>;
 }
@@ -341,6 +242,9 @@ export function homeBusinessSpaceTradeoff(input: HomeBusinessSpaceInput): HomeBu
   const useEnd = input.businessUseEnd ?? input.saleDate;
   parseYmd(useEnd, 'businessUseEnd');
   if (useEnd < input.businessUseStart || useEnd > input.saleDate) throw new RangeError('businessUseEnd: must fall between businessUseStart and saleDate');
+  if ((input.homeValueAtFirstUse === undefined) !== (input.valueAt30June2027 === undefined)) {
+    throw new RangeError('homeValueAtFirstUse and valueAt30June2027: give both or neither');
+  }
 
   const incomeYears: string[] = [];
   incomeYearStart(input.incomeYear);
@@ -352,6 +256,7 @@ export function homeBusinessSpaceTradeoff(input: HomeBusinessSpaceInput): HomeBu
     note('occupancyOnlyPlaceOfBusiness', 'Occupancy costs are claimable only if the area is a genuine place of business.'),
     note('occupancyByFloorAreaAndTime', `Occupancy is apportioned by floor area: ${cents(share * 100)}% here.`),
   ];
+  const beforeRegime = input.saleDate < AU_CGT_REGIME_2027_FROM;
 
   if (!runsIt) {
     notes.push(note('coOwnerNotInBusiness', 'You do not run the business, so you claim no occupancy costs and keep the full main residence exemption on your share.'));
@@ -363,11 +268,12 @@ export function homeBusinessSpaceTradeoff(input: HomeBusinessSpaceInput): HomeBu
       options: { deskOrSharedRoom: zero, placeOfBusiness: { ...zero } },
       extraDeductions: { perYear: 0, total: 0, taxValue: 0 },
       cgt: {
-        currentLaw: { businessShareGain: 0, discountApplies: false, taxableGain: 0, tax: 0, appliesToThisSale: input.saleDate < AU_CGT_REGIME_2027_FROM },
-        from1July2027: { status: 'enacted', applies: false, note: 'Your share stays fully exempt, so there is no gain to tax under either regime.' },
+        currentLaw: { businessShareGain: 0, discountApplies: false, taxableGain: 0, tax: 0, appliesToThisSale: beforeRegime },
+        preJuly2027: { gain: 0, discountApplies: false, taxableGain: 0, tax: 0, basis: beforeRegime ? 'whole gain — sale before 1 July 2027' : 'even growth by day to 30 June 2027' },
+        postJuly2027: { applies: false, note: 'Your share stays fully exempt, so there is no gain to tax under either set of rules.' },
       },
-      net: { currentLaw: 0, from1July2027: 0 },
-      breakEvenGrowth: { currentLaw: null, from1July2027: null },
+      net: { currentLaw: 0, complete: true },
+      breakEvenGrowth: { currentLaw: null },
       notes,
       rules: rulesFor(notes),
     };
@@ -377,28 +283,42 @@ export function homeBusinessSpaceTradeoff(input: HomeBusinessSpaceInput): HomeBu
   const extraPerYear = occupancy * share;
   const extraTotal = extraPerYear * years;
   const extraTaxValue = extraTotal * marginal;
-  const desk = { deductionsPerYear: running, deductionsTotal: running * years };
 
-  // CGT under the discount rules. The gain runs from first business use (the first-use rule
-  // resets the cost base to market value then); if use stopped before the sale, the days factor applies.
-  const daysFactor = useEnd === input.saleDate ? 1 : daysInclusive(input.businessUseStart, useEnd) / daysInclusive(input.businessUseStart, input.saleDate);
-  const taxableFraction = ownership * share * daysFactor;
+  // CGT under the discount rules. The gain runs from first business use (the first-use rule resets the cost
+  // base to market value then); if use stopped before the sale, the days factor applies (ATO steps 1 to 6).
+  const totalDays = daysInclusive(input.businessUseStart, input.saleDate);
+  const useDays = daysInclusive(input.businessUseStart, useEnd);
+  const taxableFraction = ownership * share * (useDays / totalDays);
   const businessShareGain = Math.max(0, growth) * taxableFraction;
   const discountApplies = heldAtLeast12Months(input.businessUseStart, input.saleDate);
   const discountFactor = discountApplies ? DISCOUNT : 1;
-  const taxableGain = businessShareGain * discountFactor;
-  const cgtTax = taxableGain * marginal;
+  const cgtTax = businessShareGain * discountFactor * marginal;
 
-  const regime = (g: number) =>
-    regime2027({ firstUse: input.businessUseStart, saleDate: input.saleDate, taxableFraction, expectedGrowth: g, marginal, a: input });
-  const from1July2027 = regime(growth);
-  const regimeTax = from1July2027.applies && from1July2027.computable ? from1July2027.tax : null;
+  // The gain to 30 June 2027: the whole gain for an earlier sale; otherwise the business-use days up to then.
+  let preGain: number;
+  let basis: PreJuly2027Cgt['basis'];
+  if (beforeRegime) {
+    preGain = businessShareGain;
+    basis = 'whole gain — sale before 1 July 2027';
+  } else if (input.homeValueAtFirstUse !== undefined && input.valueAt30June2027 !== undefined) {
+    // The deemed sale at 30 June 2027, by the same steps: value gain × share × ownership × (days used ÷ days).
+    const preDays = input.businessUseStart <= LAST_DISCOUNT_DAY ? daysInclusive(input.businessUseStart, LAST_DISCOUNT_DAY) : 0;
+    const usedPre = overlapDays(input.businessUseStart, useEnd, input.businessUseStart, LAST_DISCOUNT_DAY);
+    const valueGain = money(input.valueAt30June2027, 'valueAt30June2027') - money(input.homeValueAtFirstUse, 'homeValueAtFirstUse');
+    preGain = preDays > 0 ? Math.max(0, valueGain) * ownership * share * (usedPre / preDays) : 0;
+    basis = 'valuations supplied';
+  } else {
+    const usedPre = overlapDays(input.businessUseStart, useEnd, input.businessUseStart, LAST_DISCOUNT_DAY);
+    preGain = (Math.max(0, growth) * ownership * share * usedPre) / totalDays;
+    basis = 'even growth by day to 30 June 2027';
+  }
+  const preTaxable = preGain * discountFactor;
 
   notes.push(
     note('partialExemptionFollowsInterest', 'As a place of business, the same share of the home loses the main residence exemption.'),
     note('homeFirstUsedToProduceIncome', 'The taxable gain is measured from the home\'s value when business use started.'),
   );
-  if (daysFactor !== 1) notes.push(note('floorAreaAndDaysApportionment', 'Business use stopped before the sale, so the gain is apportioned by days used.'));
+  if (useDays !== totalDays) notes.push(note('floorAreaAndDaysApportionment', 'Business use stopped before the sale, so the gain is apportioned by days used.'));
   if (ownership < 1) notes.push(note('coOwnerNotInBusiness', 'A co-owner who does not run the business keeps the full exemption on their share.'));
   notes.push(
     discountApplies
@@ -407,37 +327,29 @@ export function homeBusinessSpaceTradeoff(input: HomeBusinessSpaceInput): HomeBu
   );
   notes.push(note('personalServicesIncome', 'If your income is personal services income, some occupancy costs may not be deductible.'));
   notes.push(note('smallBusinessConcessionsRare', 'The small business CGT concessions will rarely apply to a home used mainly as a home.'));
-  if (input.saleDate >= AU_CGT_REGIME_2027_FROM) {
-    notes.push(note('cgtFrom1July2027', 'The sale is on or after 1 July 2027: the enacted indexation regime applies to the gain after 30 June 2027.'));
-    notes.push(note('minimumTax30', 'A 30% minimum tax applies to the indexed gain.'));
-  }
+  notes.push(...notes2027(input.saleDate));
 
-  const breakEvenCurrent = discountFactor * taxableFraction * marginal > 0 ? extraTaxValue / (taxableFraction * discountFactor * marginal) : null;
-  const breakEven2027 =
-    regimeTax === null ? null : solveGrowth(extraTaxValue, (g) => {
-      const r = regime(g);
-      return r.applies && r.computable ? r.tax : null;
-    });
+  const breakEven = taxableFraction * discountFactor * marginal > 0 ? extraTaxValue / (taxableFraction * discountFactor * marginal) : null;
 
-  const pob = { deductionsPerYear: running + extraPerYear, deductionsTotal: (running + extraPerYear) * years };
+  const pob = running + extraPerYear;
   return {
     supported: true,
     country: 'AU',
     incomeYears,
     options: {
       deskOrSharedRoom: {
-        deductionsPerYear: cents(desk.deductionsPerYear),
-        deductionsTotal: cents(desk.deductionsTotal),
-        taxValue: cents(desk.deductionsTotal * marginal),
+        deductionsPerYear: cents(running),
+        deductionsTotal: cents(running * years),
+        taxValue: cents(running * years * marginal),
         cgtCurrentLaw: 0,
-        net: cents(desk.deductionsTotal * marginal),
+        net: cents(running * years * marginal),
       },
       placeOfBusiness: {
-        deductionsPerYear: cents(pob.deductionsPerYear),
-        deductionsTotal: cents(pob.deductionsTotal),
-        taxValue: cents(pob.deductionsTotal * marginal),
+        deductionsPerYear: cents(pob),
+        deductionsTotal: cents(pob * years),
+        taxValue: cents(pob * years * marginal),
         cgtCurrentLaw: cents(cgtTax),
-        net: cents(pob.deductionsTotal * marginal - cgtTax),
+        net: cents(pob * years * marginal - cgtTax),
       },
     },
     extraDeductions: { perYear: cents(extraPerYear), total: cents(extraTotal), taxValue: cents(extraTaxValue) },
@@ -445,14 +357,15 @@ export function homeBusinessSpaceTradeoff(input: HomeBusinessSpaceInput): HomeBu
       currentLaw: {
         businessShareGain: cents(businessShareGain),
         discountApplies,
-        taxableGain: cents(taxableGain),
+        taxableGain: cents(businessShareGain * discountFactor),
         tax: cents(cgtTax),
-        appliesToThisSale: input.saleDate < AU_CGT_REGIME_2027_FROM,
+        appliesToThisSale: beforeRegime,
       },
-      from1July2027,
+      preJuly2027: { gain: cents(preGain), discountApplies, taxableGain: cents(preTaxable), tax: cents(preTaxable * marginal), basis },
+      postJuly2027: postJuly2027(input.saleDate),
     },
-    net: { currentLaw: cents(extraTaxValue - cgtTax), from1July2027: regimeTax === null ? null : cents(extraTaxValue - regimeTax) },
-    breakEvenGrowth: { currentLaw: breakEvenCurrent === null ? null : Math.round(breakEvenCurrent), from1July2027: breakEven2027 },
+    net: { currentLaw: cents(extraTaxValue - cgtTax), complete: beforeRegime },
+    breakEvenGrowth: { currentLaw: breakEven === null ? null : Math.round(breakEven) },
     notes,
     rules: rulesFor(notes),
   };
@@ -486,16 +399,24 @@ export interface HomeOutcome {
   ownedDays: number;
   taxableDays: number;
   exemptGain: number;
+  /** Whole taxable gain, before the discount. */
   taxableGain: number;
   discountApplies: boolean;
+  /** Current-law tax on the whole taxable gain (the law for a sale before 1 July 2027). */
   tax: number;
+  /** Current-law figures for the part of the taxable gain that accrued to 30 June 2027. */
+  preJuly2027: PreJuly2027Cgt;
+  postJuly2027: PostJuly2027Cgt;
 }
 
 export interface MainResidenceOption {
   /** The home treated as the main residence while you owned both. */
   nominated: string;
   homes: HomeOutcome[];
+  /** Sum of the current-law tax on both homes. */
   totalTax: number;
+  /** Sum of the current-law tax on the gain to 30 June 2027. */
+  totalTaxPreJuly2027: number;
 }
 
 export interface MainResidenceChoiceResult {
@@ -506,8 +427,11 @@ export interface MainResidenceChoiceResult {
   /** Days at the end of the overlap when both are exempt under the moving-house rule (0 where it does not apply). */
   movingHouseDays: number;
   options: MainResidenceOption[];
-  /** The option with less tax, and how much less. */
-  better: { nominated: string; saving: number };
+  /**
+   * The option with less current-law tax, and how much less. `complete` is false when either sale is on or
+   * after 1 July 2027: the tax on gains after 30 June 2027 is not computed, and could change the answer.
+   */
+  better: { nominated: string; saving: number; complete: boolean };
   notes: DecisionNote[];
   rules: Array<HomePropertyRule & { key: HomePropertyRuleKey }>;
 }
@@ -521,6 +445,12 @@ export function daysBeyondSixYears(rentedFrom: string, absenceEnd: string): numb
   const lastExempt = addMonths(rentedFrom, 72);
   return absenceEnd <= lastExempt ? 0 : daysInclusive(addDays(lastExempt, 1), absenceEnd);
 }
+
+/** An inclusive span of taxable days. */
+type Span = { from: string; to: string };
+const spanDays = (spans: Span[]) => spans.reduce((n, s) => n + (s.to < s.from ? 0 : daysInclusive(s.from, s.to)), 0);
+const spanDaysTo = (spans: Span[], last: string) =>
+  spans.reduce((n, s) => n + (s.to < s.from ? 0 : overlapDays(s.from, s.to, s.from, last)), 0);
 
 /**
  * Which home's exemption should cover the period you owned both? Compares the
@@ -562,7 +492,7 @@ export function mainResidenceChoice(input: MainResidenceChoiceInput): MainReside
   const overlapTo = minYmd(saleF, saleN);
   const overlap = overlapTo < overlapFrom ? 0 : daysInclusive(overlapFrom, overlapTo);
 
-  // Moving-house rule: up to 6 months before the old home is disposed of, both are exempt, if you lived in
+  // Moving-house rule: for up to 6 months before the old home is disposed of, both are exempt, if you lived in
   // it for a continuous 3 months in the 12 months before disposal and it earned no income in those 12 months.
   const yearBefore = addMonths(saleF, -12);
   const livedLast12 = overlapDays(former.ownedFrom, movedOut, yearBefore, saleF);
@@ -570,15 +500,29 @@ export function mainResidenceChoice(input: MainResidenceChoiceInput): MainReside
   const rentedLast12 = former.rentedFrom !== undefined && overlapDays(former.rentedFrom, saleF, yearBefore, saleF) > 0;
   const movingRuleMet = overlap > 0 && saleF <= saleN && livedLast12 >= threeMonths && !rentedLast12;
   // The ATO's Jeneen and John example: sold 1 October 2025, both exempt "1 April 2025 to 1 October 2025".
-  const movingHouseDays = movingRuleMet ? overlapDays(overlapFrom, overlapTo, addMonths(saleF, -6), saleF) : 0;
+  const movingFrom = addMonths(saleF, -6);
+  const movingHouseDays = movingRuleMet ? overlapDays(overlapFrom, overlapTo, movingFrom, saleF) : 0;
+  // The overlap days one home loses: the overlap, less the moving-house days at its end.
+  const contested: Span = { from: overlapFrom, to: movingRuleMet ? minYmd(overlapTo, addDays(movingFrom, -1)) : overlapTo };
 
-  const outcome = (h: HomeTimeline, sale: string, taxableDays: number, firstIncomeUse: string | null): HomeOutcome => {
+  // Income-producing days beyond 6 years in the absence, as a span ending on `absenceEnd`.
+  const beyondSix = (absenceEnd: string): Span[] => {
+    if (!former.rentedFrom || former.rentedFrom > absenceEnd) return [];
+    const firstTaxable = addDays(addMonths(former.rentedFrom, 72), 1);
+    return firstTaxable <= absenceEnd ? [{ from: firstTaxable, to: absenceEnd }] : [];
+  };
+
+  const outcome = (h: HomeTimeline, sale: string, taxable: Span[], firstIncomeUse: string | null): HomeOutcome => {
     const ownedDays = daysInclusive(h.ownedFrom, sale);
     const g = Math.max(0, h.expectedGrowth);
+    const taxableDays = spanDays(taxable);
     const taxableGain = ownedDays > 0 ? (g * taxableDays) / ownedDays : 0;
     // No discount where the first-use rule applies and income use began within 12 months of the sale.
     const acquired = firstIncomeUse && taxableDays > 0 ? firstIncomeUse : h.ownedFrom;
     const discountApplies = heldAtLeast12Months(acquired, sale);
+    const factor = discountApplies ? DISCOUNT : 1;
+    const beforeRegime = sale < AU_CGT_REGIME_2027_FROM;
+    const preGain = beforeRegime ? taxableGain : ownedDays > 0 ? (g * spanDaysTo(taxable, LAST_DISCOUNT_DAY)) / ownedDays : 0;
     return {
       name: h.name,
       ownedDays,
@@ -586,35 +530,45 @@ export function mainResidenceChoice(input: MainResidenceChoiceInput): MainReside
       exemptGain: cents(g - taxableGain),
       taxableGain: cents(taxableGain),
       discountApplies,
-      tax: cents(taxableGain * (discountApplies ? DISCOUNT : 1) * marginal),
+      tax: cents(taxableGain * factor * marginal),
+      preJuly2027: {
+        gain: cents(preGain),
+        discountApplies,
+        taxableGain: cents(preGain * factor),
+        tax: cents(preGain * factor * marginal),
+        basis: beforeRegime ? 'whole gain — sale before 1 July 2027' : 'even growth by day to 30 June 2027',
+      },
+      postJuly2027: postJuly2027(sale),
     };
   };
-
-  // Income-producing days beyond 6 years in the absence (only while the former home is still nominated).
-  const beyondSix = (absenceEnd: string) => (former.rentedFrom && former.rentedFrom <= absenceEnd ? daysBeyondSixYears(former.rentedFrom, absenceEnd) : 0);
 
   // Option 1: the former home stays the main residence throughout; the new home is taxable for the overlap.
   const keepFormer: MainResidenceOption = {
     nominated: former.name,
-    homes: [
-      outcome(former, saleF, beyondSix(saleF), former.rentedFrom ?? null),
-      outcome(next, saleN, Math.max(0, overlap - movingHouseDays), null),
-    ],
+    homes: [outcome(former, saleF, beyondSix(saleF), former.rentedFrom ?? null), outcome(next, saleN, [contested], null)],
     totalTax: 0,
+    totalTaxPreJuly2027: 0,
   };
-  // Option 2: the new home from the day it was acquired; the former home is taxable for the overlap,
-  // plus any income-producing absence days beyond 6 years before it.
+  // Option 2: the new home from the day it was acquired; the former home is taxable for the overlap, plus any
+  // income-producing absence days beyond 6 years before it.
   const preOverlapEnd = addDays(overlapFrom, -1);
-  const formerTaxable = Math.max(0, overlap - movingHouseDays) + (preOverlapEnd >= movedOut ? beyondSix(preOverlapEnd) : 0);
   const takeNew: MainResidenceOption = {
     nominated: next.name,
-    homes: [outcome(former, saleF, formerTaxable, former.rentedFrom ?? null), outcome(next, saleN, 0, null)],
+    homes: [
+      outcome(former, saleF, [...(preOverlapEnd >= movedOut ? beyondSix(preOverlapEnd) : []), contested], former.rentedFrom ?? null),
+      outcome(next, saleN, [], null),
+    ],
     totalTax: 0,
+    totalTaxPreJuly2027: 0,
   };
-  for (const o of [keepFormer, takeNew]) o.totalTax = cents(o.homes.reduce((s, h) => s + h.tax, 0));
+  for (const o of [keepFormer, takeNew]) {
+    o.totalTax = cents(o.homes.reduce((s, h) => s + h.tax, 0));
+    o.totalTaxPreJuly2027 = cents(o.homes.reduce((s, h) => s + h.preJuly2027.tax, 0));
+  }
 
   const better = keepFormer.totalTax <= takeNew.totalTax ? keepFormer : takeNew;
   const other = better === keepFormer ? takeNew : keepFormer;
+  const lastSale = maxYmd(saleF, saleN);
 
   const notes: DecisionNote[] = [
     note('oneMainResidence', 'Only one home can be your main residence at a time, apart from the moving-house overlap.'),
@@ -633,10 +587,8 @@ export function mainResidenceChoice(input: MainResidenceChoiceInput): MainReside
     note('homeFirstUsedToProduceIncome', 'Gains are assumed to accrue evenly by day; with even growth the market-value reset at first income use gives the same result.'),
     note('cgtDiscount', 'The 50% discount applies to each home held at least 12 months.'),
     note('spouseDifferentHomes', 'If you have a spouse living in a different home, you must choose one home for both of you or each nominate your own, with a half-period rule. This result is for one owner, or spouses choosing the same home.'),
+    ...notes2027(lastSale),
   ];
-  if (saleF >= AU_CGT_REGIME_2027_FROM || saleN >= AU_CGT_REGIME_2027_FROM) {
-    notes.push(note('cgtFrom1July2027', 'A sale on or after 1 July 2027 falls under the enacted indexation regime for the gain after 30 June 2027; the figures here use the discount rules throughout.'));
-  }
 
   return {
     supported: true,
@@ -644,7 +596,7 @@ export function mainResidenceChoice(input: MainResidenceChoiceInput): MainReside
     overlap: { from: overlapFrom, to: overlapTo, days: overlap },
     movingHouseDays,
     options: [keepFormer, takeNew],
-    better: { nominated: better.nominated, saving: cents(other.totalTax - better.totalTax) },
+    better: { nominated: better.nominated, saving: cents(other.totalTax - better.totalTax), complete: lastSale < AU_CGT_REGIME_2027_FROM },
     notes,
     rules: rulesFor(notes),
   };
@@ -706,7 +658,16 @@ export interface LodgerArrangementResult {
   letSharePct: number;
   perYear: { rent: number; deductions: number; net: number; tax: number };
   total: { rent: number; deductions: number; net: number; tax: number };
-  cgt: { taxableGain: number; discountApplies: boolean; netGain: number; tax: number; appliesToThisSale: boolean };
+  cgt: {
+    /** The whole gain under the 50% discount rules. The law for a sale before 1 July 2027; a comparison after it. */
+    taxableGain: number;
+    discountApplies: boolean;
+    netGain: number;
+    tax: number;
+    appliesToThisSale: boolean;
+    preJuly2027: PreJuly2027Cgt;
+    postJuly2027: PostJuly2027Cgt;
+  };
   mainResidenceExemption: 'partial';
   notes: DecisionNote[];
   rules: Array<HomePropertyRule & { key: HomePropertyRuleKey }>;
@@ -772,10 +733,14 @@ export function roomOrPartnerArrangement(
   const tax = net * marginal;
 
   // CGT: the ATO's steps 1 to 6 — gain from first letting × let share × (days let ÷ days from first letting to sale).
-  const daysFactor = letEnd === input.saleDate ? 1 : daysInclusive(input.firstLetDate, letEnd) / daysInclusive(input.firstLetDate, input.saleDate);
-  const taxableGain = Math.max(0, growth) * share * ownership * daysFactor;
+  const totalDays = daysInclusive(input.firstLetDate, input.saleDate);
+  const letDays = daysInclusive(input.firstLetDate, letEnd);
+  const perDay = (Math.max(0, growth) * share * ownership) / totalDays;
+  const taxableGain = perDay * letDays;
   const discountApplies = heldAtLeast12Months(input.firstLetDate, input.saleDate);
-  const netGain = taxableGain * (discountApplies ? DISCOUNT : 1);
+  const factor = discountApplies ? DISCOUNT : 1;
+  const beforeRegime = input.saleDate < AU_CGT_REGIME_2027_FROM;
+  const preGain = beforeRegime ? taxableGain : perDay * overlapDays(input.firstLetDate, letEnd, input.firstLetDate, LAST_DISCOUNT_DAY);
 
   const notes: DecisionNote[] = [
     note('lodgerLetShare', `Rent is assessable and the let share (${cents(share * 100)}%) of home costs is deductible.`),
@@ -788,9 +753,7 @@ export function roomOrPartnerArrangement(
   if (net < 0) {
     notes.push(note('negativeGearingNewBuilds', 'A rental loss: from 1 July 2027 negative gearing for residential property is limited to new builds, unless the property was held at 7:30pm AEST 12 May 2026. This result does not quarantine the loss.'));
   }
-  if (input.saleDate >= AU_CGT_REGIME_2027_FROM) {
-    notes.push(note('cgtFrom1July2027', 'A sale on or after 1 July 2027 falls under the enacted indexation regime for the gain after 30 June 2027; the CGT here uses the discount rules.'));
-  }
+  notes.push(...notes2027(input.saleDate));
 
   return {
     supported: true,
@@ -802,9 +765,17 @@ export function roomOrPartnerArrangement(
     cgt: {
       taxableGain: cents(taxableGain),
       discountApplies,
-      netGain: cents(netGain),
-      tax: cents(netGain * marginal),
-      appliesToThisSale: input.saleDate < AU_CGT_REGIME_2027_FROM,
+      netGain: cents(taxableGain * factor),
+      tax: cents(taxableGain * factor * marginal),
+      appliesToThisSale: beforeRegime,
+      preJuly2027: {
+        gain: cents(preGain),
+        discountApplies,
+        taxableGain: cents(preGain * factor),
+        tax: cents(preGain * factor * marginal),
+        basis: beforeRegime ? 'whole gain — sale before 1 July 2027' : 'even growth by day to 30 June 2027',
+      },
+      postJuly2027: postJuly2027(input.saleDate),
     },
     mainResidenceExemption: 'partial',
     notes,

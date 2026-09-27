@@ -17,9 +17,10 @@ Pure decision maths the app, the marketing site and the Tax MCP all call, so the
   - a co-owner who does not run the business keeps the full exemption;
   - returns deductions per year and in total, their tax value, the CGT on the business share under the discount rules, the net result and the break-even growth;
   - worked case: 35% share, $9,600 occupancy a year, 4 years, 32% → $4,300.80 of extra deduction value; CGT $2,800 / $5,600 / $14,000 at $50k / $100k / $250k growth; break-even $76,800.
-- The **1 July 2027 CGT regime is enacted, not just announced**. The Treasury Laws Amendment (Tax Reform No. 1) Act 2026 (No. 49) was assented 26 June 2026, and the ATO says "These measures are now law."
-  - How it works: a deemed sale and reacquisition at market value on 1 July 2027. The earlier gain keeps the 50% discount. The later gain uses a cost base indexed for inflation, with the Division 119 30% minimum tax.
-  - It is computed when the caller supplies the home's value at first use and an inflation assumption. Otherwise it returns `computable: false` and lists what is missing.
+- The **1 July 2027 CGT changes are law, not announced**. The Treasury Laws Amendment (Tax Reform No. 1) Act 2026 (No. 49, https://www.legislation.gov.au/C2026A00049/latest) was assented 26 June 2026, and the ATO page (updated 29 June 2026) says "These measures are now law".
+  - The Act replaces the 50% discount with cost-base indexation and a 30% minimum tax for gains accruing after 1 July 2027.
+  - Every CGT result carries `preJuly2027`: current-law figures for the gain to 30 June 2027, measured by even growth by day or from supplied valuations.
+  - Every CGT result also carries `postJuly2027: { computable: false, note }`. The 1 July 2027 apportioning method (s 112-185) is not yet published, and future CPI is unknown. Results with a sale after that date are flagged `complete: false`.
 - `mainResidenceChoice` works out which of two homes the exemption should cover while you own both. It applies:
   - the 6-year rule (counted as in the ATO's Roya example);
   - one main residence at a time;
