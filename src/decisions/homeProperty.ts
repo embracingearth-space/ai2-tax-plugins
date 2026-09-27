@@ -546,10 +546,14 @@ export function mainResidenceChoice(input: MainResidenceChoiceInput): MainReside
     };
   };
 
-  // Option 1: the former home stays the main residence throughout; the new home is taxable for the overlap.
+  // Option 1: the former home stays the main residence for as long as the absence rule allows; the new home is
+  // taxable for that part of the overlap. Once a rented former home passes its 6 years it is no longer being
+  // treated as your main residence, so the new home can be from the next day (the ATO's James example).
+  const formerCoverEnds = former.rentedFrom ? addMonths(former.rentedFrom, 72) : contested.to;
+  const newTaxable: Span = { from: contested.from, to: minYmd(contested.to, formerCoverEnds) };
   const keepFormer: MainResidenceOption = {
     nominated: former.name,
-    homes: [outcome(former, saleF, beyondSix(saleF), former.rentedFrom ?? null), outcome(next, saleN, [contested], null)],
+    homes: [outcome(former, saleF, beyondSix(saleF), former.rentedFrom ?? null), outcome(next, saleN, [newTaxable], null)],
     totalTax: 0,
     totalTaxPreJuly2027: 0,
   };

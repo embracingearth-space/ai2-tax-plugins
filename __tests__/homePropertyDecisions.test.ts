@@ -248,7 +248,8 @@ describe('mainResidenceChoice', () => {
     const keep = r.options.find((o) => o.nominated === 'Brisbane')!;
     // The 6 years run to 10 Oct 2021; taxable from 11 Oct 2021.
     expect(keep.homes.find((h) => h.name === 'Brisbane')!.taxableDays).toBe(daysInclusive('2021-10-11', '2026-03-01'));
-    expect(keep.homes.find((h) => h.name === 'Perth')!.taxableDays).toBe(r.overlap.days);
+    // Perth is taxable only while Brisbane is still covered: 3 Oct 2020 to 10 Oct 2021, not the whole overlap.
+    expect(keep.homes.find((h) => h.name === 'Perth')!.taxableDays).toBe(daysInclusive('2020-10-03', '2021-10-10'));
     const take = r.options.find((o) => o.nominated === 'Perth')!;
     expect(take.homes.find((h) => h.name === 'Brisbane')!.taxableDays).toBe(daysInclusive('2020-10-03', '2026-03-01'));
     expect(take.homes.find((h) => h.name === 'Perth')!.taxableDays).toBe(0);
