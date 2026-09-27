@@ -8,6 +8,19 @@ member has a value on every rules object that ships, `declineInValue` still
 accepts `daysHeld` / `daysInYear` exactly as before, and a host on 2.1.0 keeps
 working untouched.
 
+### Changed — AU instant asset write-off: $20,000 from 1 July 2023, no end date
+
+- The ATO's *Instant asset write-off for eligible businesses* page (last updated 28 August 2026, read 27 September 2026), Table 1: "On or after 1 July 2023 | $20,000". The Treasury Laws Amendment (Tax Reform No. 2) Act 2026 (No. 71, 2026, assented 26 August 2026 — confirmed on the Federal Register of Legislation) made the threshold permanent from 1 July 2026. The $20,000 row now runs on from 1 July 2023 with no successor; the 2026-27 row (enacted $1,000, `proposed` $20,000) is removed. The row carries `sourceUrl` and `readOn` (new optional fields on `AuWriteOffRow`). `AU_DEPRECIATION_AUTHORITY_URLS.instantAssetWriteOff` added.
+- `auSmallBusinessPoolWriteOff` reads the verified $20,000 for 2026-27 onwards (a pool balance under $20,000 is deducted in full) and now answers only against a *verified* limit.
+
+### Added — AU per-unit deduction rates, effective-dated by income year
+
+- `workFromHomeFixedRate(incomeYearOrDate)` and `centsPerKmRate(incomeYearOrDate)` → `{ rate, verified, incomeYear, sourceUrl, readOn, note, lastPublished? }`, over `AU_WFH_FIXED_RATE_ROWS` and `AU_CENTS_PER_KM_ROWS`. `auIncomeYear`, `formatAuCents`, `AU_CENTS_PER_KM_MAX_BUSINESS_KM` (5,000), `AU_WFH_REVISED_METHOD_FROM`, `AU_DEDUCTION_RATE_AUTHORITY_URLS` exported.
+- Fixed rate — ATO *Fixed rate method* (last updated 8 June 2026): 52c 2020-21 and 2021-22; 67c 2022-23 and 2023-24; 70c 2024-25 and 2025-26. **2026-27: not published** — `rate: null, verified: false`, and the note names 70c for 2025-26 without applying it.
+- Cents per km — the Commissioner's determinations under s 28-25(4) ITAA 1997, read from the Federal Register of Legislation: 68c 2018-19 and 2019-20 (F2018L01023); 72c 2020-21 and 2021-22 (F2020L00676); 78c 2022-23 (F2022L00813); 85c 2023-24 (F2023L00767); 88c 2024-25 and 2025-26 (F2024L00697); **91c 2026-27** (F2026L00785 — 89c base plus a one-off 2c uplift, for that year only). 2027-28 is a `null` row: the ATO will index the 89c base, so 91c must not run on.
+- AU-IT `getFormSchema({ incomeYear })` builds the car-expense and working-from-home help text from those rows for the return's income year (default: today's income year, the same default `calcAuTax` uses), replacing the hard-coded "67c/hour" and "88c/km 2025-26". `TaxFilingPlugin.getFormSchema` accepts an optional `incomeYear` (additive). `auWorkFromHomeHelpText` / `auCarExpensesHelpText` exported.
+- Rate Watch: `analyzeDeductionRates()` / `hasActionableDeductionFindings()` / `shippedDeductionSeries()` watch the fixed rate, cents per km and the instant asset write-off — a current income year with no verified row and a citation older than 365 days are actionable; upcoming rows are FYI. The runner prints them and opens the issue when actionable.
+
 ### Added — landlord small-item rules (`landlordSmallItemDeduction`)
 
 - `DepreciationRules.landlordSmallItemDeduction?(onDate)` — optional, returning `LandlordSmallItemInfo` (`InstantAssetWriteOffInfo` plus an optional `pool`). The per-item rule for a landlord who is **not** carrying on a business, which differs from the business `instantAssetWriteOff` in every country surveyed. Absent (the generic rules, IE) means "not published". A host should act only on `verified: true` with a non-null `limit`, and default nothing for any other answer. Every answer carries a `note` that the plugin provides for the host to display. Whether the note is shown depends on the host; the core app's current release does not call this method yet.

@@ -14,9 +14,14 @@
  *  - upcoming (future-dated) changes (FYI / ensure they will seed)
  *  - coverage gaps (a series that ended in the past with no successor → no live rate)
  *  - a per-country authority checklist (for the quarterly manual eyeball)
+ *  - per-unit deduction rates (analyzeDeductionRates, below): a current
+ *    income year with no verified row, stale citations, upcoming rows
  */
 import { RATE_LEDGER, activeNationalRows, toYmd } from './data';
 import type { RateLedgerRow } from './data';
+
+import { AU_CENTS_PER_KM_ROWS, AU_WFH_FIXED_RATE_ROWS, auIncomeYear, formatAuCents } from './countries/australiaDeductions';
+import { AU_INSTANT_ASSET_WRITE_OFF_ROWS } from './countries/australiaDepreciation';
 
 export interface RateWatchOptions {
   /** A verified citation older than this many days is flagged stale. Default 365. */
@@ -121,6 +126,157 @@ export function analyzeLedger(asOf?: string | Date, opts: RateWatchOptions = {})
   findings.reviewChecklist.sort((a, b) => a.countryCode.localeCompare(b.countryCode));
   findings.upcomingChanges.sort((a, b) => a.effectiveFrom.localeCompare(b.effectiveFrom));
   return findings;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DEDUCTION RATES — per-unit and threshold figures a return quotes back
+//
+// The GST/VAT ledger fails loudly when neglected (a series ends → coverage gap).
+// Deduction rates fail the other way: the rows are effective-dated by income
+// year, a year with no published rate is a `null, verified: false` row, and the
+// lookup correctly refuses to quote a number for it. That is safe but invisible
+// — nobody learns the authority has since published. So this watches:
+//
+//  - the row in force today with no verified figure (the CURRENT income year
+//    has no rate yet — someone should check whether it has been published)
+//  - a verified current row whose citation is older than `staleAfterDays`
+//  - rows that start in the future (FYI: announced, or a placeholder year)
+//
+// Same contract as analyzeLedger(): pure, deterministic, never changes a rate.
+// Only the row in force is judged; history is not re-litigated every week.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** One effective-dated row in the shape this analysis reads. */
+export interface DeductionWatchRow {
+  effectiveFrom: string;
+  value: number | null;
+  verified: boolean;
+  sourceUrl?: string | null;
+  readOn?: string | null;
+}
+
+/** A watched series. Tests pass fixtures; production uses shippedDeductionSeries(). */
+export interface DeductionSeries {
+  /** Stable key, e.g. 'AU.workFromHomeFixedRate'. */
+  series: string;
+  countryCode: string;
+  /** Human label for the report. */
+  label: string;
+  /** The file a human edits to act on a finding. */
+  file: string;
+  /** Income-year label for a YYYY-MM-DD day (the report names the year, not a date). */
+  incomeYearOf: (ymd: string) => string;
+  /** A value as the report prints it. */
+  format: (value: number) => string;
+  rows: DeductionWatchRow[];
+}
+
+type DeductionId = { series: string; countryCode: string; label: string; incomeYear: string; file: string };
+
+export interface DeductionWatchFindings {
+  asOf: string;
+  /** The row in force has no verified figure, or cannot be staleness-checked. Actionable. */
+  unverifiedCurrent: Array<DeductionId & { effectiveFrom: string; reason: string }>;
+  /** The row in force is verified, but its citation is older than the threshold. Actionable. */
+  staleCitations: Array<DeductionId & { readOn: string; ageDays: number; sourceUrl: string }>;
+  /** Rows that start after asOf. FYI — `value` is null for a year with nothing published. */
+  upcoming: Array<DeductionId & { effectiveFrom: string; value: string | null; verified: boolean }>;
+}
+
+const auYear = (ymd: string) => auIncomeYear(ymd).label;
+const aud = (n: number) => `$${String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}`;
+const AU_DEDUCTIONS_FILE = 'src/countries/australiaDeductions.ts';
+
+/** Every deduction-rate series the package ships, in the shape analyzeDeductionRates() reads. */
+export function shippedDeductionSeries(): DeductionSeries[] {
+  return [
+    {
+      series: 'AU.workFromHomeFixedRate',
+      countryCode: 'AU',
+      label: 'Working from home fixed rate',
+      file: AU_DEDUCTIONS_FILE,
+      incomeYearOf: auYear,
+      format: (v) => formatAuCents(v, 'per work hour'),
+      rows: AU_WFH_FIXED_RATE_ROWS.map((r) => ({ effectiveFrom: r.effectiveFrom, value: r.rate, verified: r.verified, sourceUrl: r.sourceUrl, readOn: r.readOn })),
+    },
+    {
+      series: 'AU.centsPerKm',
+      countryCode: 'AU',
+      label: 'Car expenses, cents per kilometre',
+      file: AU_DEDUCTIONS_FILE,
+      incomeYearOf: auYear,
+      format: (v) => formatAuCents(v, 'per kilometre'),
+      rows: AU_CENTS_PER_KM_ROWS.map((r) => ({ effectiveFrom: r.effectiveFrom, value: r.rate, verified: r.verified, sourceUrl: r.sourceUrl, readOn: r.readOn })),
+    },
+    {
+      series: 'AU.instantAssetWriteOff',
+      countryCode: 'AU',
+      label: 'Instant asset write-off limit',
+      file: 'src/countries/australiaDepreciation.ts',
+      incomeYearOf: auYear,
+      format: aud,
+      rows: AU_INSTANT_ASSET_WRITE_OFF_ROWS.map((r) => ({ effectiveFrom: r.effectiveFrom, value: r.limit, verified: r.verified, sourceUrl: r.sourceUrl, readOn: r.readOn })),
+    },
+  ];
+}
+
+export function analyzeDeductionRates(
+  asOf?: string | Date,
+  opts: Pick<RateWatchOptions, 'staleAfterDays'> = {},
+  series: DeductionSeries[] = shippedDeductionSeries(),
+): DeductionWatchFindings {
+  const today = toYmd(asOf ?? new Date());
+  const staleAfterDays = opts.staleAfterDays ?? 365;
+  const f: DeductionWatchFindings = { asOf: today, unverifiedCurrent: [], staleCitations: [], upcoming: [] };
+
+  for (const s of series) {
+    const id: DeductionId = { series: s.series, countryCode: s.countryCode, label: s.label, incomeYear: s.incomeYearOf(today), file: s.file };
+    // Order is derived, never trusted — the same rule the resolvers follow.
+    const newestFirst = [...s.rows].sort((a, b) => b.effectiveFrom.localeCompare(a.effectiveFrom));
+    const current = newestFirst.find((r) => r.effectiveFrom <= today);
+
+    if (!current) {
+      f.unverifiedCurrent.push({ ...id, effectiveFrom: today, reason: 'no row covers today' });
+    } else if (!current.verified || current.value === null) {
+      f.unverifiedCurrent.push({
+        ...id,
+        effectiveFrom: current.effectiveFrom,
+        reason: 'no verified rate for the current income year — check whether the authority has published one',
+      });
+    } else if (!current.sourceUrl || !current.readOn) {
+      f.unverifiedCurrent.push({
+        ...id,
+        effectiveFrom: current.effectiveFrom,
+        reason: current.sourceUrl ? 'verified, but no read date to check staleness against' : 'verified, but no authority url',
+      });
+    } else {
+      const ageDays = daysBetween(current.readOn, today);
+      if (ageDays > staleAfterDays) {
+        f.staleCitations.push({ ...id, readOn: current.readOn, ageDays, sourceUrl: current.sourceUrl });
+      }
+    }
+
+    for (const r of newestFirst) {
+      if (r.effectiveFrom > today) {
+        const published = r.verified && r.value !== null;
+        f.upcoming.push({
+          ...id,
+          incomeYear: s.incomeYearOf(r.effectiveFrom),
+          effectiveFrom: r.effectiveFrom,
+          value: published ? s.format(r.value as number) : null,
+          verified: published,
+        });
+      }
+    }
+  }
+
+  f.upcoming.sort((a, b) => a.effectiveFrom.localeCompare(b.effectiveFrom) || a.series.localeCompare(b.series));
+  return f;
+}
+
+/** True when a deduction-rate finding needs a human. `upcoming` is FYI. */
+export function hasActionableDeductionFindings(f: DeductionWatchFindings): boolean {
+  return f.unverifiedCurrent.length > 0 || f.staleCitations.length > 0;
 }
 
 /** True when the findings contain anything that needs a human (not just FYI/checklist). */
