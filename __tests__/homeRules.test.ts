@@ -318,7 +318,6 @@ describe('Rate Watch — the home-rule figures', () => {
     expect(f.unverifiedCurrent.map((u) => `${u.series}:${u.incomeYear}`).sort()).toEqual([
       'NZ.boarderStandardCost:2027 income year',
       'NZ.homeOfficeSquareMetreRate:2027 income year',
-      'US.homeOfficeSimplifiedMethod:2026',
     ]);
     expect(f.staleCitations).toEqual([]);
   });

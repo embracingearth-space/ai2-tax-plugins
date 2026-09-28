@@ -23,6 +23,11 @@ import type { RateLedgerRow } from './data';
 import { AU_CENTS_PER_KM_ROWS, AU_WFH_FIXED_RATE_ROWS, auIncomeYear, formatAuCents } from './countries/australiaDeductions';
 import { AU_INSTANT_ASSET_WRITE_OFF_ROWS } from './countries/australiaDepreciation';
 import {
+  GB_CGT_ANNUAL_EXEMPT_ROWS,
+  GB_CGT_BASIC_RATE_ROWS,
+  GB_CGT_HIGHER_RATE_ROWS,
+  US_HOME_OFFICE_RECOVERY_YEARS_ROWS,
+  US_UNRECAPTURED_1250_MAX_RATE_ROWS,
   GB_RENT_A_ROOM_ROWS,
   NZ_BOARDER_STANDARD_COST_ROWS,
   NZ_SQUARE_METRE_RATE_ROWS,
@@ -232,6 +237,12 @@ export function shippedDeductionSeries(): DeductionSeries[] {
     homeSeries('US.homeOfficeSimplifiedMethod', 'US', 'Home office simplified method', usTaxYear, (v) => `$${v} per sq ft`, US_SIMPLIFIED_METHOD_ROWS),
     homeSeries('NZ.homeOfficeSquareMetreRate', 'NZ', 'Home office square-metre rate', nzIncomeYear, (v) => `$${v.toFixed(2)} per m²`, NZ_SQUARE_METRE_RATE_ROWS),
     homeSeries('NZ.boarderStandardCost', 'NZ', 'Boarder standard cost', nzIncomeYear, (v) => `$${v} per boarder per week`, NZ_BOARDER_STANDARD_COST_ROWS),
+    // The GB and US home-space comparisons (src/decisions/homeSpaceCountries.ts).
+    homeSeries('GB.cgtBasicRate', 'GB', 'Capital Gains Tax rate, basic rate band', gbTaxYear, (v) => `${v}%`, GB_CGT_BASIC_RATE_ROWS),
+    homeSeries('GB.cgtHigherRate', 'GB', 'Capital Gains Tax rate, above the basic rate band', gbTaxYear, (v) => `${v}%`, GB_CGT_HIGHER_RATE_ROWS),
+    homeSeries('GB.cgtAnnualExempt', 'GB', 'Capital Gains Tax annual exempt amount', gbTaxYear, (v) => `£${group(v)}`, GB_CGT_ANNUAL_EXEMPT_ROWS),
+    homeSeries('US.unrecaptured1250MaxRate', 'US', 'Unrecaptured section 1250 gain, maximum rate', usTaxYear, (v) => `${v}%`, US_UNRECAPTURED_1250_MAX_RATE_ROWS),
+    homeSeries('US.homeOfficeRecoveryYears', 'US', 'Home office depreciation recovery period', usTaxYear, (v) => `${v} years`, US_HOME_OFFICE_RECOVERY_YEARS_ROWS),
   ];
 }
 
