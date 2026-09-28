@@ -213,6 +213,27 @@ export type {
 } from './decisions/homeProperty';
 export { AU_HOME_PROPERTY_RULES, AU_HOME_PROPERTY_URLS } from './decisions/homePropertyRules';
 
+// Desk or shared room vs a place of business, like with like (day-accurate years, split at 30 June 2027), and the verdict.
+export {
+  homeSpaceComparison,
+  validateHomeSpaceComparison,
+  recommendHomeSpace,
+  isAboutEven as isHomeSpaceAboutEven,
+  HOME_SPACE_EVEN_SHARE,
+  HOME_SPACE_EVEN_FLOOR,
+} from './decisions/homeSpaceComparison';
+export type {
+  HomeSpaceComparisonInput,
+  HomeSpaceComparison,
+  HomeSpaceUsePeriod,
+  UseYearsByIncomeYear,
+  HomeSpaceRecommendation,
+  HomeSpaceVerdict,
+  HomeSpaceTone,
+} from './decisions/homeSpaceComparison';
+export { AU_HOME_SPACE_FIGURES } from './decisions/homeSpaceRates';
+export type { SourcedFigure } from './decisions/homeSpaceRates';
+
 // Home rules by country, as data — which questions change a filer's figures, and what each answer does.
 export { homeRulesFor, homeQuestionsFor, shouldAsk, allFigures } from './decisions/homeRules';
 

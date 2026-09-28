@@ -8,6 +8,19 @@ member has a value on every rules object that ships, `declineInValue` still
 accepts `daysHeld` / `daysInYear` exactly as before, and a host on 2.1.0 keeps
 working untouched.
 
+### Added — the home-space verdict, like with like (`homeSpaceComparison`, `recommendHomeSpace`)
+
+The app and the website each weighed a place of business against a desk themselves, and the app weighed four years of occupancy deductions against CGT on growth to 30 June 2027 only. For a sale after that date, a place of business looked better when a desk was. One function now does it for both.
+
+- `homeSpaceComparison(input)` counts years of use **by day**, per income year (days used ÷ days in the year), for one period or several dated periods each with its own floor-area share. It returns the deductions a place of business adds and the CGT it costs, split at 30 June 2027; the CGT on the later growth at today's rules (for scale); and, when the home's values are given, an **estimate** under the rules from 1 July 2027: the cost base indexed at an assumed 2.5% CPI a year from the September 2027 quarter, no discount, the marginal rate with the 30% minimum.
+- `recommendHomeSpace(comparison)` returns `placeOfBusiness | desk | even | dependsOnLater | notYet`, the tones for each option (`better | worse | neutral`), and the amounts. For a sale on or after 1 July 2027 it weighs deductions to 30 June 2027 against CGT on growth to then, and checks the later period: if the two disagree, the verdict is `dependsOnLater`. Use starting on or after 1 July 2027 is `notYet`. "About even" is within 5% of the larger side or under 100.
+- Every figure it multiplies by (the 50% discount, the 30% minimum, the CPI assumption) is in `AU_HOME_SPACE_FIGURES` with its source, read date and `reviewBy` date.
+- `homeBusinessSpaceTradeoff` is unchanged in shape and figures.
+
+### Fixed — the 1 July 2027 wording
+
+The apportioning method in s 112-185 is the **Minister's**, by legislative instrument, not the Commissioner's, and none has been made (only a Treasury exposure draft). The `cgtFrom1July2027` rule and the post-2027 note now say so, cite s 112-155(3)(a) (market value just before 1 July 2027 is the default), s 112-160 (the gain to then is deferred and keeps the discount) and the September 2027 quarter for indexation, and state that Subdivision 118-B is not amended. The "even growth by day" split is labelled an assumption: the law uses a market valuation, and the draft method compounds daily.
+
 ### Added — individual tax return deduction lines (`individualDeductionLines`)
 
 - `individualDeductionLines(country)` returns the deduction lines of the individual return, in the same spirit as the rental form lines. Each line has a key, ref, the form's own label, which return it is on, a description, an expense type, typical categories and keywords, the AU-IT field it feeds (and sub-fields), and its ATO source with the page date and the read date.

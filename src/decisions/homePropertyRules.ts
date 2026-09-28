@@ -257,10 +257,13 @@ export const AU_HOME_PROPERTY_RULES: Record<HomePropertyRuleKey, HomePropertyRul
       'discount is generally replaced, for gains accruing after 1 July 2027, by cost-base indexation (s 110-36(1A): Australian ' +
       'residents, asset held at least 12 months) and a possible 30% minimum tax; a qualifying new residential dwelling or ' +
       'affordable housing keeps a discount of at least 50% (s 115-102, s 115-125). The gain to ' +
-      '30 June 2027 keeps the discount. An individual is taken to sell just before, and reacquire on, 1 July 2027 at market ' +
-      'value or under an apportioning method the Commissioner determines (s 112-155, s 112-185). No such method is ' +
-      'published — none is on the Federal Register of Legislation as at the read date — so the portion after 30 June 2027 ' +
-      'is not computed.',
+      '30 June 2027 keeps the discount, and the tax on it is deferred to the real sale (s 112-160). A resident individual ' +
+      'is taken to sell just before, and reacquire on, 1 July 2027 (s 112-155(2)) for the market value just before ' +
+      '1 July 2027 (s 112-155(3)(a)) or, by choice, an amount worked out under an apportioning method the Minister ' +
+      'determines by legislative instrument (s 112-185). No such instrument has been made — only a Treasury exposure ' +
+      'draft — so the portion after 30 June 2027 is not computed as law. Indexation of the reacquired cost base runs from ' +
+      'the September 2027 quarter (s 960-275(1B), All Groups CPI). Subdivision 118-B (main residence) is not amended, ' +
+      'and the Act says nothing specific about a home partly used for business at the deemed sale.',
     authority: 'Federal Register of Legislation',
     sourceUrl: U.taxReformAct,
     pageLastUpdated: null,
