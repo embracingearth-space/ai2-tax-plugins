@@ -216,6 +216,21 @@ export { AU_HOME_PROPERTY_RULES, AU_HOME_PROPERTY_URLS } from './decisions/homeP
 // Home rules by country, as data — which questions change a filer's figures, and what each answer does.
 export { homeRulesFor, homeQuestionsFor, shouldAsk, allFigures } from './decisions/homeRules';
 
+// The deduction lines of the individual tax return (AU: myTax D1–D15), for tagging categories with their return line.
+export {
+  individualDeductionLines,
+  individualDeductionLine,
+  methodRate,
+  INDIVIDUAL_DEDUCTION_LINES_CHECKED,
+} from './data/individualDeductionLines';
+export type {
+  IndividualDeductionForm,
+  IndividualDeductionLine,
+  DeductionMethod,
+  DeductionRateLookup,
+  DeductionLineSource,
+} from './data/individualDeductionLines';
+
 // The shared decision contract: years → dated inputs, form specs, and the website → app handoff codec.
 export { spaceScenario, movingScenario, lodgerScenario, addYears, auIncomeYearStartOf, dayOf } from './decisions/scenarioFromYears';
 export type {

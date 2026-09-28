@@ -8,6 +8,15 @@ member has a value on every rules object that ships, `declineInValue` still
 accepts `daysHeld` / `daysInYear` exactly as before, and a host on 2.1.0 keeps
 working untouched.
 
+### Added — individual tax return deduction lines (`individualDeductionLines`)
+
+- `individualDeductionLines(country)` returns the deduction lines of the individual return, in the same spirit as the rental form lines. Each line has a key, ref, the form's own label, which return it is on, a description, an expense type, typical categories and keywords, the AU-IT field it feeds (and sub-fields), and its ATO source with the page date and the read date.
+- **AU:** myTax/paper-return D1–D10 and supplementary D11–D15, read on the ATO's 2026 instructions on 28 Sep 2026 (UTC).
+  - D1 lists both methods: cents per km (capped at `AU_CENTS_PER_KM_MAX_BUSINESS_KM`, 5,000 km) and logbook.
+  - D5 lists the working-from-home fixed-rate and actual-cost methods, which feed `work_from_home`.
+  - `methodRate(method, incomeYear)` resolves the rate through `centsPerKmRate` / `workFromHomeFixedRate`, so no rate is copied into the lines.
+- **GB, US, CA, NZ, IN:** `null`. Their return lines (P87 / SA102, Schedule A, T777 / line 22900, IR3, ITR) have not been verified on the authorities' pages yet.
+
 ### Added — the shared decision contract (scenarioFromYears, inputSpecs, handoff v1)
 
 - **`spaceScenario` / `movingScenario` / `lodgerScenario`** turn a "Weigh it up" screen's number of years into the decisions' dated inputs. The mapping is moved here from the app's adapter, so every surface dates a scenario the same way:
