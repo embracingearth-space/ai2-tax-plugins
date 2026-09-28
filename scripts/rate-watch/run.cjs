@@ -54,6 +54,16 @@ function renderDeductions(L, d) {
     for (const s of d.staleCitations) L.push(`- ${tag(s)} — last read ${s.readOn} (${s.ageDays} days ago). Re-read ${s.sourceUrl} and update \`readOn\` in \`${s.file}\`.`);
     L.push('');
   }
+  if (d.pastReviewBy && d.pastReviewBy.length) {
+    L.push('## ⏰ Past their review date (the freshness test fails the build until these are re-read)');
+    for (const r of d.pastReviewBy) L.push(`- ${tag(r)} — ${r.incomeYear}: review was due ${r.reviewBy} (${r.daysPast} days ago). Re-read ${r.sourceUrl || 'the source'}, then update the row and move \`reviewBy\` in \`${r.file}\`.`);
+    L.push('');
+  }
+  if (d.home && d.home.length) {
+    L.push('## ⏰ Home-decision figures and rules past their review date');
+    for (const h of d.home) L.push(`- **${h.country}** ${h.label} — review was due ${h.reviewBy}. Re-read ${h.sourceUrl} and move \`reviewBy\` in \`${h.file}\`.`);
+    L.push('');
+  }
   if (d.upcoming.length) {
     L.push('## 🗓️ Upcoming deduction-rate rows');
     for (const r of d.upcoming) L.push(`- ${tag(r)} → ${r.incomeYear} from ${r.effectiveFrom}: ${r.value ?? 'no rate published yet'}`);
@@ -123,11 +133,13 @@ async function main() {
   // failure handler below and opens a "runner failed" issue, instead of throwing at
   // module load and bypassing the report path entirely. embracingearth.space
   const { analyzeLedger, hasActionableFindings, analyzeDeductionRates, hasActionableDeductionFindings } = require('../../dist/rateWatch');
+  const { homeFiguresPastReview } = require('../../dist/decisions/homeRatesFreshness');
   const mode = resolveMode();
   // One timestamp for both analyses, so they cannot straddle midnight.
   const asOf = new Date();
   const findings = analyzeLedger(asOf);
   const deductions = analyzeDeductionRates(asOf);
+  deductions.home = homeFiguresPastReview(asOf);
   const external = await fetchExternalRates();
   const report = render(findings, mode, external, deductions);
 
@@ -135,7 +147,7 @@ async function main() {
   fs.writeFileSync(outPath, report);
 
   // quarterly always opens an issue (the review prompt); weekly only when actionable
-  const shouldOpen = mode === 'quarterly' || hasActionableFindings(findings) || hasActionableDeductionFindings(deductions);
+  const shouldOpen = mode === 'quarterly' || hasActionableFindings(findings) || hasActionableDeductionFindings(deductions) || deductions.home.length > 0;
   const title = `Rate Watch — ${findings.asOf} (${mode})`;
 
   console.log(report);

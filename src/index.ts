@@ -232,6 +232,9 @@ export type {
   HomeSpaceTone,
 } from './decisions/homeSpaceComparison';
 export { AU_HOME_SPACE_FIGURES } from './decisions/homeSpaceRates';
+// Keeping the home rules up to date: every figure with its source, read date and review date.
+export { homeRateInventory, homeRatesPastReview, homeFiguresPastReview } from './decisions/homeRatesFreshness';
+export type { HomeRateInventoryItem } from './decisions/homeRatesFreshness';
 // The same comparison under the UK and US rules (verified figures only).
 export { gbBusinessRoomComparison, validateGbBusinessRoom, usHomeOfficeComparison, validateUsHomeOffice } from './decisions/homeSpaceCountries';
 export type {
@@ -318,6 +321,7 @@ export type { HomePropertyRule, HomePropertyRuleKey, DecisionNote } from './deci
 // Australia — per-unit deduction rates (WFH fixed rate, cents per km), effective-dated by income year.
 export {
   workFromHomeFixedRate,
+  workFromHomeFixedRateOrEstimate,
   centsPerKmRate,
   auIncomeYear,
   formatAuCents,
@@ -331,6 +335,7 @@ export {
 export type {
   AuDeductionRateRow,
   AuDeductionRate,
+  AuFixedRateOrEstimate,
   AuIncomeYear,
   AuIncomeYearInput,
   AuRateUnit,

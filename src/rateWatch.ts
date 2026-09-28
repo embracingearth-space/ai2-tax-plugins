@@ -168,6 +168,8 @@ export interface DeductionWatchRow {
   verified: boolean;
   sourceUrl?: string | null;
   readOn?: string | null;
+  /** YYYY-MM-DD by which a person must look at the row again. Past it, while the row is in force, it is flagged. */
+  reviewBy?: string | null;
 }
 
 /** A watched series. Tests pass fixtures; production uses shippedDeductionSeries(). */
@@ -196,6 +198,8 @@ export interface DeductionWatchFindings {
   staleCitations: Array<DeductionId & { readOn: string; ageDays: number; sourceUrl: string }>;
   /** Rows that start after asOf. FYI — `value` is null for a year with nothing published. */
   upcoming: Array<DeductionId & { effectiveFrom: string; value: string | null; verified: boolean }>;
+  /** The row in force is past its `reviewBy` date: nobody has confirmed it since. Actionable; the freshness test fails too. */
+  pastReviewBy?: Array<DeductionId & { effectiveFrom: string; reviewBy: string; daysPast: number; sourceUrl: string | null }>;
 }
 
 const auYear = (ymd: string) => auIncomeYear(ymd).label;
@@ -212,7 +216,7 @@ export function shippedDeductionSeries(): DeductionSeries[] {
       file: AU_DEDUCTIONS_FILE,
       incomeYearOf: auYear,
       format: (v) => formatAuCents(v, 'per work hour'),
-      rows: AU_WFH_FIXED_RATE_ROWS.map((r) => ({ effectiveFrom: r.effectiveFrom, value: r.rate, verified: r.verified, sourceUrl: r.sourceUrl, readOn: r.readOn })),
+      rows: AU_WFH_FIXED_RATE_ROWS.map((r) => ({ effectiveFrom: r.effectiveFrom, value: r.rate, verified: r.verified, sourceUrl: r.sourceUrl, readOn: r.readOn, reviewBy: r.reviewBy ?? null })),
     },
     {
       series: 'AU.centsPerKm',
@@ -263,7 +267,7 @@ function homeSeries(
     file: 'src/decisions/homeRuleRates.ts',
     incomeYearOf,
     format,
-    rows: rows.map((r) => ({ effectiveFrom: r.effectiveFrom, value: r.value, verified: r.verified, sourceUrl: r.sourceUrl, readOn: r.readOn })),
+    rows: rows.map((r) => ({ effectiveFrom: r.effectiveFrom, value: r.value, verified: r.verified, sourceUrl: r.sourceUrl, readOn: r.readOn, reviewBy: r.reviewBy })),
   };
 }
 
@@ -274,7 +278,7 @@ export function analyzeDeductionRates(
 ): DeductionWatchFindings {
   const today = toYmd(asOf ?? new Date());
   const staleAfterDays = opts.staleAfterDays ?? 365;
-  const f: DeductionWatchFindings = { asOf: today, unverifiedCurrent: [], staleCitations: [], upcoming: [] };
+  const f: DeductionWatchFindings = { asOf: today, unverifiedCurrent: [], staleCitations: [], upcoming: [], pastReviewBy: [] };
 
   for (const s of series) {
     const id: DeductionId = { series: s.series, countryCode: s.countryCode, label: s.label, incomeYear: s.incomeYearOf(today), file: s.file };
@@ -303,6 +307,10 @@ export function analyzeDeductionRates(
       }
     }
 
+    if (current?.reviewBy && current.reviewBy < today) {
+      f.pastReviewBy!.push({ ...id, effectiveFrom: current.effectiveFrom, reviewBy: current.reviewBy, daysPast: daysBetween(current.reviewBy, today), sourceUrl: current.sourceUrl ?? null });
+    }
+
     for (const r of newestFirst) {
       if (r.effectiveFrom > today) {
         const published = r.verified && r.value !== null;
@@ -323,7 +331,7 @@ export function analyzeDeductionRates(
 
 /** True when a deduction-rate finding needs a human. `upcoming` is FYI. */
 export function hasActionableDeductionFindings(f: DeductionWatchFindings): boolean {
-  return f.unverifiedCurrent.length > 0 || f.staleCitations.length > 0;
+  return f.unverifiedCurrent.length > 0 || f.staleCitations.length > 0 || (f.pastReviewBy?.length ?? 0) > 0;
 }
 
 /** True when the findings contain anything that needs a human (not just FYI/checklist). */
