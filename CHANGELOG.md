@@ -8,6 +8,41 @@ member has a value on every rules object that ships, `declineInValue` still
 accepts `daysHeld` / `daysInYear` exactly as before, and a host on 2.1.0 keeps
 working untouched.
 
+### Added — home rules by country, as data (`homeRulesFor`)
+
+`homeRulesFor(country)` returns one of two shapes:
+- `{ supported, country, taxYear, questions, notes }` for a modelled country, where each question is `{ id, field, prompt, askWhen, options: [{ id, label, effects }] }`;
+- `{ supported: false, country }` for any other country.
+
+`askWhen` checks place facts: the kind, business share > 0, rental share > 0, and the taxpayer role. `effects` gives the deduction basis now (`running_only` | `occupancy_at_share` | `flat_rate` | `none`) and the effect at sale (`exemption_unaffected` | `reduced_by_share` | `reduced_by_value_share` | `not_applicable` | `depreciation_recaptured`). Each effect has a citation `{ url, readOn }`, and so does every numeric figure (a test enforces both). `homeQuestionsFor` / `shouldAsk` filter the questions for a place.
+
+Only claims verified on the authority's page (read 28 Sep 2026, UTC) drive a question or a number. Search-excerpt and unverified claims are `notes` with `forAccountant: true`.
+
+- **AU**: as the app behaves today. Business use is a `home_office` (running costs only, exemption unaffected) or a `place_of_business` (occupancy costs at the share, exemption reduced by the share). The rental arrangement is `domestic` / `commercial` for a home and `commercial` / `below_market` for other kinds. There is no role question.
+- **GB**:
+  - role: an employee gets no deduction from 2026-27 (£6/week up to 2025-26); the self-employed get flat rates of £10 / £18 / £26 a month;
+  - an exclusive business room: fixed costs at the share, and Private Residence Relief reduced by *value* share;
+  - Rent a Room £7,500 (£3,750 shared); a single lodger leaves PRR intact; lettings relief is capped at £40,000.
+- **US**:
+  - role: employees get no home office;
+  - regular and exclusive use: the simplified method at $5/sq ft up to 300 sq ft (nothing to recapture), or the regular method with depreciation recaptured;
+  - §121 $250,000 / $500,000 is not reduced for an in-home office;
+  - a lodger means depreciation is recaptured; renting under 15 days is ignored.
+- **CA**:
+  - role: employees need a T2200 and meet the conditions (salaried: running costs; commission adds tax and insurance);
+  - the self-employed with the principal place or exclusive use plus clients;
+  - the principal residence exemption stays intact for ancillary use with no CCA; CCA or a structural change reduces it.
+- **NZ**:
+  - role: an employee claims nothing; a company pays a fair reimbursement;
+  - the square-metre rate is $57.30/m² for the 2026 income year;
+  - the boarder standard cost is $245/week each, for 1 to 4 boarders;
+  - no CGT outside the bright-line.
+- **IN**:
+  - a let-out part is separate house property with a 30% standard deduction;
+  - salaried people get no home office, and there is no main-residence exemption (s54, 1961 Act, noted). Business use is an accountant note;
+  - only two mappings to the Income-tax Act, 2025 are confirmed: s115BAC → s202 and s44AD/ADA/AE → s58.
+- Rate Watch now also watches GB Rent a Room, the US simplified-method rate and NZ's square-metre rate and boarder standard cost (`src/decisions/homeRuleRates.ts`). As of 28 Sep 2026 it flags the US for 2026 and NZ for the 2027 income year as having no verified figure yet.
+
 ### Added — home and property decisions (`src/decisions/homeProperty.ts`)
 
 Pure decision maths the app, the marketing site and the Tax MCP all call, so they show the same numbers. AU first. Any other country returns `{ supported: false, authority }` with the country's tax authority link and no numbers. Every rule is a row in `AU_HOME_PROPERTY_RULES` with its source URL, the page's own last-updated date, and the date it was read (27 September 2026). Every result lists the notes and rules it relied on.
