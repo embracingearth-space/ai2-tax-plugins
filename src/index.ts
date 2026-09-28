@@ -236,6 +236,43 @@ export type { SourcedFigure } from './decisions/homeSpaceRates';
 
 // Home rules by country, as data — which questions change a filer's figures, and what each answer does.
 export { homeRulesFor, homeQuestionsFor, shouldAsk, allFigures } from './decisions/homeRules';
+
+// The deduction lines of the individual tax return (AU: myTax D1–D15), for tagging categories with their return line.
+export {
+  individualDeductionLines,
+  individualDeductionLine,
+  methodRate,
+  INDIVIDUAL_DEDUCTION_LINES_CHECKED,
+} from './data/individualDeductionLines';
+export type {
+  IndividualDeductionForm,
+  IndividualDeductionLine,
+  DeductionMethod,
+  DeductionRateLookup,
+  DeductionLineSource,
+} from './data/individualDeductionLines';
+
+// The shared decision contract: years → dated inputs, form specs, and the website → app handoff codec.
+export { spaceScenario, movingScenario, lodgerScenario, addYears, auIncomeYearStartOf, dayOf } from './decisions/scenarioFromYears';
+export type {
+  Scenario,
+  SpaceScenarioInput,
+  MovingScenarioInput,
+  MovingHome,
+  LodgerScenarioInput,
+} from './decisions/scenarioFromYears';
+export { INPUT_SPECS, withinSpec, MAX_AREA_M2 } from './decisions/inputSpecs';
+export type { DecisionKind, InputSpec, InputUnit } from './decisions/inputSpecs';
+export {
+  encodeHandoff,
+  decodeHandoff,
+  problemsOf as handoffProblemsOf,
+  handoffFields,
+  HANDOFF_VERSION,
+  HANDOFF_MAX_LENGTH,
+  HANDOFF_MAX_AMOUNT,
+} from './decisions/handoff';
+export type { HandoffV1, HandoffSpace, HandoffMoving, HandoffSomeone, DecodeResult } from './decisions/handoff';
 export type {
   HomeRules,
   HomeRulesUnsupported,
