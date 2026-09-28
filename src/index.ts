@@ -185,9 +185,17 @@ export {
   roomOrPartnerArrangement,
   daysBeyondSixYears,
   AU_CGT_REGIME_2027_FROM,
+  validateHomeBusinessSpace,
+  validateMainResidenceChoice,
+  validateRoomOrPartnerArrangement,
+  DecisionInputError,
+  MAX_HOURS_PER_YEAR,
+  MAX_WEEKS_PER_YEAR,
 } from './decisions/homeProperty';
 export type {
   UnsupportedCountry,
+  MarginalRateAssumption,
+  DecisionInputProblem,
   PreJuly2027Cgt,
   PostJuly2027Cgt,
   HomeBusinessSpaceInput,
@@ -222,6 +230,28 @@ export type {
   DeductionRateLookup,
   DeductionLineSource,
 } from './data/individualDeductionLines';
+
+// The shared decision contract: years → dated inputs, form specs, and the website → app handoff codec.
+export { spaceScenario, movingScenario, lodgerScenario, addYears, auIncomeYearStartOf, dayOf } from './decisions/scenarioFromYears';
+export type {
+  Scenario,
+  SpaceScenarioInput,
+  MovingScenarioInput,
+  MovingHome,
+  LodgerScenarioInput,
+} from './decisions/scenarioFromYears';
+export { INPUT_SPECS, withinSpec, MAX_AREA_M2 } from './decisions/inputSpecs';
+export type { DecisionKind, InputSpec, InputUnit } from './decisions/inputSpecs';
+export {
+  encodeHandoff,
+  decodeHandoff,
+  problemsOf as handoffProblemsOf,
+  handoffFields,
+  HANDOFF_VERSION,
+  HANDOFF_MAX_LENGTH,
+  HANDOFF_MAX_AMOUNT,
+} from './decisions/handoff';
+export type { HandoffV1, HandoffSpace, HandoffMoving, HandoffSomeone, DecodeResult } from './decisions/handoff';
 export type {
   HomeRules,
   HomeRulesUnsupported,
