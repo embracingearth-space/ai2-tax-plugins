@@ -58,6 +58,11 @@ export interface AuDeductionRateRow extends EffectiveDatedRow {
   sourceUrl: string | null;
   /** YYYY-MM-DD the source was last read. null only on the "not recorded" floor. */
   readOn: string | null;
+  /**
+   * YYYY-MM-DD by which a person must look at the row again (re-read the figure, or check whether a rate has been
+   * published for a null row). Set on the rows the home decisions use; the freshness test fails past it.
+   */
+  reviewBy?: string;
   /** The legal instrument that sets the rate, where one does. */
   instrument?: string;
   note: string;
@@ -165,6 +170,8 @@ export const AU_WFH_FIXED_RATE_ROWS: AuDeductionRateRow[] = [
     verified: false,
     sourceUrl: ATO_WFH_FIXED_RATE,
     readOn: READ_ON,
+    // The ATO has published each rate before the year ends; look again by then.
+    reviewBy: '2027-03-31',
     // Runs on for every later year until a rate is published, so the note
     // names the last published year rather than "2026-27".
     note:
@@ -177,6 +184,7 @@ export const AU_WFH_FIXED_RATE_ROWS: AuDeductionRateRow[] = [
     verified: true,
     sourceUrl: ATO_WFH_FIXED_RATE,
     readOn: READ_ON,
+    reviewBy: '2027-06-30',
     note: `70 cents per work hour for 2024-25 and 2025-26. ${WFH_COVERS}`,
   },
   {
@@ -376,6 +384,48 @@ const CENTS_PER_KM_NEWEST_FIRST: readonly AuDeductionRateRow[] = sortNewestFirst
  */
 export function workFromHomeFixedRate(incomeYearOrDate: AuIncomeYearInput): AuDeductionRate {
   return lookup(WFH_NEWEST_FIRST, incomeYearOrDate, 'per work hour');
+}
+
+/** The fixed rate to use for a year: the published one, or the last published one labelled an estimate. */
+export interface AuFixedRateOrEstimate {
+  /** AUD per work hour. */
+  rate: number;
+  /** true when the year has no published rate and an earlier year's is used in its place. */
+  estimate: boolean;
+  incomeYear: string;
+  /** The income year the rate was published for. */
+  rateIncomeYear: string;
+  sourceUrl: string | null;
+  readOn: string | null;
+  /** For an estimate, the wording the app uses (places.homeUse.wfhRateEstimate) and the website shares. */
+  note: string;
+}
+
+/**
+ * The working from home fixed rate for a year, or — for a year the ATO has not published — the last published
+ * rate, marked `estimate: true` with a note saying so. For a planner or a what-if that must show a number;
+ * a return must use `workFromHomeFixedRate`, which never applies an unpublished year's rate. Null when no
+ * earlier rate is recorded either.
+ */
+export function workFromHomeFixedRateOrEstimate(incomeYearOrDate: AuIncomeYearInput): AuFixedRateOrEstimate | null {
+  const r = workFromHomeFixedRate(incomeYearOrDate);
+  if (r.verified && r.rate !== null) {
+    return { rate: r.rate, estimate: false, incomeYear: r.incomeYear, rateIncomeYear: r.incomeYear, sourceUrl: r.sourceUrl, readOn: r.readOn, note: r.note };
+  }
+  if (!r.lastPublished) return null;
+  const cents = Math.round(r.lastPublished.rate * 100);
+  const dash = (y: string) => y.replace('-', '\u2013');
+  return {
+    rate: r.lastPublished.rate,
+    estimate: true,
+    incomeYear: r.incomeYear,
+    rateIncomeYear: r.lastPublished.incomeYear,
+    sourceUrl: r.sourceUrl,
+    readOn: r.readOn,
+    note:
+      `The ${dash(r.incomeYear)} rate is not published yet. The ${dash(r.lastPublished.incomeYear)} rate (${cents}c an hour) ` +
+      'is used as an estimate only — or use actual costs.',
+  };
 }
 
 /**

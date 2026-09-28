@@ -21,6 +21,12 @@ export interface HomeRateRow {
   verified: boolean;
   sourceUrl: string | null;
   readOn: string | null;
+  /**
+   * YYYY-MM-DD by which a person must look at this row again: re-read a verified figure, or check whether a
+   * figure has been published for a `value: null` year. Past it, while the row is in force, the freshness test
+   * fails the build (see the README, "Keeping the home rules up to date"). null only on the "not recorded" floor.
+   */
+  reviewBy: string | null;
   note: string;
 }
 
@@ -44,8 +50,8 @@ export const HOME_RATE_URLS = {
  * (from 6 April 2026) and earlier years are not recorded here.
  */
 export const GB_RENT_A_ROOM_ROWS: HomeRateRow[] = [
-  { effectiveFrom: '2026-04-06', value: 7500, verified: true, sourceUrl: HOME_RATE_URLS.gbRentARoom, readOn: R, note: '£7,500 a year tax-free (£3,750 if you share the income).' },
-  { effectiveFrom: '1900-04-06', value: null, verified: false, sourceUrl: null, readOn: null, note: 'Rent a Room limits before 2026-27 are not recorded here.' },
+  { effectiveFrom: '2026-04-06', value: 7500, verified: true, sourceUrl: HOME_RATE_URLS.gbRentARoom, readOn: R, reviewBy: '2027-04-05', note: '£7,500 a year tax-free (£3,750 if you share the income).' },
+  { effectiveFrom: '1900-04-06', value: null, verified: false, sourceUrl: null, readOn: null, reviewBy: null, note: 'Rent a Room limits before 2026-27 are not recorded here.' },
 ];
 
 /**
@@ -54,10 +60,10 @@ export const GB_RENT_A_ROOM_ROWS: HomeRateRow[] = [
  * verified on that page.
  */
 export const US_SIMPLIFIED_METHOD_ROWS: HomeRateRow[] = [
-  { effectiveFrom: '2027-01-01', value: null, verified: false, sourceUrl: HOME_RATE_URLS.usSimplifiedMethod, readOn: null, note: 'Not yet checked for 2027: re-read Topic 509 in January 2027.' },
-  { effectiveFrom: '2026-01-01', value: 5, verified: true, sourceUrl: HOME_RATE_URLS.usSimplifiedMethod, readOn: R, note: '"a prescribed rate of $5 per square foot of the portion of the home used for business (up to a maximum of 300 square feet)" (Topic 509, reviewed 24-Sep-2026).' },
-  { effectiveFrom: '2025-01-01', value: 5, verified: true, sourceUrl: HOME_RATE_URLS.usSimplifiedMethod, readOn: R, note: '$5 per square foot of the area used, up to 300 square feet; depreciation is treated as zero.' },
-  { effectiveFrom: '1900-01-01', value: null, verified: false, sourceUrl: null, readOn: null, note: 'Simplified-method rates before 2025 are not recorded here.' },
+  { effectiveFrom: '2027-01-01', value: null, verified: false, sourceUrl: HOME_RATE_URLS.usSimplifiedMethod, readOn: null, reviewBy: '2027-02-15', note: 'Not yet checked for 2027: re-read Topic 509 in January 2027.' },
+  { effectiveFrom: '2026-01-01', value: 5, verified: true, sourceUrl: HOME_RATE_URLS.usSimplifiedMethod, readOn: R, reviewBy: '2026-12-31', note: '"a prescribed rate of $5 per square foot of the portion of the home used for business (up to a maximum of 300 square feet)" (Topic 509, reviewed 24-Sep-2026).' },
+  { effectiveFrom: '2025-01-01', value: 5, verified: true, sourceUrl: HOME_RATE_URLS.usSimplifiedMethod, readOn: R, reviewBy: '2025-12-31', note: '$5 per square foot of the area used, up to 300 square feet; depreciation is treated as zero.' },
+  { effectiveFrom: '1900-01-01', value: null, verified: false, sourceUrl: null, readOn: null, reviewBy: null, note: 'Simplified-method rates before 2025 are not recorded here.' },
 ];
 
 /**
@@ -67,16 +73,16 @@ export const US_SIMPLIFIED_METHOD_ROWS: HomeRateRow[] = [
  * income year rate was not found.
  */
 export const NZ_SQUARE_METRE_RATE_ROWS: HomeRateRow[] = [
-  { effectiveFrom: '2026-04-01', value: null, verified: false, sourceUrl: HOME_RATE_URLS.nzSquareMetreRate, readOn: R, note: 'The square-metre rate for the 2027 income year (from 1 April 2026) has not been found on an IRD page.' },
-  { effectiveFrom: '2025-04-01', value: 57.3, verified: true, sourceUrl: HOME_RATE_URLS.nzSquareMetreRate, readOn: R, note: '$57.30 per square metre of home-office area for the 2026 income year (1 April 2025 to 31 March 2026), for utilities.' },
-  { effectiveFrom: '2024-04-01', value: null, verified: false, sourceUrl: null, readOn: null, note: 'The 2025 income year rate ($55.60) was seen only in a search excerpt, not on the page; confirm it with IRD.' },
+  { effectiveFrom: '2026-04-01', value: null, verified: false, sourceUrl: HOME_RATE_URLS.nzSquareMetreRate, readOn: R, reviewBy: '2026-12-31', note: 'The square-metre rate for the 2027 income year (from 1 April 2026) has not been found on an IRD page.' },
+  { effectiveFrom: '2025-04-01', value: 57.3, verified: true, sourceUrl: HOME_RATE_URLS.nzSquareMetreRate, readOn: R, reviewBy: '2026-03-31', note: '$57.30 per square metre of home-office area for the 2026 income year (1 April 2025 to 31 March 2026), for utilities.' },
+  { effectiveFrom: '2024-04-01', value: null, verified: false, sourceUrl: null, readOn: null, reviewBy: '2025-03-31', note: 'The 2025 income year rate ($55.60) was seen only in a search excerpt, not on the page; confirm it with IRD.' },
 ];
 
 /** NZ standard cost for boarders and home-stay students: $245 per boarder per week, 1 to 4 boarders, 2025–2026 income year. */
 export const NZ_BOARDER_STANDARD_COST_ROWS: HomeRateRow[] = [
-  { effectiveFrom: '2026-04-01', value: null, verified: false, sourceUrl: HOME_RATE_URLS.nzBoarderStandardCost, readOn: R, note: 'The boarder standard cost for the 2027 income year (from 1 April 2026) has not been found on an IRD page.' },
-  { effectiveFrom: '2025-04-01', value: 245, verified: true, sourceUrl: HOME_RATE_URLS.nzBoarderStandardCost, readOn: R, note: '$245 per boarder per week, for 1 to 4 boarders, for the 2025–2026 income year.' },
-  { effectiveFrom: '1900-04-01', value: null, verified: false, sourceUrl: null, readOn: null, note: 'Boarder standard costs before the 2025–2026 income year are not recorded here.' },
+  { effectiveFrom: '2026-04-01', value: null, verified: false, sourceUrl: HOME_RATE_URLS.nzBoarderStandardCost, readOn: R, reviewBy: '2026-12-31', note: 'The boarder standard cost for the 2027 income year (from 1 April 2026) has not been found on an IRD page.' },
+  { effectiveFrom: '2025-04-01', value: 245, verified: true, sourceUrl: HOME_RATE_URLS.nzBoarderStandardCost, readOn: R, reviewBy: '2026-03-31', note: '$245 per boarder per week, for 1 to 4 boarders, for the 2025–2026 income year.' },
+  { effectiveFrom: '1900-04-01', value: null, verified: false, sourceUrl: null, readOn: null, reviewBy: null, note: 'Boarder standard costs before the 2025–2026 income year are not recorded here.' },
 ];
 
 /** The verified row with the given start date — throws if it is missing or unverified, so a figure can never drift from its row. */
@@ -113,35 +119,35 @@ export function usTaxYear(ymd: string): string {
  * 2025 residential property is taxed at the same rates). Years from 2027-28 are not published.
  */
 export const GB_CGT_BASIC_RATE_ROWS: HomeRateRow[] = [
-  { effectiveFrom: '2027-04-06', value: null, verified: false, sourceUrl: HOME_RATE_URLS.gbCgtRates, readOn: null, note: 'The 2027-28 rates are not yet published.' },
-  { effectiveFrom: '2025-04-06', value: 18, verified: true, sourceUrl: HOME_RATE_URLS.gbCgtRates, readOn: R, note: '18% for individuals within the basic rate band, 2025-26 and 2026-27.' },
-  { effectiveFrom: '1900-04-06', value: null, verified: false, sourceUrl: null, readOn: null, note: 'Rates before 2025-26 are not recorded here.' },
+  { effectiveFrom: '2027-04-06', value: null, verified: false, sourceUrl: HOME_RATE_URLS.gbCgtRates, readOn: null, reviewBy: '2027-05-06', note: 'The 2027-28 rates are not yet published.' },
+  { effectiveFrom: '2025-04-06', value: 18, verified: true, sourceUrl: HOME_RATE_URLS.gbCgtRates, readOn: R, reviewBy: '2027-04-05', note: '18% for individuals within the basic rate band, 2025-26 and 2026-27.' },
+  { effectiveFrom: '1900-04-06', value: null, verified: false, sourceUrl: null, readOn: null, reviewBy: null, note: 'Rates before 2025-26 are not recorded here.' },
 ];
 export const GB_CGT_HIGHER_RATE_ROWS: HomeRateRow[] = [
-  { effectiveFrom: '2027-04-06', value: null, verified: false, sourceUrl: HOME_RATE_URLS.gbCgtRates, readOn: null, note: 'The 2027-28 rates are not yet published.' },
-  { effectiveFrom: '2025-04-06', value: 24, verified: true, sourceUrl: HOME_RATE_URLS.gbCgtRates, readOn: R, note: '24% for individuals above the basic rate band, 2025-26 and 2026-27.' },
-  { effectiveFrom: '1900-04-06', value: null, verified: false, sourceUrl: null, readOn: null, note: 'Rates before 2025-26 are not recorded here.' },
+  { effectiveFrom: '2027-04-06', value: null, verified: false, sourceUrl: HOME_RATE_URLS.gbCgtRates, readOn: null, reviewBy: '2027-05-06', note: 'The 2027-28 rates are not yet published.' },
+  { effectiveFrom: '2025-04-06', value: 24, verified: true, sourceUrl: HOME_RATE_URLS.gbCgtRates, readOn: R, reviewBy: '2027-04-05', note: '24% for individuals above the basic rate band, 2025-26 and 2026-27.' },
+  { effectiveFrom: '1900-04-06', value: null, verified: false, sourceUrl: null, readOn: null, reviewBy: null, note: 'Rates before 2025-26 are not recorded here.' },
 ];
 /** GB CGT annual exempt amount for individuals: £3,000 for 2024-25, 2025-26 and 2026-27. */
 export const GB_CGT_ANNUAL_EXEMPT_ROWS: HomeRateRow[] = [
-  { effectiveFrom: '2027-04-06', value: null, verified: false, sourceUrl: HOME_RATE_URLS.gbCgtRates, readOn: null, note: 'The 2027-28 annual exempt amount is not yet published.' },
-  { effectiveFrom: '2024-04-06', value: 3000, verified: true, sourceUrl: HOME_RATE_URLS.gbCgtRates, readOn: R, note: '£3,000 for individuals, 2024-25 to 2026-27.' },
-  { effectiveFrom: '1900-04-06', value: null, verified: false, sourceUrl: null, readOn: null, note: 'Amounts before 2024-25 are not recorded here.' },
+  { effectiveFrom: '2027-04-06', value: null, verified: false, sourceUrl: HOME_RATE_URLS.gbCgtRates, readOn: null, reviewBy: '2027-05-06', note: 'The 2027-28 annual exempt amount is not yet published.' },
+  { effectiveFrom: '2024-04-06', value: 3000, verified: true, sourceUrl: HOME_RATE_URLS.gbCgtRates, readOn: R, reviewBy: '2027-04-05', note: '£3,000 for individuals, 2024-25 to 2026-27.' },
+  { effectiveFrom: '1900-04-06', value: null, verified: false, sourceUrl: null, readOn: null, reviewBy: null, note: 'Amounts before 2024-25 are not recorded here.' },
 ];
 /**
  * US: unrecaptured section 1250 gain — the depreciation on real property, which a home-office owner cannot exclude
  * under s121 for periods after 6 May 1997 — "is taxed at a maximum 25% rate" (Topic 409, reviewed 24-Sep-2026).
  */
 export const US_UNRECAPTURED_1250_MAX_RATE_ROWS: HomeRateRow[] = [
-  { effectiveFrom: '2027-01-01', value: null, verified: false, sourceUrl: HOME_RATE_URLS.usUnrecaptured1250, readOn: null, note: 'Not yet checked for 2027: re-read Topic 409 in January 2027.' },
-  { effectiveFrom: '2025-01-01', value: 25, verified: true, sourceUrl: HOME_RATE_URLS.usUnrecaptured1250, readOn: R, note: '"The portion of any unrecaptured section 1250 gain from selling section 1250 real property is taxed at a maximum 25% rate."' },
-  { effectiveFrom: '1900-01-01', value: null, verified: false, sourceUrl: null, readOn: null, note: 'Not recorded before 2025.' },
+  { effectiveFrom: '2027-01-01', value: null, verified: false, sourceUrl: HOME_RATE_URLS.usUnrecaptured1250, readOn: null, reviewBy: '2027-02-15', note: 'Not yet checked for 2027: re-read Topic 409 in January 2027.' },
+  { effectiveFrom: '2025-01-01', value: 25, verified: true, sourceUrl: HOME_RATE_URLS.usUnrecaptured1250, readOn: R, reviewBy: '2026-12-31', note: '"The portion of any unrecaptured section 1250 gain from selling section 1250 real property is taxed at a maximum 25% rate."' },
+  { effectiveFrom: '1900-01-01', value: null, verified: false, sourceUrl: null, readOn: null, reviewBy: null, note: 'Not recorded before 2025.' },
 ];
 /** US home-office depreciation: 39-year straight line (nonresidential real property MACRS), Pub 587 (2025). */
 export const US_HOME_OFFICE_RECOVERY_YEARS_ROWS: HomeRateRow[] = [
-  { effectiveFrom: '2027-01-01', value: null, verified: false, sourceUrl: HOME_RATE_URLS.usPub587, readOn: null, note: 'Not yet checked for 2027: re-read Pub 587 when the 2026 edition is published.' },
-  { effectiveFrom: '2025-01-01', value: 39, verified: true, sourceUrl: HOME_RATE_URLS.usPub587, readOn: R, note: '39 years, straight line, mid-month convention (Pub 587, 2025 edition).' },
-  { effectiveFrom: '1900-01-01', value: null, verified: false, sourceUrl: null, readOn: null, note: 'Not recorded before 2025.' },
+  { effectiveFrom: '2027-01-01', value: null, verified: false, sourceUrl: HOME_RATE_URLS.usPub587, readOn: null, reviewBy: '2027-02-15', note: 'Not yet checked for 2027: re-read Pub 587 when the 2026 edition is published.' },
+  { effectiveFrom: '2025-01-01', value: 39, verified: true, sourceUrl: HOME_RATE_URLS.usPub587, readOn: R, reviewBy: '2026-12-31', note: '39 years, straight line, mid-month convention (Pub 587, 2025 edition).' },
+  { effectiveFrom: '1900-01-01', value: null, verified: false, sourceUrl: null, readOn: null, reviewBy: null, note: 'Not recorded before 2025.' },
 ];
 
 /** A rate for a day: the verified figure, or, for a year with nothing published, the latest verified one labelled an estimate. */

@@ -17,6 +17,14 @@ The app and the website each weighed a place of business against a desk themselv
 - Every figure it multiplies by (the 50% discount, the 30% minimum, the CPI assumption) is in `AU_HOME_SPACE_FIGURES` with its source, read date and `reviewBy` date.
 - `homeBusinessSpaceTradeoff` is unchanged in shape and figures.
 
+### Added — the home rules stay up to date (`reviewBy`, a freshness gate, estimates for unpublished years)
+
+- Every home figure and rule now carries a `reviewBy` date next to `sourceUrl` and `readOn`. This covers GB/US/NZ rate rows, the AU fixed-rate rows, `AU_HOME_SPACE_FIGURES` and every `AU_HOME_PROPERTY_RULES` row. `homeRateInventory(day)` lists them with the value and tax year in force.
+- `__tests__/homeRatesFreshness.test.ts` uses **today's date**. It fails the build once anything in force is past its `reviewBy`, so a stale figure blocks CI and the release instead of shipping silently.
+- Rate Watch now reports `pastReviewBy` rows, and the runner lists the AU figures and rules past review. Both count as actionable.
+- `workFromHomeFixedRateOrEstimate(year)` gives the last published AU fixed rate for an unpublished year, with `estimate: true` and the app's wording. `workFromHomeFixedRate` is unchanged and still never applies it.
+- The README has a new section, "Keeping the home rules up to date", with the yearly update steps.
+
 ### Added — the home-space comparison for the UK and the US
 
 - `gbBusinessRoomComparison`: a room used ONLY for the business against a desk or shared space. The room's floor-area share of fixed costs is deductible (BIM47820). At sale, the gain on that part gets no Private Residence Relief. It is apportioned **by value** (CG64663), and the final 9 months do not cover it (s224(1) TCGA 1992). CGT is 18% or 24% after the £3,000 annual exempt amount. When exclusive use covered only part of the ownership, the time apportionment is labelled a judgement (s224(2) "just and reasonable"). The result feeds `recommendHomeSpace`.
