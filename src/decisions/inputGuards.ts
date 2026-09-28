@@ -94,8 +94,4 @@ export class Problems {
   order(earlier: string, later: string, earlierField: string, laterField: string): boolean {
     return later >= earlier || this.add(laterField, `must be on or after ${earlierField} (${earlier}), got ${later}`);
   }
-
-  throwIfAny(): void {
-    if (this.list.length) throw new DecisionInputError(this.list);
-  }
 }

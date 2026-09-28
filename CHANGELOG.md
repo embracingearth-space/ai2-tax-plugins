@@ -24,6 +24,7 @@ A website user entered 1,000,000 work hours and was shown "$700,000 running cost
   - The app's adapter already catches a throw and falls back.
   - A caller that doesn't catch fails loudly instead of printing a wrong figure.
 - **Checking without throwing.** `validateHomeBusinessSpace`, `validateMainResidenceChoice` and `validateRoomOrPartnerArrangement` return the same list without throwing, so a UI can show the problems first.
+- **The weeks limit is now 52.** `weeksLetPerYear` used to accept up to 53; it is now refused above 52, which is a deliberate narrowing to a full year of letting.
 - **Negative growth** is now refused. Before, it was clamped silently to zero.
 - **Hours as input.** `homeBusinessSpaceTradeoff` can take `workHoursPerYear` × `runningCostPerHour` instead of `runningCostsPerYear` (one or the other). The hours are checked against the 8,760 hours in a year.
 - **The marginal rate is stated in every result.** Each result now carries `assumptions: { marginalRatePct, note }`, saying that every tax figure is the amount × that one flat rate and is not a bracket calculation. The space tradeoff also states how running costs were arrived at.
