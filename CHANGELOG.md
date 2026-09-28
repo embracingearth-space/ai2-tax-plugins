@@ -17,6 +17,14 @@ The app and the website each weighed a place of business against a desk themselv
 - Every figure it multiplies by (the 50% discount, the 30% minimum, the CPI assumption) is in `AU_HOME_SPACE_FIGURES` with its source, read date and `reviewBy` date.
 - `homeBusinessSpaceTradeoff` is unchanged in shape and figures.
 
+### Added — the home-space comparison for the UK and the US
+
+- `gbBusinessRoomComparison`: a room used ONLY for the business against a desk or shared space. The room's floor-area share of fixed costs is deductible (BIM47820). At sale, the gain on that part gets no Private Residence Relief. It is apportioned **by value** (CG64663), and the final 9 months do not cover it (s224(1) TCGA 1992). CGT is 18% or 24% after the £3,000 annual exempt amount. When exclusive use covered only part of the ownership, the time apportionment is labelled a judgement (s224(2) "just and reasonable"). The result feeds `recommendHomeSpace`.
+- `usHomeOfficeComparison`: the simplified method ($5 a sq ft, up to 300, no depreciation) against the regular method. The regular method covers the business share of indirect costs plus 39-year depreciation. At sale, depreciation allowed or allowable after 6 May 1997 is taxed at up to 25%. For someone who itemizes, mortgage interest and taxes do not favour either method. A separate structure's share of the gain is taxed at the long-term rate you give. Employees and areas without exclusive use get `eligible: false`.
+- New watched rate rows: GB CGT basic, higher and annual exempt; the US unrecaptured §1250 maximum and the 39-year recovery period. Topic 509 (reviewed 24 Sep 2026) confirms the US 2026 simplified rate.
+- `resolveHomeRate(rows, day)` handles a year with no verified figure. It uses the latest verified one with `estimate: true`, and returns null when nothing is recorded.
+- The US rule card's note on the 25% rate is now verified (Topic 409).
+
 ### Fixed — the 1 July 2027 wording
 
 The apportioning method in s 112-185 is the **Minister's**, by legislative instrument, not the Commissioner's, and none has been made (only a Treasury exposure draft). The `cgtFrom1July2027` rule and the post-2027 note now say so, cite s 112-155(3)(a) (market value just before 1 July 2027 is the default), s 112-160 (the gain to then is deferred and keeps the discount) and the September 2027 quarter for indexation, and state that Subdivision 118-B is not amended. The "even growth by day" split is labelled an assumption: the law uses a market valuation, and the draft method compounds daily.

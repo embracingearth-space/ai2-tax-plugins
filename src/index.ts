@@ -232,6 +232,17 @@ export type {
   HomeSpaceTone,
 } from './decisions/homeSpaceComparison';
 export { AU_HOME_SPACE_FIGURES } from './decisions/homeSpaceRates';
+// The same comparison under the UK and US rules (verified figures only).
+export { gbBusinessRoomComparison, validateGbBusinessRoom, usHomeOfficeComparison, validateUsHomeOffice } from './decisions/homeSpaceCountries';
+export type {
+  GbBusinessRoomInput,
+  GbBusinessRoomResult,
+  UsHomeOfficeInput,
+  UsHomeOfficeResult,
+  UsMethodOutcome,
+  UsedRate,
+  CountryNote,
+} from './decisions/homeSpaceCountries';
 export type { SourcedFigure } from './decisions/homeSpaceRates';
 
 // Home rules by country, as data — which questions change a filer's figures, and what each answer does.
@@ -293,9 +304,15 @@ export {
   US_SIMPLIFIED_METHOD_ROWS,
   NZ_SQUARE_METRE_RATE_ROWS,
   NZ_BOARDER_STANDARD_COST_ROWS,
+  GB_CGT_BASIC_RATE_ROWS,
+  GB_CGT_HIGHER_RATE_ROWS,
+  GB_CGT_ANNUAL_EXEMPT_ROWS,
+  US_UNRECAPTURED_1250_MAX_RATE_ROWS,
+  US_HOME_OFFICE_RECOVERY_YEARS_ROWS,
   HOME_RULES_READ_ON,
+  resolveHomeRate,
 } from './decisions/homeRuleRates';
-export type { HomeRateRow } from './decisions/homeRuleRates';
+export type { HomeRateRow, ResolvedHomeRate } from './decisions/homeRuleRates';
 export type { HomePropertyRule, HomePropertyRuleKey, DecisionNote } from './decisions/homePropertyRules';
 
 // Australia — per-unit deduction rates (WFH fixed rate, cents per km), effective-dated by income year.

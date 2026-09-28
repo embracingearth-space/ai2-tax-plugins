@@ -163,6 +163,11 @@ describe('analyzeDeductionRates — the shipped data', () => {
       'US.homeOfficeSimplifiedMethod',
       'NZ.homeOfficeSquareMetreRate',
       'NZ.boarderStandardCost',
+      'GB.cgtBasicRate',
+      'GB.cgtHigherRate',
+      'GB.cgtAnnualExempt',
+      'US.unrecaptured1250MaxRate',
+      'US.homeOfficeRecoveryYears',
     ]);
   });
 

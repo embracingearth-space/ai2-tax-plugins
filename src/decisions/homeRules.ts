@@ -509,7 +509,7 @@ const US: HomeRules = {
   notes: [
     { id: 'us-separate-structure', text: 'A separate structure used for the business: the gain is allocated and reported on Form 4797 unless you also lived in that part for 2 of the 5 years.', forAccountant: true, status: 'verified', citation: cite(IRS.p587) },
     { id: 'us-relative-below-rent', text: 'Days a relative pays less than fair rent count as personal-use days, which limits expenses.', forAccountant: true, status: 'verified', citation: cite(IRS.tc415) },
-    { id: 'us-recapture-rate', text: 'The rate on the depreciation portion at sale (a summary said "potentially 25%") was not quoted from the page.', forAccountant: true, status: 'unverified' },
+    { id: 'us-recapture-rate', text: 'The depreciation portion of the gain at sale (unrecaptured section 1250 gain) is taxed at a maximum 25% rate.', forAccountant: false, status: 'verified', citation: cite('https://www.irs.gov/taxtopics/tc409') },
     { id: 'us-employee-permanent', text: 'That the employee disallowance is permanent (P.L. 119-21) was not confirmed in IRS text.', forAccountant: true, status: 'unverified' },
     { id: 'us-owner-employee', text: 'S-corp or C-corp owner-employees (accountable plans) and renting a home office to your employer are for an accountant.', forAccountant: true, status: 'judgement' },
     { id: 'us-cost-sharing', text: 'Whether housemates sharing costs is rental income: Pub 527 has no cost-sharing carve-out.', forAccountant: true, status: 'unverified' },
