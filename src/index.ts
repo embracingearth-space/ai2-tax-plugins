@@ -212,6 +212,32 @@ export type {
   LodgerArrangementResult,
 } from './decisions/homeProperty';
 export { AU_HOME_PROPERTY_RULES, AU_HOME_PROPERTY_URLS } from './decisions/homePropertyRules';
+
+// Home rules by country, as data — which questions change a filer's figures, and what each answer does.
+export { homeRulesFor, homeQuestionsFor, shouldAsk, allFigures } from './decisions/homeRules';
+export type {
+  HomeRules,
+  HomeRulesUnsupported,
+  Question as HomeRuleQuestion,
+  QuestionOption as HomeRuleOption,
+  AskWhen as HomeRuleAskWhen,
+  Effects as HomeRuleEffects,
+  Figure as HomeRuleFigure,
+  Citation as HomeRuleCitation,
+  HomeRuleNote,
+  DeductionBasis,
+  SaleEffect,
+  TaxpayerRole,
+  PlaceFactsForQuestions,
+} from './decisions/homeRules';
+export {
+  GB_RENT_A_ROOM_ROWS,
+  US_SIMPLIFIED_METHOD_ROWS,
+  NZ_SQUARE_METRE_RATE_ROWS,
+  NZ_BOARDER_STANDARD_COST_ROWS,
+  HOME_RULES_READ_ON,
+} from './decisions/homeRuleRates';
+export type { HomeRateRow } from './decisions/homeRuleRates';
 export type { HomePropertyRule, HomePropertyRuleKey, DecisionNote } from './decisions/homePropertyRules';
 
 // Australia — per-unit deduction rates (WFH fixed rate, cents per km), effective-dated by income year.
