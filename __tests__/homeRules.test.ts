@@ -170,8 +170,12 @@ describe('GB', () => {
     expect(opt(l, 'self_contained_let').effects.deduction.figures).toBeUndefined(); // no Rent a Room for a separate flat
   });
 
-  it('the Rent a Room figure is the verified rate row, not a copy', () => {
-    expect(GB_RENT_A_ROOM_ROWS.find((r) => r.verified)!.value).toBe(7500);
+  it('the Rent a Room figures come from the verified rate row: the limit, and half of it when shared', () => {
+    const row = GB_RENT_A_ROOM_ROWS.find((r) => r.verified)!;
+    expect(row.value).toBe(7500);
+    const [full, shared] = opt(q(gb, 'homeLodgers'), 'single_lodger').effects.deduction.figures!;
+    expect(full).toMatchObject({ amount: row.value, citation: { url: row.sourceUrl, readOn: row.readOn } });
+    expect(shared).toMatchObject({ amount: (row.value as number) / 2, citation: { url: row.sourceUrl, readOn: row.readOn } });
   });
 
   it('no director branch: that is an accountant note (search excerpt)', () => {

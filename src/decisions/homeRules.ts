@@ -127,9 +127,9 @@ export interface HomeRulesUnsupported {
 const cite = (url: string, readOn = HOME_RULES_READ_ON): Citation => ({ url, readOn });
 
 /** A Figure from a verified rate row, so the number cannot drift from the row Rate Watch watches. */
-function fromRow(rows: readonly HomeRateRow[], effectiveFrom: string, f: Omit<Figure, 'amount' | 'citation'>): Figure {
+function fromRow(rows: readonly HomeRateRow[], effectiveFrom: string, f: Omit<Figure, 'amount' | 'citation'>, factor = 1): Figure {
   const row = verifiedRow(rows, effectiveFrom);
-  return { ...f, amount: row.value, citation: cite(row.sourceUrl, row.readOn) };
+  return { ...f, amount: row.value * factor, citation: cite(row.sourceUrl, row.readOn) };
 }
 
 // ─── Australia — as the app behaves today ───────────────────────────────────
@@ -349,7 +349,8 @@ const GB: HomeRules = {
               citation: cite(GOVUK.rentARoom),
               figures: [
                 fromRow(GB_RENT_A_ROOM_ROWS, '2026-04-06', { label: 'Rent a Room tax-free amount', currency: 'GBP', per: 'year', appliesTo: '2026-27' }),
-                { label: 'Rent a Room tax-free amount if the income is shared', amount: 3750, currency: 'GBP', per: 'year', appliesTo: '2026-27', citation: cite(GOVUK.rentARoom) },
+                // gov.uk: £3,750 if you share the income — half the limit, so derived from the row and never a second literal.
+                fromRow(GB_RENT_A_ROOM_ROWS, '2026-04-06', { label: 'Rent a Room tax-free amount if the income is shared', currency: 'GBP', per: 'year', appliesTo: '2026-27' }, 0.5),
               ],
               note: 'Up to the Rent a Room amount the income is tax-free automatically; above it, choose the allowance or actual expenses.',
             },
