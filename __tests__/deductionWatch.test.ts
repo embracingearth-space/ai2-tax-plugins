@@ -151,27 +151,34 @@ describe('hasActionableDeductionFindings', () => {
 });
 
 describe('analyzeDeductionRates — the shipped data', () => {
-  it('watches the AU fixed rate, cents per km and the instant asset write-off', () => {
+  // The AU series; the home-rule series (GB, US, NZ) have their own suite in homeRules.test.ts.
+  const au = () => shippedDeductionSeries().filter((s) => s.countryCode === 'AU');
+
+  it('watches the AU fixed rate, cents per km and the instant asset write-off, then the home-rule figures', () => {
     expect(shippedDeductionSeries().map((s) => s.series)).toEqual([
       'AU.workFromHomeFixedRate',
       'AU.centsPerKm',
       'AU.instantAssetWriteOff',
+      'GB.rentARoom',
+      'US.homeOfficeSimplifiedMethod',
+      'NZ.homeOfficeSquareMetreRate',
+      'NZ.boarderStandardCost',
     ]);
   });
 
   it('as of 27 September 2026: flags the 2026-27 fixed rate, and nothing else as current', () => {
-    const f = analyzeDeductionRates('2026-09-27');
+    const f = analyzeDeductionRates('2026-09-27', {}, au());
     expect(f.unverifiedCurrent.map((u) => `${u.series}:${u.incomeYear}`)).toEqual(['AU.workFromHomeFixedRate:2026-27']);
     expect(f.staleCitations).toEqual([]);
     expect(f.upcoming.map((u) => `${u.series}:${u.incomeYear}:${u.value}`)).toEqual(['AU.centsPerKm:2027-28:null']);
   });
 
   it('on 30 June 2026 the fixed rate is still verified (2025-26), so nothing is flagged', () => {
-    expect(analyzeDeductionRates('2026-06-30').unverifiedCurrent).toEqual([]);
+    expect(analyzeDeductionRates('2026-06-30', {}, au()).unverifiedCurrent).toEqual([]);
   });
 
   it('WILL flag every citation read on 27 September 2026 as stale a year and a day later', () => {
-    const f = analyzeDeductionRates('2027-09-28');
+    const f = analyzeDeductionRates('2027-09-28', {}, au());
     // 2027-28: cents per km has no rate yet, so it is unverified rather than stale.
     expect(f.unverifiedCurrent.map((u) => u.series).sort()).toEqual(['AU.centsPerKm', 'AU.workFromHomeFixedRate']);
     expect(f.staleCitations.map((s) => s.series)).toEqual(['AU.instantAssetWriteOff']);

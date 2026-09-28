@@ -22,6 +22,16 @@ import type { RateLedgerRow } from './data';
 
 import { AU_CENTS_PER_KM_ROWS, AU_WFH_FIXED_RATE_ROWS, auIncomeYear, formatAuCents } from './countries/australiaDeductions';
 import { AU_INSTANT_ASSET_WRITE_OFF_ROWS } from './countries/australiaDepreciation';
+import {
+  GB_RENT_A_ROOM_ROWS,
+  NZ_BOARDER_STANDARD_COST_ROWS,
+  NZ_SQUARE_METRE_RATE_ROWS,
+  US_SIMPLIFIED_METHOD_ROWS,
+  gbTaxYear,
+  nzIncomeYear,
+  usTaxYear,
+  type HomeRateRow,
+} from './decisions/homeRuleRates';
 
 export interface RateWatchOptions {
   /** A verified citation older than this many days is flagged stale. Default 365. */
@@ -217,7 +227,33 @@ export function shippedDeductionSeries(): DeductionSeries[] {
       format: aud,
       rows: AU_INSTANT_ASSET_WRITE_OFF_ROWS.map((r) => ({ effectiveFrom: r.effectiveFrom, value: r.limit, verified: r.verified, sourceUrl: r.sourceUrl, readOn: r.readOn })),
     },
+    // Home rules (src/decisions/homeRules.ts): the per-country figures a filer's answers turn into numbers.
+    homeSeries('GB.rentARoom', 'GB', 'Rent a Room tax-free amount', gbTaxYear, (v) => `£${group(v)} a year`, GB_RENT_A_ROOM_ROWS),
+    homeSeries('US.homeOfficeSimplifiedMethod', 'US', 'Home office simplified method', usTaxYear, (v) => `$${v} per sq ft`, US_SIMPLIFIED_METHOD_ROWS),
+    homeSeries('NZ.homeOfficeSquareMetreRate', 'NZ', 'Home office square-metre rate', nzIncomeYear, (v) => `$${v.toFixed(2)} per m²`, NZ_SQUARE_METRE_RATE_ROWS),
+    homeSeries('NZ.boarderStandardCost', 'NZ', 'Boarder standard cost', nzIncomeYear, (v) => `$${v} per boarder per week`, NZ_BOARDER_STANDARD_COST_ROWS),
   ];
+}
+
+const group = (n: number) => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+
+function homeSeries(
+  series: string,
+  countryCode: string,
+  label: string,
+  incomeYearOf: (ymd: string) => string,
+  format: (v: number) => string,
+  rows: readonly HomeRateRow[],
+): DeductionSeries {
+  return {
+    series,
+    countryCode,
+    label,
+    file: 'src/decisions/homeRuleRates.ts',
+    incomeYearOf,
+    format,
+    rows: rows.map((r) => ({ effectiveFrom: r.effectiveFrom, value: r.value, verified: r.verified, sourceUrl: r.sourceUrl, readOn: r.readOn })),
+  };
 }
 
 export function analyzeDeductionRates(
