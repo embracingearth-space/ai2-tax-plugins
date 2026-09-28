@@ -17,6 +17,17 @@ The app and the website each weighed a place of business against a desk themselv
 - Every figure it multiplies by (the 50% discount, the 30% minimum, the CPI assumption) is in `AU_HOME_SPACE_FIGURES` with its source, read date and `reviewBy` date.
 - `homeBusinessSpaceTradeoff` is unchanged in shape and figures.
 
+### Added — a home that is a place of business AND let at the same time (`homeMixedUseComparison`)
+
+The owner asked whether 2Fin can weigh a home that is partly a place of business and partly let, together. Running the business tab and the letting tab separately each assumes the rest of the home stays fully exempt, so side by side they overstate the exemption on both.
+
+- `homeMixedUseComparison(input)` (AU only) takes the business share (one share or dated `usePeriods`, as `homeSpaceComparison`) and the let share (as `roomOrPartnerArrangement`'s lodger), and validates that together they never exceed 100% of the home on any overlapping day.
+- **One CGT figure**, on the combined non-exempt share, measured the ATO's way: from the day the home was FIRST used to produce income (business or letting, whichever is earlier) to the sale, split at 30 June 2027 exactly as `homeSpaceComparison` splits it (with the same optional valuations). `businessPart` / `letPart` attribute that one figure by each use's share of the non-exempt days, for display.
+- Occupancy deductions stay on the business share only; rent and the let share's costs stay on the let share only.
+- `placeOfBusiness`: the business verdict (`recommendHomeSpace`) on the EXTRA CGT a place of business adds on top of the letting alone — not the whole combined figure.
+- **`sumOfSeparate`** is what running the two calculators apart would give, for comparison. When both uses start the SAME day, the combined figure equals the sum (the maths is linear in share). When they start on DIFFERENT days, it does not: each separate calculator measures from its own first use over its own days, so the one that starts later either gets it own full share of growth (overstating it, if measured on the whole home) or a diluted share when attributed from the combined figure (understating it against running it alone). A test pins both directions with real numbers.
+- Country: AU only. The research (`home-rules-research.md` §6) shows the same combinable structure in GB (an exclusive room by value vs a let part/lodger — see the module doc), US (both reach the sale only through depreciation, against one §121 exclusion), NZ (bright-line's main-home area test counts both together), CA (no effect while ancillary, with no CCA and no structural change) and IN (no exemption to lose) — left for a later PR.
+
 ### Added — the home rules stay up to date (`reviewBy`, a freshness gate, estimates for unpublished years)
 
 - Every home figure and rule now carries a `reviewBy` date next to `sourceUrl` and `readOn`. This covers GB/US/NZ rate rows, the AU fixed-rate rows, `AU_HOME_SPACE_FIGURES` and every `AU_HOME_PROPERTY_RULES` row. `homeRateInventory(day)` lists them with the value and tax year in force.

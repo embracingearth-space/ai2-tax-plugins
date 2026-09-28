@@ -231,6 +231,10 @@ export type {
   HomeSpaceVerdict,
   HomeSpaceTone,
 } from './decisions/homeSpaceComparison';
+
+// A home that is a place of business AND let at the same time: one CGT figure on the combined non-exempt share.
+export { homeMixedUseComparison, validateHomeMixedUse } from './decisions/homeMixedUse';
+export type { HomeMixedUseInput, HomeMixedUseResult, MixedCgt } from './decisions/homeMixedUse';
 export { AU_HOME_SPACE_FIGURES } from './decisions/homeSpaceRates';
 // Keeping the home rules up to date: every figure with its source, read date and review date.
 export { homeRateInventory, homeRatesPastReview, homeFiguresPastReview } from './decisions/homeRatesFreshness';
