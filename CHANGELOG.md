@@ -8,6 +8,27 @@ member has a value on every rules object that ships, `declineInValue` still
 accepts `daysHeld` / `daysInYear` exactly as before, and a host on 2.1.0 keeps
 working untouched.
 
+### Fixed — the home and property decisions refuse impossible input
+
+A website user entered 1,000,000 work hours and was shown "$700,000 running costs a year". The decision functions are the shared maths, so they now check their own input before any arithmetic.
+
+- `homeBusinessSpaceTradeoff`, `mainResidenceChoice` and `roomOrPartnerArrangement` refuse these inputs:
+  - hours outside 0–8,760 a year;
+  - percentages outside 0–100 (business, let and ownership shares, and the marginal rate);
+  - negative costs, rents, values or growth;
+  - years outside 1–50 or not whole;
+  - malformed, impossible or reversed dates;
+  - more than 52 weeks let.
+- **How a refusal looks.** The functions throw a `DecisionInputError`, a `RangeError` subclass that lists every problem as `problems: { field, message }[]`. A throw was chosen over an `{ invalid: true }` result for three reasons:
+  - Callers already read `supported: true` as "numbers follow".
+  - The app's adapter already catches a throw and falls back.
+  - A caller that doesn't catch fails loudly instead of printing a wrong figure.
+- **Checking without throwing.** `validateHomeBusinessSpace`, `validateMainResidenceChoice` and `validateRoomOrPartnerArrangement` return the same list without throwing, so a UI can show the problems first.
+- **Negative growth** is now refused. Before, it was clamped silently to zero.
+- **Hours as input.** `homeBusinessSpaceTradeoff` can take `workHoursPerYear` × `runningCostPerHour` instead of `runningCostsPerYear` (one or the other). The hours are checked against the 8,760 hours in a year.
+- **The marginal rate is stated in every result.** Each result now carries `assumptions: { marginalRatePct, note }`, saying that every tax figure is the amount × that one flat rate and is not a bracket calculation. The space tradeoff also states how running costs were arrived at.
+- **Worked examples unchanged.** The brief's case, Fatima, Thomas, Roya and Jeneen and John all give the same figures as before.
+
 ### Added — home and property decisions (`src/decisions/homeProperty.ts`)
 
 Pure decision maths the app, the marketing site and the Tax MCP all call, so they show the same numbers. AU first. Any other country returns `{ supported: false, authority }` with the country's tax authority link and no numbers. Every rule is a row in `AU_HOME_PROPERTY_RULES` with its source URL, the page's own last-updated date, and the date it was read (27 September 2026). Every result lists the notes and rules it relied on.
