@@ -148,6 +148,10 @@ const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789
 const INDEX = new Map([...ALPHABET].map((c, i) => [c, i]));
 
 function toBase64Url(ascii: string): string {
+  // The payload is numbers and fixed keys, so always ASCII; anything else would be packed wrongly, so refuse it.
+  for (let i = 0; i < ascii.length; i++) {
+    if (ascii.charCodeAt(i) > 127) throw new RangeError('handoff: the payload must be ASCII');
+  }
   let out = '';
   for (let i = 0; i < ascii.length; i += 3) {
     const [a, b, c] = [ascii.charCodeAt(i), ascii.charCodeAt(i + 1), ascii.charCodeAt(i + 2)];

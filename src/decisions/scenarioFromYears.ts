@@ -37,12 +37,17 @@ import {
   type MainResidenceChoiceInput,
 } from './homeProperty';
 import type { DecisionInputProblem } from './inputGuards';
+import { parseYmd } from './dates';
 
 const pad2 = (n: number) => String(n).padStart(2, '0');
 
-/** A local calendar day as YYYY-MM-DD; a string is taken as already being one. */
+/** A local calendar day as YYYY-MM-DD. A string must already be a real calendar day; anything else throws a RangeError. */
 export function dayOf(today: Date | string): string {
-  if (typeof today === 'string') return today;
+  if (typeof today === 'string') {
+    parseYmd(today, 'today');
+    return today;
+  }
+  if (!(today instanceof Date) || Number.isNaN(today.getTime())) throw new RangeError('today: expected a valid Date or a YYYY-MM-DD day');
   return `${today.getFullYear()}-${pad2(today.getMonth() + 1)}-${pad2(today.getDate())}`;
 }
 

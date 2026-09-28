@@ -45,6 +45,12 @@ describe('spaceScenario', () => {
     expect(spaceScenario(base, '2024-07-01').input).toMatchObject({ incomeYear: '2024-25', businessUseStart: '2024-07-01', saleDate: '2028-06-30' });
   });
 
+  it('refuses a `today` that is not a real day', () => {
+    expect(() => spaceScenario(base, '2024-02-30')).toThrow(RangeError);
+    expect(() => spaceScenario(base, '1 July 2024')).toThrow(RangeError);
+    expect(() => spaceScenario(base, new Date('nope'))).toThrow(RangeError);
+  });
+
   it('reads a Date by its local calendar day', () => {
     expect(spaceScenario(base, new Date(2024, 6, 1)).input.businessUseStart).toBe('2024-07-01');
   });
