@@ -88,6 +88,9 @@ export interface SpaceScenarioInput {
   occupancyCostsPerYear: number;
   expectedGrowth: number;
   marginalRatePct: number;
+  /** The home is co-owned. When false (the default) your share is taken as 100%. */
+  coOwned?: boolean;
+  /** Your share of the home, percent — used when `coOwned` is true. */
   ownershipPct?: number;
   /** Running costs are claimable either way, so they never change the comparison; default 0. */
   runningCostsPerYear?: number;
@@ -112,7 +115,8 @@ export function spaceScenario(s: SpaceScenarioInput, today: Date | string): Scen
     years,
     expectedGrowth: s.expectedGrowth,
     marginalRatePct: s.marginalRatePct,
-    ownershipPct: s.ownershipPct ?? 100,
+    // The website asks "co-owned?" first; a share only counts when the answer is yes.
+    ownershipPct: s.coOwned ? s.ownershipPct ?? 100 : s.ownershipPct !== undefined && s.coOwned === undefined ? s.ownershipPct : 100,
     businessUseStart: `${start}-07-01`,
     // 30 June at the end of the last income year claimed.
     saleDate: `${start + datingYears(years)}-06-30`,
@@ -168,14 +172,18 @@ export interface LodgerScenarioInput {
   years: number;
   marginalRatePct: number;
   weeklyRent: number;
-  /** The let share of the home, percent — or give exclusivePct and sharedPct (the shared area counts half). */
+  /**
+   * The let share of the home, percent. Or give areas: `roomM2` (theirs alone), `commonM2` (shared, counts half)
+   * and `wholeHomeM2` — the share is (room + common ÷ 2) ÷ whole home, as on the website.
+   */
   letSharePct?: number;
-  /** Floor area only the lodger uses, percent. */
-  exclusivePct?: number;
-  /** Floor area you and the lodger share, percent; the lodger's part is half of it. */
-  sharedPct?: number;
-  /** YOUR share of the whole home's yearly costs. */
-  homeCostsPerYear: number;
+  roomM2?: number;
+  commonM2?: number;
+  wholeHomeM2?: number;
+  /** YOUR share of the whole home's yearly costs (the app's field). Give this or `wholeHomeCostsPerYear`. */
+  homeCostsPerYear?: number;
+  /** The WHOLE home's yearly costs (the website's field). */
+  wholeHomeCostsPerYear?: number;
   ownershipPct?: number;
   weeksLetPerYear?: number;
   expectedGrowth: number;
@@ -185,15 +193,38 @@ export function lodgerScenario(s: LodgerScenarioInput, today: Date | string): Sc
   const firstLetDate = dayOf(today);
   const years = Number(s.years);
   const ownershipPct = Math.min(100, Math.max(0, s.ownershipPct ?? 100));
+  const problems: DecisionInputProblem[] = [];
+  if (ownershipPct <= 0) problems.push({ field: 'ownershipPct', message: 'must be above 0 — with no share of the home there is nothing to let' });
+
+  // The let share: given, or from areas.
+  let letSharePct = s.letSharePct;
+  if (letSharePct === undefined) {
+    const [room, common, whole] = [Number(s.roomM2 ?? NaN), Number(s.commonM2 ?? 0), Number(s.wholeHomeM2 ?? NaN)];
+    if (!Number.isFinite(room) || room < 0) problems.push({ field: 'roomM2', message: "expected their room's area in m², zero or more (or give letSharePct)" });
+    if (!Number.isFinite(common) || common < 0) problems.push({ field: 'commonM2', message: 'expected the shared area in m², zero or more' });
+    if (!Number.isFinite(whole) || whole <= 0) problems.push({ field: 'wholeHomeM2', message: "expected the whole home's area in m², above zero" });
+    else if (room + common > whole) problems.push({ field: 'roomM2', message: `their room and the shared areas (${room + common} m²) exceed the whole home (${whole} m²)` });
+    letSharePct = Number.isFinite(room) && Number.isFinite(whole) && whole > 0 ? ((room + (Number.isFinite(common) ? common : 0) / 2) / whole) * 100 : NaN;
+  }
+
+  // Costs: the whole home's as given, or your share grossed back up (the decision applies the ownership share itself).
+  let homeCosts: number;
+  if (s.wholeHomeCostsPerYear !== undefined && s.homeCostsPerYear !== undefined) {
+    problems.push({ field: 'homeCostsPerYear', message: "give your share of the costs or the whole home's, not both" });
+    homeCosts = NaN;
+  } else if (s.wholeHomeCostsPerYear !== undefined) homeCosts = s.wholeHomeCostsPerYear;
+  else if (s.homeCostsPerYear !== undefined) homeCosts = ownershipPct > 0 ? (s.homeCostsPerYear * 100) / ownershipPct : s.homeCostsPerYear;
+  else {
+    problems.push({ field: 'homeCostsPerYear', message: 'required: your share of the costs, or wholeHomeCostsPerYear' });
+    homeCosts = NaN;
+  }
+
   const input: LodgerArrangementInput = {
     country: s.country ?? 'AU',
     kind: 'lodger',
     weeklyRent: s.weeklyRent,
-    ...(s.letSharePct !== undefined
-      ? { letSharePct: s.letSharePct }
-      : { exclusivePct: s.exclusivePct, sharedPct: s.sharedPct ?? 0, sharedBy: 2 }),
-    // Your share of the costs, grossed back up to the whole home (the decision applies the ownership share itself).
-    homeCostsPerYear: ownershipPct > 0 ? (s.homeCostsPerYear * 100) / ownershipPct : s.homeCostsPerYear,
+    letSharePct,
+    homeCostsPerYear: homeCosts,
     ...(s.weeksLetPerYear !== undefined ? { weeksLetPerYear: s.weeksLetPerYear } : {}),
     marginalRatePct: s.marginalRatePct,
     years,
@@ -202,6 +233,5 @@ export function lodgerScenario(s: LodgerScenarioInput, today: Date | string): Sc
     saleDate: addYears(firstLetDate, datingYears(years)),
     expectedGrowth: s.expectedGrowth,
   };
-  const ownership = ownershipPct > 0 ? [] : [{ field: 'ownershipPct', message: 'must be above 0 — with no share of the home there is nothing to let' }];
-  return { input, problems: merge(yearsProblem(s.years), ownership, validateRoomOrPartnerArrangement(input)) };
+  return { input, problems: merge(yearsProblem(s.years), problems, validateRoomOrPartnerArrangement(input)) };
 }

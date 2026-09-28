@@ -19,7 +19,7 @@ working untouched.
 - **`INPUT_SPECS`** holds, for each decision and field: label, hint, unit, bounds, whether it's required, the explaining `HomePropertyRuleKey`s, and the handoff key. The bounds are the guards' own (`MAX_HOURS_PER_YEAR`, `MAX_WEEKS_PER_YEAR`, 0–100 %, 1–50 whole years, amounts ≥ 0), and a test checks each against the guards.
 - **Handoff v1** (`encodeHandoff` / `decodeHandoff` / `handoffProblemsOf` / `handoffFields`) is the website → app payload:
   - the token is `1.<base64url JSON>`, at most 1,200 characters;
-  - the keys are `{v, t, mr, s:{sh,oc,hr,y,g,co,os}, m:{y,r,og,ng}, o:{wk,rm,cm,wh,hc,y,g}}`;
+  - the keys are `{v, t, mr, s:{sh,oc,hr,y,g,co,os,rc}, m:{y,r,og,ng}, o:{wk,rm,cm,wh,hc,y,g,wl}}`, as fixed by home-decisions-design.md §5: `co` is the co-owned flag (0/1) and `os` the share when co-owned; `rm`, `cm` and `wh` are the room, shared and whole-home areas in m² (share = (rm + cm ÷ 2) ÷ wh; room + shared > whole is a problem; areas are capped at 100,000 m²); `hc` is the whole home's costs; `rc` (running cost per hour) and `wl` (weeks let) are added as new keys;
   - it carries numbers only: no free text, no PII;
   - bounds are strict, and amounts are also capped at `HANDOFF_MAX_AMOUNT` (1e9);
   - decoding drops unknown keys and other sections, and drops each invalid field while reporting it;

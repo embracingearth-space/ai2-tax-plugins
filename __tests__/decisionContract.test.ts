@@ -14,6 +14,7 @@ import {
   HANDOFF_MAX_LENGTH,
   MAX_HOURS_PER_YEAR,
   MAX_WEEKS_PER_YEAR,
+  MAX_AREA_M2,
   decodeHandoff,
   encodeHandoff,
   handoffFields,
@@ -53,6 +54,12 @@ describe('spaceScenario', () => {
     expect(r.extraDeductions.taxValue).toBe(4300.8);
     expect(r.cgt.currentLaw.tax).toBe(2800);
     expect(r.breakEvenGrowth.currentLaw).toBe(76_800);
+  });
+
+  it('co-owned: the share counts only when the home is co-owned', () => {
+    expect(spaceScenario({ ...base, coOwned: true, ownershipPct: 50 }, '2023-09-15').input.ownershipPct).toBe(50);
+    expect(spaceScenario({ ...base, coOwned: false, ownershipPct: 50 }, '2023-09-15').input.ownershipPct).toBe(100);
+    expect(spaceScenario({ ...base, ownershipPct: 60 }, '2023-09-15').input.ownershipPct).toBe(60); // the app passes a share without the flag
   });
 
   it('reports fractional years and guard problems instead of computing', () => {
@@ -96,9 +103,21 @@ describe('lodgerScenario', () => {
     expect(input).toMatchObject({ kind: 'lodger', firstLetDate: '2025-03-10', saleDate: '2030-03-10', homeCostsPerYear: 20_000, ownershipPct: 50, letSharePct: 35 });
   });
 
-  it('room and shared areas: the shared area counts half (the ATO\'s Thomas example: 20% + 30% ÷ 2)', () => {
-    const { input } = lodgerScenario({ ...s, letSharePct: undefined, exclusivePct: 20, sharedPct: 30 }, '2025-03-10');
-    expect(input).toMatchObject({ exclusivePct: 20, sharedPct: 30, sharedBy: 2 });
+  it('areas in m²: share = (room + shared ÷ 2) ÷ whole home, as on the website (the ATO\'s Thomas example: 20% + 30% ÷ 2)', () => {
+    const { input, problems } = lodgerScenario({ ...s, letSharePct: undefined, roomM2: 20, commonM2: 30, wholeHomeM2: 100 }, '2025-03-10');
+    expect(problems).toEqual([]);
+    expect(input.letSharePct).toBe(35);
+  });
+
+  it('room + shared areas larger than the whole home is a problem; so is no whole-home area', () => {
+    const r = lodgerScenario({ ...s, letSharePct: undefined, roomM2: 80, commonM2: 40, wholeHomeM2: 100 }, '2025-03-10');
+    expect(r.problems.map((p) => p.field)).toContain('roomM2');
+    expect(lodgerScenario({ ...s, letSharePct: undefined, roomM2: 10, wholeHomeM2: 0 }, '2025-03-10').problems.map((p) => p.field)).toContain('wholeHomeM2');
+  });
+
+  it('whole-home costs (the website\'s field) pass through; your share (the app\'s) is grossed up; not both', () => {
+    expect(lodgerScenario({ ...s, homeCostsPerYear: undefined, wholeHomeCostsPerYear: 20_000 }, '2025-03-10').input.homeCostsPerYear).toBe(20_000);
+    expect(lodgerScenario({ ...s, wholeHomeCostsPerYear: 20_000 }, '2025-03-10').problems.map((p) => p.field)).toContain('homeCostsPerYear');
   });
 
   it('no share of the home is a problem, as the app treated it', () => {
@@ -111,7 +130,7 @@ describe('lodgerScenario', () => {
 describe('INPUT_SPECS bounds are the guards\' bounds', () => {
   const at = '2023-09-15';
   const spaceBase = { years: 4, businessSharePct: 35, occupancyCostsPerYear: 9600, expectedGrowth: 50_000, marginalRatePct: 32 };
-  const someoneBase = { years: 5, marginalRatePct: 32, weeklyRent: 250, exclusivePct: 20, sharedPct: 30, homeCostsPerYear: 10_000, expectedGrowth: 100_000 };
+  const someoneBase = { years: 5, marginalRatePct: 32, weeklyRent: 250, letSharePct: 35, wholeHomeCostsPerYear: 10_000, expectedGrowth: 100_000 };
   const movingBase = { years: 3, marginalRatePct: 37, leaving: { name: 'Old', growth: 1 }, moving: { name: 'New', growth: 1 } };
 
   /** Run a value through the scenario + guards for one decision field; true when accepted. */
@@ -120,8 +139,7 @@ describe('INPUT_SPECS bounds are the guards\' bounds', () => {
       const extra = field === 'workHoursPerYear' ? { runningCostPerHour: 0.7 } : field === 'runningCostPerHour' ? { workHoursPerYear: 100 } : {};
       return spaceScenario({ ...spaceBase, ...extra, [field]: v }, at).problems.length === 0;
     },
-    // With the room at its own bound, leave no shared area: room + shared ÷ 2 must not pass 100% on its own account.
-    someone: (field, v) => lodgerScenario({ ...someoneBase, ...(field === 'exclusivePct' ? { sharedPct: 0 } : {}), [field]: v }, at).problems.length === 0,
+    someone: (field, v) => lodgerScenario({ ...someoneBase, [field]: v }, at).problems.length === 0,
     moving: (field, v) => {
       if (field === 'leavingGrowth') return movingScenario({ ...movingBase, leaving: { name: 'Old', growth: v } }, at).problems.length === 0;
       if (field === 'movingGrowth') return movingScenario({ ...movingBase, moving: { name: 'New', growth: v } }, at).problems.length === 0;
@@ -131,7 +149,9 @@ describe('INPUT_SPECS bounds are the guards\' bounds', () => {
 
   const cases: Array<[string, string, InputSpec]> = [];
   for (const [kind, fields] of Object.entries(INPUT_SPECS)) {
-    for (const [field, spec] of Object.entries(fields)) if (spec.unit !== 'boolean') cases.push([kind, field, spec]);
+    // Booleans have no bounds; areas are a form/handoff concept the decisions never see (they take a share),
+    // so their bounds are checked through the codec below instead.
+    for (const [field, spec] of Object.entries(fields)) if (spec.unit !== 'boolean' && spec.unit !== 'square_metres') cases.push([kind, field, spec]);
   }
 
   it.each(cases)('%s.%s', (kind, field, spec) => {
@@ -152,6 +172,15 @@ describe('INPUT_SPECS bounds are the guards\' bounds', () => {
     expect(INPUT_SPECS.someone.weeksLetPerYear.max).toBe(MAX_WEEKS_PER_YEAR);
   });
 
+  it('the handoff keys are the ones home-decisions-design.md §5 fixes', () => {
+    const keys = (k: keyof typeof INPUT_SPECS) => Object.fromEntries(Object.entries(INPUT_SPECS[k]).map(([f, sp]) => [sp.handoffKey, f]));
+    expect(keys('space')).toEqual({ mr: 'marginalRatePct', sh: 'businessSharePct', oc: 'occupancyCostsPerYear', hr: 'workHoursPerYear', rc: 'runningCostPerHour', y: 'years', g: 'expectedGrowth', co: 'coOwned', os: 'ownershipPct' });
+    expect(keys('moving')).toEqual({ mr: 'marginalRatePct', y: 'years', r: 'producesIncome', og: 'leavingGrowth', ng: 'movingGrowth' });
+    expect(keys('someone')).toEqual({ mr: 'marginalRatePct', wk: 'weeklyRent', rm: 'roomM2', cm: 'commonM2', wh: 'wholeHomeM2', hc: 'wholeHomeCostsPerYear', wl: 'weeksLetPerYear', y: 'years', g: 'expectedGrowth' });
+    expect(INPUT_SPECS.space.coOwned.unit).toBe('boolean');
+    for (const f of ['roomM2', 'commonM2', 'wholeHomeM2']) expect(INPUT_SPECS.someone[f]).toMatchObject({ unit: 'square_metres', max: MAX_AREA_M2 });
+  });
+
   it('every spec has a label, hint and handoff key; rule keys are real rules', () => {
     for (const fields of Object.values(INPUT_SPECS)) {
       for (const spec of Object.values(fields)) {
@@ -165,9 +194,9 @@ describe('INPUT_SPECS bounds are the guards\' bounds', () => {
 
 // ─── The handoff codec ──────────────────────────────────────────────────────
 
-const space: HandoffV1 = { v: 1, t: 'space', mr: 32, s: { sh: 35, oc: 9600, hr: 1000, y: 4, g: 50_000, co: 0.7, os: 100 } };
+const space: HandoffV1 = { v: 1, t: 'space', mr: 32, s: { sh: 35, oc: 9600, hr: 1000, y: 4, g: 50_000, co: 1, os: 50, rc: 0.7 } };
 const moving: HandoffV1 = { v: 1, t: 'moving', mr: 37, m: { y: 3, r: 1, og: 100_000, ng: 80_000 } };
-const someone: HandoffV1 = { v: 1, t: 'someone', mr: 30, o: { wk: 250, rm: 20, cm: 30, wh: 52, hc: 10_000, y: 5, g: 100_000 } };
+const someone: HandoffV1 = { v: 1, t: 'someone', mr: 30, o: { wk: 250, rm: 12, cm: 40, wh: 120, hc: 20_000, y: 5, g: 100_000, wl: 48 } };
 
 describe('handoff: round trip', () => {
   it.each([space, moving, someone])('$t', (p) => {
@@ -179,8 +208,18 @@ describe('handoff: round trip', () => {
   });
 
   it('maps a payload to the scenario fields a form pre-fills', () => {
-    expect(handoffFields(space)).toEqual({ marginalRatePct: 32, businessSharePct: 35, occupancyCostsPerYear: 9600, workHoursPerYear: 1000, runningCostPerHour: 0.7, years: 4, expectedGrowth: 50_000, ownershipPct: 100 });
+    expect(handoffFields(space)).toEqual({ marginalRatePct: 32, businessSharePct: 35, occupancyCostsPerYear: 9600, workHoursPerYear: 1000, runningCostPerHour: 0.7, years: 4, expectedGrowth: 50_000, coOwned: true, ownershipPct: 50 });
+    expect(handoffFields(someone)).toEqual({ marginalRatePct: 30, weeklyRent: 250, roomM2: 12, commonM2: 40, wholeHomeM2: 120, wholeHomeCostsPerYear: 20_000, weeksLetPerYear: 48, years: 5, expectedGrowth: 100_000 });
     expect(handoffFields(moving)).toEqual({ marginalRatePct: 37, years: 3, producesIncome: true, leavingGrowth: 100_000, movingGrowth: 80_000 });
+  });
+
+  it('a decoded someone payload gives the website\'s share: (12 + 40 ÷ 2) ÷ 120', () => {
+    const d = decodeHandoff(encodeHandoff(someone));
+    if (!d.ok) throw new Error('decode failed');
+    const { input, problems } = lodgerScenario(handoffFields(d.payload) as never, '2025-03-10');
+    expect(problems).toEqual([]);
+    expect(input.letSharePct).toBeCloseTo((32 / 120) * 100, 10);
+    expect(input.homeCostsPerYear).toBe(20_000);
   });
 
   it('a decoded space payload runs through spaceScenario without problems', () => {
@@ -206,7 +245,11 @@ describe('handoff: strict', () => {
     expect(refuse({ ...space, s: { ...space.s, hr: 1_000_000 } })).toEqual(['s.hr']);
     expect(refuse({ ...space, mr: 120 })).toEqual(['mr']);
     expect(refuse({ ...space, s: { ...space.s, y: 2.5 } })).toEqual(['s.y']);
-    expect(refuse({ ...someone, o: { ...someone.o, wh: 53 } })).toEqual(['o.wh']);
+    expect(refuse({ ...someone, o: { ...someone.o, wl: 53 } })).toEqual(['o.wl']);
+    expect(refuse({ ...someone, o: { ...someone.o, wh: MAX_AREA_M2 + 1 } })).toEqual(['o.wh']);
+    expect(refuse({ ...someone, o: { ...someone.o, rm: -1 } })).toEqual(['o.rm']);
+    expect(refuse({ ...someone, o: { ...someone.o, rm: 100, cm: 40, wh: 120 } })).toEqual(['o.rm']); // room + shared > whole
+    expect(refuse({ ...space, s: { ...space.s, co: 0.5 } })).toEqual(['s.co']);
     expect(refuse({ ...space, s: { ...space.s, oc: HANDOFF_MAX_AMOUNT + 1 } })).toEqual(['s.oc']);
     expect(refuse({ ...space, s: { ...space.s, note: 'my address' } })).toEqual(['s.note']);
     expect(refuse({ ...space, name: 'Jane' })).toEqual(['name']);

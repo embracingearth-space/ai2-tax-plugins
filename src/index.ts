@@ -225,7 +225,7 @@ export type {
   MovingHome,
   LodgerScenarioInput,
 } from './decisions/scenarioFromYears';
-export { INPUT_SPECS, withinSpec } from './decisions/inputSpecs';
+export { INPUT_SPECS, withinSpec, MAX_AREA_M2 } from './decisions/inputSpecs';
 export type { DecisionKind, InputSpec, InputUnit } from './decisions/inputSpecs';
 export {
   encodeHandoff,

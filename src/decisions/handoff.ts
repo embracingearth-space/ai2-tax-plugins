@@ -7,9 +7,13 @@
  *
  *   token   = '1.' + base64url(JSON)            at most 1,200 characters
  *   payload = { v: 1, t: 'space' | 'moving' | 'someone', mr,
- *               s: { sh, oc, hr, y, g, co, os },  // space   (see INPUT_SPECS.space)
- *               m: { y, r, og, ng },              // moving  (r: 1 = the old home will be rented)
- *               o: { wk, rm, cm, wh, hc, y, g } } // someone
+ *               s: { sh, oc, hr, y, g, co, os, rc }, // space   (co: 1 = co-owned; os used when co = 1)
+ *               m: { y, r, og, ng },                 // moving  (r: 1 = the former home will be rented)
+ *               o: { wk, rm, cm, wh, hc, y, g, wl } } // someone (rm, cm, wh in m²; hc = whole home)
+ *
+ * The keys and meanings are fixed by home-decisions-design.md §5; INPUT_SPECS
+ * lists each as `handoffKey`. `rc` (running cost per hour) and `wl` (weeks
+ * let) are additions — new keys, never a reuse of an existing one.
  *
  * NO FREE TEXT AND NO PII. Only numbers, the `t` tag and the version travel;
  * income is turned into a marginal rate on the website. Names, addresses and
@@ -33,9 +37,9 @@ export const HANDOFF_MAX_LENGTH = 1200;
 export const HANDOFF_MAX_AMOUNT = 1_000_000_000;
 const PREFIX = `${HANDOFF_VERSION}.`;
 
-export interface HandoffSpace { sh?: number; oc?: number; hr?: number; y?: number; g?: number; co?: number; os?: number }
+export interface HandoffSpace { sh?: number; oc?: number; hr?: number; y?: number; g?: number; co?: 0 | 1; os?: number; rc?: number }
 export interface HandoffMoving { y?: number; r?: 0 | 1; og?: number; ng?: number }
-export interface HandoffSomeone { wk?: number; rm?: number; cm?: number; wh?: number; hc?: number; y?: number; g?: number }
+export interface HandoffSomeone { wk?: number; rm?: number; cm?: number; wh?: number; hc?: number; y?: number; g?: number; wl?: number }
 
 export interface HandoffV1 {
   v: 1;
@@ -107,6 +111,14 @@ function clean(raw: unknown): { payload: HandoffV1 | null; problems: DecisionInp
         if (!spec) continue; // unknown keys are dropped silently
         if (valid(spec, v)) out[k] = v as number;
         else problems.push({ field: `${key}.${k}`, message: describe(spec) });
+      }
+      // Areas must fit: their room and the shared areas cannot exceed the whole home. All three are dropped
+      // together when they do not, so no share is ever worked out from an impossible set.
+      if (t === 'someone' && out.rm !== undefined && out.wh !== undefined && out.rm + (out.cm ?? 0) > out.wh) {
+        problems.push({ field: 'o.rm', message: `room + shared areas (${out.rm + (out.cm ?? 0)} m²) exceed the whole home (${out.wh} m²)` });
+        delete out.rm;
+        delete out.cm;
+        delete out.wh;
       }
       (payload as unknown as Record<string, unknown>)[key] = out;
     }

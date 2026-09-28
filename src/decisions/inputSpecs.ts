@@ -25,6 +25,7 @@ export type InputUnit =
   | 'hours_per_year'
   | 'weeks_per_year'
   | 'years'
+  | 'square_metres'
   | 'boolean';
 
 export interface InputSpec {
@@ -41,6 +42,9 @@ export interface InputSpec {
   rules: HomePropertyRuleKey[];
   handoffKey: string;
 }
+
+/** Largest floor area a form or handoff accepts, in m² — above any home, well short of a nonsense figure. */
+export const MAX_AREA_M2 = 100_000;
 
 /** 0–100, as the guards' `percent`. */
 const PCT = { min: 0, max: 100, integer: false } as const;
@@ -100,7 +104,7 @@ export const INPUT_SPECS: Record<DecisionKind, Record<string, InputSpec>> = {
       ...AMOUNT,
       required: false,
       rules: ['runningExpensesAnyWorkArea'],
-      handoffKey: 'co',
+      handoffKey: 'rc',
     },
     years: years('Income years of claims; the home is taken to be sold at the end of the last one.'),
     expectedGrowth: {
@@ -112,9 +116,20 @@ export const INPUT_SPECS: Record<DecisionKind, Record<string, InputSpec>> = {
       rules: ['homeFirstUsedToProduceIncome', 'cgtDiscount'],
       handoffKey: 'g',
     },
+    coOwned: {
+      label: 'The home is co-owned',
+      hint: 'If someone else owns part of the home, only your share of the gain is yours.',
+      unit: 'boolean',
+      min: null,
+      max: null,
+      integer: false,
+      required: false,
+      rules: ['coOwnerNotInBusiness'],
+      handoffKey: 'co',
+    },
     ownershipPct: {
       label: 'Your share of the home',
-      hint: 'A co-owner who does not run the business keeps the full exemption on their share.',
+      hint: 'Used when the home is co-owned. A co-owner who does not run the business keeps the full exemption on their share.',
       unit: 'percent',
       ...PCT,
       required: false,
@@ -166,23 +181,47 @@ export const INPUT_SPECS: Record<DecisionKind, Record<string, InputSpec>> = {
       rules: ['lodgerLetShare'],
       handoffKey: 'wk',
     },
-    exclusivePct: {
+    roomM2: {
       label: 'Their room',
-      hint: 'Floor area only they use, as a percent of the home.',
-      unit: 'percent',
-      ...PCT,
+      hint: 'Floor area only they use, in square metres.',
+      unit: 'square_metres',
+      min: 0,
+      max: MAX_AREA_M2,
+      integer: false,
       required: true,
       rules: ['lodgerLetShare', 'floorAreaAndDaysApportionment'],
       handoffKey: 'rm',
     },
-    sharedPct: {
+    commonM2: {
       label: 'Shared areas',
-      hint: 'Kitchen, living room and bathroom you both use; half of it counts as theirs.',
-      unit: 'percent',
-      ...PCT,
+      hint: 'Kitchen, living room and bathroom you both use, in square metres; half of it counts as theirs.',
+      unit: 'square_metres',
+      min: 0,
+      max: MAX_AREA_M2,
+      integer: false,
       required: false,
       rules: ['lodgerLetShare'],
       handoffKey: 'cm',
+    },
+    wholeHomeM2: {
+      label: 'The whole home',
+      hint: 'Total floor area in square metres. Their share is (room + shared ÷ 2) ÷ whole home.',
+      unit: 'square_metres',
+      min: 1,
+      max: MAX_AREA_M2,
+      integer: false,
+      required: true,
+      rules: ['lodgerLetShare'],
+      handoffKey: 'wh',
+    },
+    wholeHomeCostsPerYear: {
+      label: 'Home costs a year (whole home)',
+      hint: 'Interest, rates, insurance and repairs for the whole home.',
+      unit: 'money_per_year',
+      ...AMOUNT,
+      required: true,
+      rules: ['lodgerLetShare'],
+      handoffKey: 'hc',
     },
     weeksLetPerYear: {
       label: 'Weeks let a year',
@@ -193,16 +232,7 @@ export const INPUT_SPECS: Record<DecisionKind, Record<string, InputSpec>> = {
       integer: false,
       required: false,
       rules: ['lodgerLetShare'],
-      handoffKey: 'wh',
-    },
-    homeCostsPerYear: {
-      label: 'Home costs a year (your share)',
-      hint: 'Interest, rates, insurance and repairs: your share of the whole home\'s costs.',
-      unit: 'money_per_year',
-      ...AMOUNT,
-      required: true,
-      rules: ['lodgerLetShare'],
-      handoffKey: 'hc',
+      handoffKey: 'wl',
     },
     years: years('Letting until the home is sold.'),
     expectedGrowth: {
