@@ -53,6 +53,7 @@ import {
   overlapDays,
   parseYmd,
 } from './dates';
+import { DecisionInputError, MAX_HOURS_PER_YEAR, MAX_WEEKS_PER_YEAR, Problems, type DecisionInputProblem } from './inputGuards';
 import { AU_HOME_PROPERTY_RULES, note, type DecisionNote, type HomePropertyRule, type HomePropertyRuleKey } from './homePropertyRules';
 
 // ─── Shared ─────────────────────────────────────────────────────────────────
@@ -65,6 +66,27 @@ export interface UnsupportedCountry {
   authority: { name: string; fullName: string; url: string } | null;
   note: string;
 }
+
+/**
+ * The rate every tax figure in a result was multiplied by, stated so a UI can show it beside the figures. The
+ * functions apply ONE flat marginal rate to every dollar of deduction and gain; they do not work out brackets,
+ * and a gain large enough to cross a bracket is taxed at the rate given.
+ */
+export interface MarginalRateAssumption {
+  marginalRatePct: number;
+  note: string;
+}
+
+const marginalAssumption = (pctGiven: number): MarginalRateAssumption => ({
+  marginalRatePct: Number(pctGiven),
+  note:
+    `Every tax figure here is the amount × ${Number(pctGiven)}%, the marginal rate you gave, applied flat. It is ` +
+    'not a bracket calculation: include the Medicare levy in the rate if you want it counted, and use a higher rate ' +
+    'if a large gain would push you into the next bracket.',
+});
+
+export { DecisionInputError, MAX_HOURS_PER_YEAR, MAX_WEEKS_PER_YEAR };
+export type { DecisionInputProblem };
 
 /**
  * 1 July 2027 — gains accruing from this day are taxed under the Tax Reform No. 1 Act (indexation, a possible
@@ -82,9 +104,9 @@ const pct = (n: number, field: string, { max = 100 } = {}) => {
   if (!Number.isFinite(v) || v < 0 || v > max) throw new RangeError(`${field}: expected a percentage from 0 to ${max}, got ${n}`);
   return v / 100;
 };
-const money = (n: number, field: string, { allowNegative = false } = {}) => {
+const money = (n: number, field: string) => {
   const v = Number(n);
-  if (!Number.isFinite(v) || (!allowNegative && v < 0)) throw new RangeError(`${field}: expected ${allowNegative ? 'a' : 'a non-negative'} number, got ${n}`);
+  if (!Number.isFinite(v) || v < 0) throw new RangeError(`${field}: expected a non-negative number, got ${n}`);
   return v;
 };
 
@@ -154,6 +176,126 @@ function notes2027(saleDate: string): DecisionNote[] {
       ];
 }
 
+// ─── Validation ─────────────────────────────────────────────────────────────
+
+/** Every problem with a homeBusinessSpaceTradeoff input; empty when it can be computed. Does not throw. */
+export function validateHomeBusinessSpace(input: HomeBusinessSpaceInput): DecisionInputProblem[] {
+  const p = new Problems();
+  if (!input || typeof input !== 'object') return [{ field: 'input', message: 'expected an object' }];
+  if (typeof input.incomeYear !== 'string' || !/^(\d{4})[-\u2013](\d{2})$/.test(input.incomeYear) ||
+      Number(input.incomeYear.slice(5)) !== (Number(input.incomeYear.slice(0, 4)) + 1) % 100) {
+    p.add('incomeYear', `expected an income year like "2025-26", got ${JSON.stringify(input.incomeYear)}`);
+  }
+  p.percent(input.businessSharePct, 'businessSharePct');
+  p.percent(input.marginalRatePct, 'marginalRatePct');
+  if (input.ownershipPct !== undefined) p.percent(input.ownershipPct, 'ownershipPct');
+  p.amount(input.occupancyCostsPerYear, 'occupancyCostsPerYear');
+  p.amount(input.expectedGrowth, 'expectedGrowth');
+  p.years(input.years, 'years');
+
+  const hoursGiven = input.workHoursPerYear !== undefined || input.runningCostPerHour !== undefined;
+  if (input.runningCostsPerYear !== undefined && hoursGiven) {
+    p.add('runningCostsPerYear', 'give running costs per year, or work hours with a cost per hour — not both');
+  } else if (input.runningCostsPerYear !== undefined) {
+    p.amount(input.runningCostsPerYear, 'runningCostsPerYear');
+  } else if (hoursGiven) {
+    p.number(input.workHoursPerYear, 'workHoursPerYear', { min: 0, max: MAX_HOURS_PER_YEAR, what: 'hours from 0 to 8,760 (the hours in a year)' });
+    p.amount(input.runningCostPerHour, 'runningCostPerHour');
+  } else {
+    p.add('runningCostsPerYear', 'required, or give workHoursPerYear with runningCostPerHour');
+  }
+
+  const start = p.date(input.businessUseStart, 'businessUseStart');
+  const sale = p.date(input.saleDate, 'saleDate');
+  if (start && sale) p.order(input.businessUseStart, input.saleDate, 'businessUseStart', 'saleDate');
+  if (input.businessUseEnd !== undefined && p.date(input.businessUseEnd, 'businessUseEnd') && start && sale) {
+    p.order(input.businessUseStart, input.businessUseEnd, 'businessUseStart', 'businessUseEnd');
+    if (input.businessUseEnd > input.saleDate) p.add('businessUseEnd', `must be on or before saleDate (${input.saleDate}), got ${input.businessUseEnd}`);
+  }
+  if ((input.homeValueAtFirstUse === undefined) !== (input.valueAt30June2027 === undefined)) {
+    p.add('homeValueAtFirstUse', 'give both or neither of homeValueAtFirstUse and valueAt30June2027');
+  } else if (input.homeValueAtFirstUse !== undefined) {
+    p.amount(input.homeValueAtFirstUse, 'homeValueAtFirstUse');
+    p.amount(input.valueAt30June2027, 'valueAt30June2027');
+  }
+  return p.list;
+}
+
+/** Every problem with a mainResidenceChoice input; empty when it can be computed. Does not throw. */
+export function validateMainResidenceChoice(input: MainResidenceChoiceInput): DecisionInputProblem[] {
+  const p = new Problems();
+  if (!input || typeof input !== 'object') return [{ field: 'input', message: 'expected an object' }];
+  p.percent(input.marginalRatePct, 'marginalRatePct');
+  if (!Array.isArray(input.homes) || input.homes.length !== 2) {
+    p.add('homes', 'expected exactly two homes — the former one and the new one');
+    return p.list;
+  }
+  const withMoveOut = input.homes.filter((h) => h && h.movedOut !== undefined).length;
+  if (withMoveOut !== 1) p.add('homes', 'exactly one home must have movedOut (the former home)');
+  if (input.homes[0]?.name === input.homes[1]?.name) p.add('homes', `the two homes need different names, both are "${input.homes[0]?.name}"`);
+  input.homes.forEach((h, i) => {
+    const f = (k: string) => `homes[${i}].${k}`;
+    if (!h || typeof h !== 'object') {
+      p.add(`homes[${i}]`, 'expected an object');
+      return;
+    }
+    if (typeof h.name !== 'string' || !h.name.trim()) p.add(f('name'), 'expected a name');
+    p.amount(h.expectedGrowth, f('expectedGrowth'));
+    const owned = p.date(h.ownedFrom, f('ownedFrom'));
+    const saleDate = input.saleDates?.[h.name];
+    const sold = p.date(saleDate, `saleDates.${h.name}`);
+    if (owned && sold) p.order(h.ownedFrom, saleDate as string, f('ownedFrom'), `saleDates.${h.name}`);
+    if (h.movedOut !== undefined && p.date(h.movedOut, f('movedOut')) && owned && sold) {
+      p.order(h.ownedFrom, h.movedOut, f('ownedFrom'), f('movedOut'));
+      if (h.movedOut > (saleDate as string)) p.add(f('movedOut'), `must be on or before its sale (${saleDate}), got ${h.movedOut}`);
+      if (h.rentedFrom !== undefined && p.date(h.rentedFrom, f('rentedFrom'))) {
+        p.order(h.movedOut, h.rentedFrom, f('movedOut'), f('rentedFrom'));
+        if (h.rentedFrom > (saleDate as string)) p.add(f('rentedFrom'), `must be on or before its sale (${saleDate}), got ${h.rentedFrom}`);
+      }
+    } else if (h.movedOut === undefined && h.rentedFrom !== undefined) {
+      p.add(f('rentedFrom'), 'only the former home (the one with movedOut) can be rented after moving out');
+    }
+  });
+  return p.list;
+}
+
+/** Every problem with a roomOrPartnerArrangement input; empty when it can be computed. Does not throw. */
+export function validateRoomOrPartnerArrangement(input: DomesticArrangementInput | LodgerArrangementInput): DecisionInputProblem[] {
+  const p = new Problems();
+  if (!input || typeof input !== 'object') return [{ field: 'input', message: 'expected an object' }];
+  if (input.kind === 'domestic') return p.list;
+  if (input.kind !== 'lodger') return [{ field: 'kind', message: `expected 'domestic' or 'lodger', got ${JSON.stringify((input as { kind: unknown }).kind)}` }];
+  p.amount(input.weeklyRent, 'weeklyRent');
+  if (input.weeksLetPerYear !== undefined) {
+    p.number(input.weeksLetPerYear, 'weeksLetPerYear', { min: 0, max: MAX_WEEKS_PER_YEAR, what: 'weeks from 0 to 52' });
+  }
+  p.amount(input.homeCostsPerYear, 'homeCostsPerYear');
+  p.percent(input.marginalRatePct, 'marginalRatePct');
+  if (input.ownershipPct !== undefined) p.percent(input.ownershipPct, 'ownershipPct');
+  if (input.years !== undefined) p.years(input.years, 'years');
+  p.amount(input.expectedGrowth, 'expectedGrowth');
+  if (input.letSharePct !== undefined) p.percent(input.letSharePct, 'letSharePct');
+  else if (input.exclusivePct !== undefined) {
+    const ok = p.percent(input.exclusivePct, 'exclusivePct') && (input.sharedPct === undefined || p.percent(input.sharedPct, 'sharedPct'));
+    const byOk = input.sharedBy === undefined || p.number(input.sharedBy, 'sharedBy', { min: 1, integer: true, what: 'a whole number of people, at least 1' });
+    if (ok && byOk && Number(input.exclusivePct) + Number(input.sharedPct ?? 0) / Number(input.sharedBy ?? 2) > 100) {
+      p.add('exclusivePct', 'exclusivePct + sharedPct ÷ sharedBy exceeds 100%');
+    }
+  } else p.add('letSharePct', 'required, or give exclusivePct (and sharedPct)');
+  const first = p.date(input.firstLetDate, 'firstLetDate');
+  const sale = p.date(input.saleDate, 'saleDate');
+  if (first && sale) p.order(input.firstLetDate, input.saleDate, 'firstLetDate', 'saleDate');
+  if (input.letEndDate !== undefined && p.date(input.letEndDate, 'letEndDate') && first && sale) {
+    p.order(input.firstLetDate, input.letEndDate, 'firstLetDate', 'letEndDate');
+    if (input.letEndDate > input.saleDate) p.add('letEndDate', `must be on or before saleDate (${input.saleDate}), got ${input.letEndDate}`);
+  }
+  return p.list;
+}
+
+const assertValid = (problems: DecisionInputProblem[]) => {
+  if (problems.length) throw new DecisionInputError(problems);
+};
+
 // ─── 1. Desk or shared room vs place of business ────────────────────────────
 
 export interface HomeBusinessSpaceInput {
@@ -165,8 +307,15 @@ export interface HomeBusinessSpaceInput {
   businessSharePct: number;
   /** Whole-home occupancy costs you pay each year: interest or rent, rates, land tax, insurance. */
   occupancyCostsPerYear: number;
-  /** The business portion of running costs each year — claimable either way. */
-  runningCostsPerYear: number;
+  /**
+   * The business portion of running costs each year — claimable either way. Give this, or
+   * `workHoursPerYear` with `runningCostPerHour` (e.g. the ATO fixed rate), not both.
+   */
+  runningCostsPerYear?: number;
+  /** Hours worked from home in a year, 0 to 8,760. With `runningCostPerHour`, running costs = hours × rate. */
+  workHoursPerYear?: number;
+  /** Running costs per work hour (AUD), e.g. 0.70 — see workFromHomeFixedRate. */
+  runningCostPerHour?: number;
   /** Income years of claims. */
   years: number;
   /** Growth in the whole home's value from `businessUseStart` to `saleDate`. */
@@ -223,6 +372,8 @@ export interface HomeBusinessSpaceResult {
   net: { currentLaw: number; complete: boolean };
   /** Growth at which the extra deductions exactly pay for the CGT under the current rules. Above it, the desk wins. */
   breakEvenGrowth: { currentLaw: number | null };
+  /** The flat marginal rate every tax figure uses, and how running costs were arrived at. */
+  assumptions: MarginalRateAssumption & { runningCosts: { perYear: number; basis: 'given' | 'hours × rate'; workHoursPerYear?: number; runningCostPerHour?: number } };
   notes: DecisionNote[];
   rules: Array<HomePropertyRule & { key: HomePropertyRuleKey }>;
 }
@@ -236,13 +387,24 @@ export interface HomeBusinessSpaceResult {
  */
 export function homeBusinessSpaceTradeoff(input: HomeBusinessSpaceInput): HomeBusinessSpaceResult | UnsupportedCountry {
   if (!isAu(input.country)) return unsupported(input.country as string);
+  // Refuse impossible input before any arithmetic (see ./inputGuards).
+  assertValid(validateHomeBusinessSpace(input));
 
   const share = pct(input.businessSharePct, 'businessSharePct');
   const ownership = pct(input.ownershipPct ?? 100, 'ownershipPct');
   const marginal = pct(input.marginalRatePct, 'marginalRatePct');
   const occupancy = money(input.occupancyCostsPerYear, 'occupancyCostsPerYear');
-  const running = money(input.runningCostsPerYear, 'runningCostsPerYear');
-  const growth = money(input.expectedGrowth, 'expectedGrowth', { allowNegative: true });
+  const byHours = input.runningCostsPerYear === undefined;
+  const running = byHours
+    ? money(input.workHoursPerYear as number, 'workHoursPerYear') * money(input.runningCostPerHour as number, 'runningCostPerHour')
+    : money(input.runningCostsPerYear as number, 'runningCostsPerYear');
+  const assumptions: HomeBusinessSpaceResult['assumptions'] = {
+    ...marginalAssumption(input.marginalRatePct),
+    runningCosts: byHours
+      ? { perYear: cents(running), basis: 'hours × rate', workHoursPerYear: Number(input.workHoursPerYear), runningCostPerHour: Number(input.runningCostPerHour) }
+      : { perYear: cents(running), basis: 'given' },
+  };
+  const growth = money(input.expectedGrowth, 'expectedGrowth');
   const years = Number(input.years);
   if (!Number.isInteger(years) || years < 1 || years > 50) throw new RangeError(`years: expected a whole number from 1 to 50, got ${input.years}`);
   parseYmd(input.businessUseStart, 'businessUseStart');
@@ -285,6 +447,7 @@ export function homeBusinessSpaceTradeoff(input: HomeBusinessSpaceInput): HomeBu
       },
       net: { currentLaw: 0, complete: true },
       breakEvenGrowth: { currentLaw: null },
+      assumptions,
       notes,
       rules: rulesFor(notes),
     };
@@ -377,6 +540,7 @@ export function homeBusinessSpaceTradeoff(input: HomeBusinessSpaceInput): HomeBu
     },
     net: { currentLaw: cents(extraTaxValue - cgtTax), complete: beforeRegime },
     breakEvenGrowth: { currentLaw: breakEven === null ? null : Math.round(breakEven) },
+    assumptions,
     notes,
     rules: rulesFor(notes),
   };
@@ -443,6 +607,8 @@ export interface MainResidenceChoiceResult {
    * after 1 July 2027: the tax on gains after 30 June 2027 is not computed, and could change the answer.
    */
   better: { nominated: string; saving: number; complete: boolean };
+  /** The flat marginal rate every tax figure uses. */
+  assumptions: MarginalRateAssumption;
   notes: DecisionNote[];
   rules: Array<HomePropertyRule & { key: HomePropertyRuleKey }>;
 }
@@ -472,6 +638,7 @@ const spanDaysTo = (spans: Span[], last: string) =>
  */
 export function mainResidenceChoice(input: MainResidenceChoiceInput): MainResidenceChoiceResult | UnsupportedCountry {
   if (!isAu(input.country)) return unsupported(input.country as string);
+  assertValid(validateMainResidenceChoice(input));
   if (!Array.isArray(input.homes) || input.homes.length !== 2) throw new RangeError('homes: expected exactly two homes — the former one and the new one');
   const former = input.homes.find((h) => h.movedOut !== undefined);
   const next = input.homes.find((h) => h.movedOut === undefined);
@@ -488,7 +655,7 @@ export function mainResidenceChoice(input: MainResidenceChoiceInput): MainReside
   };
   for (const h of input.homes) {
     parseYmd(h.ownedFrom, `${h.name}.ownedFrom`);
-    money(h.expectedGrowth, `${h.name}.expectedGrowth`, { allowNegative: true });
+    money(h.expectedGrowth, `${h.name}.expectedGrowth`);
   }
   const saleF = saleOf(former);
   const saleN = saleOf(next);
@@ -630,6 +797,7 @@ export function mainResidenceChoice(input: MainResidenceChoiceInput): MainReside
     movingHouseDays,
     options: [keepFormer, takeNew],
     better: { nominated: better.nominated, saving: cents(other.totalTax - better.totalTax), complete: lastSale < AU_CGT_REGIME_2027_FROM },
+    assumptions: marginalAssumption(input.marginalRatePct),
     notes,
     rules: rulesFor(notes),
   };
@@ -702,6 +870,8 @@ export interface LodgerArrangementResult {
     postJuly2027: PostJuly2027Cgt;
   };
   mainResidenceExemption: 'partial';
+  /** The flat marginal rate every tax figure uses. */
+  assumptions: MarginalRateAssumption;
   notes: DecisionNote[];
   rules: Array<HomePropertyRule & { key: HomePropertyRuleKey }>;
 }
@@ -715,6 +885,7 @@ export function roomOrPartnerArrangement(
   input: DomesticArrangementInput | LodgerArrangementInput,
 ): DomesticArrangementResult | LodgerArrangementResult | UnsupportedCountry {
   if (!isAu(input.country)) return unsupported(input.country as string);
+  assertValid(validateRoomOrPartnerArrangement(input));
 
   if (input.kind === 'domestic') {
     const notes = [
@@ -745,7 +916,7 @@ export function roomOrPartnerArrangement(
 
   const rentWeekly = money(input.weeklyRent, 'weeklyRent');
   const weeks = Number(input.weeksLetPerYear ?? 52);
-  if (!Number.isFinite(weeks) || weeks < 0 || weeks > 53) throw new RangeError(`weeksLetPerYear: expected 0 to 53, got ${input.weeksLetPerYear}`);
+  if (!Number.isFinite(weeks) || weeks < 0 || weeks > MAX_WEEKS_PER_YEAR) throw new RangeError(`weeksLetPerYear: expected 0 to 52, got ${input.weeksLetPerYear}`);
   const costs = money(input.homeCostsPerYear, 'homeCostsPerYear');
   const marginal = pct(input.marginalRatePct, 'marginalRatePct');
   const ownership = pct(input.ownershipPct ?? 100, 'ownershipPct');
@@ -757,7 +928,7 @@ export function roomOrPartnerArrangement(
   const letEnd = input.letEndDate ?? input.saleDate;
   parseYmd(letEnd, 'letEndDate');
   if (letEnd < input.firstLetDate || letEnd > input.saleDate) throw new RangeError('letEndDate: must fall between firstLetDate and saleDate');
-  const growth = money(input.expectedGrowth, 'expectedGrowth', { allowNegative: true });
+  const growth = money(input.expectedGrowth, 'expectedGrowth');
 
   // Income tax, per year. The rent is your share's if you co-own; so are the costs you bear.
   const rent = rentWeekly * weeks * ownership;
@@ -811,6 +982,7 @@ export function roomOrPartnerArrangement(
       postJuly2027: postJuly2027(input.saleDate),
     },
     mainResidenceExemption: 'partial',
+    assumptions: marginalAssumption(input.marginalRatePct),
     notes,
     rules: rulesFor(notes),
   };

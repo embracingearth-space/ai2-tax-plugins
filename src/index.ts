@@ -185,9 +185,17 @@ export {
   roomOrPartnerArrangement,
   daysBeyondSixYears,
   AU_CGT_REGIME_2027_FROM,
+  validateHomeBusinessSpace,
+  validateMainResidenceChoice,
+  validateRoomOrPartnerArrangement,
+  DecisionInputError,
+  MAX_HOURS_PER_YEAR,
+  MAX_WEEKS_PER_YEAR,
 } from './decisions/homeProperty';
 export type {
   UnsupportedCountry,
+  MarginalRateAssumption,
+  DecisionInputProblem,
   PreJuly2027Cgt,
   PostJuly2027Cgt,
   HomeBusinessSpaceInput,
