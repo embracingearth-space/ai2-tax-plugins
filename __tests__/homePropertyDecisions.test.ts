@@ -178,7 +178,9 @@ describe('homeBusinessSpaceTradeoff — CGT from 1 July 2027 is law, and only th
       expect(post.note).toMatch(/may be indexed for inflation instead if you are an Australian resident and held the asset at least 12 months/);
       expect(post.note).toMatch(/30% minimum tax may apply/);
       expect(post.note).toMatch(/new dwelling or affordable housing/);
-      expect(post.note).toMatch(/not yet published/);
+      expect(post.note).toMatch(/not yet made/);
+      expect(post.note).toMatch(/Minister/);
+      expect(post.note).not.toMatch(/Commissioner/);
       expect(post.note).not.toMatch(/announced/i);
     }
     expect(r.net.complete).toBe(false);

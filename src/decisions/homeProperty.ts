@@ -28,9 +28,20 @@
  * after 1 July 2027. The gain to 30 June 2027 keeps the discount, so every
  * CGT figure is split: `preJuly2027` carries current-law figures for the gain
  * to 30 June 2027, and `postJuly2027` is `{ computable: false, note }`. The
- * method for valuing or apportioning a home at 1 July 2027 (the Commissioner's
- * determination under s 112-185) is not yet published, and indexation needs
- * CPI figures that do not exist yet — so the later portion is never guessed.
+ * asset is taken to be sold just before 1 July 2027 at market value
+ * (s 112-155(3)(a)) or, by choice, under an apportioning method the MINISTER
+ * determines by legislative instrument (s 112-185). No instrument has been
+ * made — only a Treasury exposure draft, which grows value at a compounding
+ * daily rate — and indexation needs CPI figures that do not exist yet, so the
+ * later portion is never computed here as law. (An estimate, with its CPI
+ * assumption stated, is in ./homeSpaceComparison.)
+ *
+ * THE "EVEN GROWTH BY DAY" SPLIT IS AN ASSUMPTION, NOT THE LAW'S METHOD. With
+ * no valuations, the gain to 30 June 2027 is the whole gain × days to then ÷
+ * all days (straight line). The law's default is a market valuation just
+ * before 1 July 2027; the draft apportioning method compounds daily, which
+ * puts less of a rising home's growth before 1 July 2027 than a straight line
+ * does. Supply the two valuations for the law's default.
  *
  * MONEY: results are in the input currency, rounded to cents. Gains are
  * assumed to accrue EVENLY BY DAY between the dates given; the ATO's own
@@ -110,7 +121,7 @@ const money = (n: number, field: string) => {
   return v;
 };
 
-function unsupported(country: string): UnsupportedCountry {
+export function unsupported(country: string): UnsupportedCountry {
   const code = country.toUpperCase();
   const info = getPluginInfo(code);
   const a = info?.plugin.authority;
@@ -156,9 +167,10 @@ const POST_JULY_2027_NOTE =
   'resident and held the asset at least 12 months (s 110-36(1A), Division 114); and a 30% minimum tax may apply ' +
   '(Division 119 — not for a qualifying new dwelling or affordable housing, or if you received certain support ' +
   'payments such as the age pension). The Act takes the home ' +
-  'to be sold and reacquired on 1 July 2027 at market value, or under an apportioning method the Commissioner ' +
-  'determines; that method is not yet published, and indexation depends on CPI figures not yet released. This ' +
-  'portion is therefore not computed — only the gain to 30 June 2027 is, under the current rules.';
+  'to be sold just before 1 July 2027 at market value and reacquired on that day, or, by choice, valued under an ' +
+  'apportioning method the Minister determines (s 112-155, s 112-185); that method is not yet made (only an ' +
+  'exposure draft), and indexation depends on CPI figures not yet released. This portion is therefore not ' +
+  'computed as law — only the gain to 30 June 2027 is, under the current rules.';
 
 function postJuly2027(saleDate: string): PostJuly2027Cgt {
   return saleDate < AU_CGT_REGIME_2027_FROM
