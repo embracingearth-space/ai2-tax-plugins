@@ -337,7 +337,7 @@ Every figure and rule the home decisions use carries four fields:
 
 - **The build fails when a figure is stale.** `__tests__/homeRatesFreshness.test.ts` uses today's date. It fails once any figure or rule in force is past its `reviewBy`, so stale figures block CI and the release instead of shipping silently.
 - **Rate Watch reports them too.** The weekly run (`scripts/rate-watch/run.cjs`) lists the same items under "Past their review date" and opens an issue.
-- **A year with no published figure is an estimate, never a gap.** `resolveHomeRate(rows, day)` returns the latest verified figure with `estimate: true`. `workFromHomeFixedRateOrEstimate(year)` does the same for the AU fixed rate. Its note matches the app's wording: "The 2026–27 rate is not published yet. The 2025–26 rate (70c an hour) is used as an estimate only — or use actual costs."
+- **A year with no published figure falls back to an estimate when an earlier verified figure exists.** `resolveHomeRate(rows, day)` returns the latest verified figure with `estimate: true`. `workFromHomeFixedRateOrEstimate(year)` does the same for the AU fixed rate. Both return `null` when no earlier verified figure is recorded (for example `workFromHomeFixedRateOrEstimate('2019-20')`), so a host still needs a no-figure path. Its note matches the app's wording: "The 2026–27 rate is not published yet. The 2025–26 rate (70c an hour) is used as an estimate only — or use actual costs."
 - **The return lookup is unchanged.** `workFromHomeFixedRate` still never applies an unpublished year's rate.
 
 **The yearly update, per figure**, when the test or Rate Watch names one:
