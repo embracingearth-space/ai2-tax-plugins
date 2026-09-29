@@ -296,7 +296,74 @@ Every rule is a row in `AU_HOME_PROPERTY_RULES`. Each row has its ATO or legisla
 
 The 1 July 2027 CGT changes are law: the Treasury Laws Amendment (Tax Reform No. 1) Act 2026 generally replaces the 50% discount with cost-base indexation (for an Australian resident who held the asset at least 12 months) and a possible 30% minimum tax for gains accruing after that date. A qualifying new residential dwelling or affordable housing keeps a discount of at least 50%. Every CGT figure is therefore split into two parts:
 - `preJuly2027` gives the current-law figures for the gain up to 30 June 2027 (the whole gain, for an earlier sale).
-- `postJuly2027` is `{ applies: false, note }` for a sale before 1 July 2027, and `{ applies: true, computable: false, note }` for a sale from that date. The 1 July 2027 apportioning method is not yet published, and indexation needs CPI figures that have not been released.
+- `postJuly2027` is `{ applies: false, note }` for a sale before 1 July 2027, and `{ applies: true, computable: false, note }` for a sale from that date. The home is taken to be sold just before 1 July 2027 at market value (s 112-155) or, by choice, under an apportioning method the **Minister** determines (s 112-185). That method has not been made (only an exposure draft exists), and indexation needs CPI figures that have not been released.
+
+### The verdict: `homeSpaceComparison` and `recommendHomeSpace`
+
+Use these to decide between a desk or shared room and a place of business. The app, the website and the Tax MCP all call them, so they give the same answer.
+
+```ts
+import { homeSpaceComparison, recommendHomeSpace } from '@ai2/tax-plugins';
+
+const c = homeSpaceComparison({
+  businessSharePct: 35, occupancyCostsPerYear: 9600, marginalRatePct: 32,
+  businessUseStart: '2025-07-01', saleDate: '2029-06-30', expectedGrowth: 100_000,
+});
+const v = recommendHomeSpace(c); // { verdict: 'desk', amount: 648, weighed: { scope: 'toJune2027', deductions: 2150, cgt: 2798 }, later: { deductions: 2150, cgt: 2802, … } }
+```
+
+- **Years of use.** They are counted by day in each income year: the days used divided by the days in that year. You can pass several dated periods (`usePeriods`), each with its own share.
+- **Sales on or after 1 July 2027.** The verdict weighs deductions to 30 June 2027 against CGT on growth to that date, and checks the later period separately:
+  - if the later period points the other way, the verdict is `dependsOnLater`;
+  - if use starts on or after 1 July 2027, it is `notYet`.
+- **The later CGT estimate.** When the home's values are given, the later CGT is estimated under the new rules: CPI indexation at an assumed 2.5% a year and a 30% minimum. The result states this assumption.
+- **About even.** The two sides count as "about even" when they are within 5% of each other or under 100 apart.
+- **Tones.** `tones` gives each option `better`, `worse` or `neutral`. A host must show the word with the colour.
+- **Other countries.**
+  - `gbBusinessRoomComparison` covers the UK: an exclusive room, with Private Residence Relief lost by value share.
+  - `usHomeOfficeComparison` covers the US: the simplified or the regular method, with depreciation taxed at up to 25% at sale.
+  - CA, NZ and IN have rule cards through `homeRulesFor`.
+  - Every other country returns `unsupported`.
+
+### Keeping the home rules up to date
+
+Every figure and rule the home decisions use carries four fields:
+- `sourceUrl`;
+- `readOn`;
+- `reviewBy`, the day by which a person must read the source again;
+- a tax year: the row's `effectiveFrom`, or `taxYear` on a figure.
+
+`homeRateInventory(day)` lists them all.
+
+- **The build fails when a figure is stale.** `__tests__/homeRatesFreshness.test.ts` uses today's date. It fails once any figure or rule in force is past its `reviewBy`, so stale figures block CI and the release instead of shipping silently.
+- **Rate Watch reports them too.** The weekly run (`scripts/rate-watch/run.cjs`) lists the same items under "Past their review date" and opens an issue.
+- **A year with no published figure falls back to an estimate when an earlier verified figure exists.** `resolveHomeRate(rows, day)` returns the latest verified figure with `estimate: true`. `workFromHomeFixedRateOrEstimate(year)` does the same for the AU fixed rate. Both return `null` when no earlier verified figure is recorded (for example `workFromHomeFixedRateOrEstimate('2019-20')`), so a host still needs a no-figure path. Its note matches the app's wording: "The 2026–27 rate is not published yet. The 2025–26 rate (70c an hour) is used as an estimate only — or use actual costs."
+- **The return lookup is unchanged.** `workFromHomeFixedRate` still never applies an unpublished year's rate.
+
+**The yearly update, per figure**, when the test or Rate Watch names one:
+
+1. Open the `sourceUrl` and read the authority's page. Do not use a search excerpt or a summary.
+2. **The figure is unchanged for the new year:**
+   - add a row for the new year (or extend the note to say which years it covers);
+   - set `readOn` to today;
+   - set `reviewBy` to the day before the year after runs out, or to one year from today, whichever is earlier.
+3. **The figure has changed:** add a new row from the new year's first day, with the new value, `verified: true`, `readOn` and `reviewBy`. Leave the old row as it is.
+4. **Nothing is published yet:** keep the `value: null, verified: false` row, and move its `reviewBy` to the next date worth checking.
+   - The hosts will show last year's figure, labelled as an estimate.
+   - Never type a number you have not read on the authority's page.
+5. **A rule's text** (`AU_HOME_PROPERTY_RULES`) or a figure in `AU_HOME_SPACE_FIGURES`: re-read the page, fix the wording, and move `readOn` and `reviewBy`.
+6. Run `npm run typecheck && npm test`, then open a PR that cites each page and the day you read it.
+
+The files, by figure:
+
+| Figures | File |
+|---|---|
+| AU fixed rate | `src/countries/australiaDeductions.ts` |
+| GB, US and NZ rows | `src/decisions/homeRuleRates.ts` |
+| AU 2027 figures and the CPI assumption | `src/decisions/homeSpaceRates.ts` |
+| AU rules | `src/decisions/homePropertyRules.ts` |
+
+Items for an accountant stay notes, never numbers.
 
 ## Development
 

@@ -25,10 +25,17 @@ export interface HomePropertyRule {
   readOn: string;
   /** true only where the rule was confirmed against the source's text on `readOn`. */
   verified: boolean;
+  /** YYYY-MM-DD by which the source must be read again; the freshness test fails past it. */
+  reviewBy: string;
 }
 
 /** UTC calendar day of the reads. */
 const READ_ON = '2026-09-27';
+/**
+ * Every rule here is re-read before the rules from 1 July 2027 start: the ATO pages will change for them, and the
+ * Minister's apportioning method may have been made by then.
+ */
+const REVIEW_BY = '2027-06-30';
 
 export const AU_HOME_PROPERTY_URLS = {
   homeBusinessExpenses:
@@ -86,6 +93,7 @@ export const AU_HOME_PROPERTY_RULES: Record<HomePropertyRuleKey, HomePropertyRul
     pageLastUpdated: '2026-06-18',
     readOn: READ_ON,
     verified: true,
+    reviewBy: REVIEW_BY,
   },
   occupancyOnlyPlaceOfBusiness: {
     rule:
@@ -97,6 +105,7 @@ export const AU_HOME_PROPERTY_RULES: Record<HomePropertyRuleKey, HomePropertyRul
     pageLastUpdated: '2026-06-18',
     readOn: READ_ON,
     verified: true,
+    reviewBy: REVIEW_BY,
   },
   occupancyByFloorAreaAndTime: {
     rule: 'Occupancy expenses are usually apportioned by the floor area that is a place of business and the part of the year it was used for business.',
@@ -105,6 +114,7 @@ export const AU_HOME_PROPERTY_RULES: Record<HomePropertyRuleKey, HomePropertyRul
     pageLastUpdated: '2026-06-18',
     readOn: READ_ON,
     verified: true,
+    reviewBy: REVIEW_BY,
   },
   personalServicesIncome: {
     rule: 'If you earn personal services income (PSI), you may not be able to deduct some occupancy expenses.',
@@ -113,6 +123,7 @@ export const AU_HOME_PROPERTY_RULES: Record<HomePropertyRuleKey, HomePropertyRul
     pageLastUpdated: '2026-06-18',
     readOn: READ_ON,
     verified: true,
+    reviewBy: REVIEW_BY,
   },
   partialExemptionFollowsInterest: {
     rule:
@@ -123,6 +134,7 @@ export const AU_HOME_PROPERTY_RULES: Record<HomePropertyRuleKey, HomePropertyRul
     pageLastUpdated: '2026-02-03',
     readOn: READ_ON,
     verified: true,
+    reviewBy: REVIEW_BY,
   },
   coOwnerNotInBusiness: {
     rule:
@@ -133,6 +145,7 @@ export const AU_HOME_PROPERTY_RULES: Record<HomePropertyRuleKey, HomePropertyRul
     pageLastUpdated: '2026-02-03',
     readOn: READ_ON,
     verified: true,
+    reviewBy: REVIEW_BY,
   },
   smallBusinessConcessionsRare: {
     rule:
@@ -143,6 +156,7 @@ export const AU_HOME_PROPERTY_RULES: Record<HomePropertyRuleKey, HomePropertyRul
     pageLastUpdated: '2026-02-03',
     readOn: READ_ON,
     verified: true,
+    reviewBy: REVIEW_BY,
   },
   homeFirstUsedToProduceIncome: {
     rule:
@@ -153,6 +167,7 @@ export const AU_HOME_PROPERTY_RULES: Record<HomePropertyRuleKey, HomePropertyRul
     pageLastUpdated: '2026-06-22',
     readOn: READ_ON,
     verified: true,
+    reviewBy: REVIEW_BY,
   },
   floorAreaAndDaysApportionment: {
     rule:
@@ -163,6 +178,7 @@ export const AU_HOME_PROPERTY_RULES: Record<HomePropertyRuleKey, HomePropertyRul
     pageLastUpdated: '2026-06-22',
     readOn: READ_ON,
     verified: true,
+    reviewBy: REVIEW_BY,
   },
   cgtDiscount: {
     rule:
@@ -173,6 +189,7 @@ export const AU_HOME_PROPERTY_RULES: Record<HomePropertyRuleKey, HomePropertyRul
     pageLastUpdated: '2026-06-29',
     readOn: READ_ON,
     verified: true,
+    reviewBy: REVIEW_BY,
   },
   noDiscountWithin12MonthsOfFirstUse: {
     rule: 'If you first started using your home for rental or business less than 12 months before disposing of it, you cannot use the CGT discount.',
@@ -181,6 +198,7 @@ export const AU_HOME_PROPERTY_RULES: Record<HomePropertyRuleKey, HomePropertyRul
     pageLastUpdated: '2026-06-29',
     readOn: READ_ON,
     verified: true,
+    reviewBy: REVIEW_BY,
   },
   sixYearRule: {
     rule:
@@ -192,6 +210,7 @@ export const AU_HOME_PROPERTY_RULES: Record<HomePropertyRuleKey, HomePropertyRul
     pageLastUpdated: '2026-06-22',
     readOn: READ_ON,
     verified: true,
+    reviewBy: REVIEW_BY,
   },
   oneMainResidence: {
     rule: 'While you treat a former home as your main residence you cannot treat any other property as your main residence, except for up to 6 months when moving house.',
@@ -200,6 +219,7 @@ export const AU_HOME_PROPERTY_RULES: Record<HomePropertyRuleKey, HomePropertyRul
     pageLastUpdated: '2026-06-22',
     readOn: READ_ON,
     verified: true,
+    reviewBy: REVIEW_BY,
   },
   movingHouseSixMonths: {
     rule:
@@ -211,6 +231,7 @@ export const AU_HOME_PROPERTY_RULES: Record<HomePropertyRuleKey, HomePropertyRul
     pageLastUpdated: '2026-06-22',
     readOn: READ_ON,
     verified: true,
+    reviewBy: REVIEW_BY,
   },
   spouseDifferentHomes: {
     rule:
@@ -221,6 +242,7 @@ export const AU_HOME_PROPERTY_RULES: Record<HomePropertyRuleKey, HomePropertyRul
     pageLastUpdated: '2026-06-22',
     readOn: READ_ON,
     verified: true,
+    reviewBy: REVIEW_BY,
   },
   domesticArrangement: {
     rule:
@@ -231,6 +253,7 @@ export const AU_HOME_PROPERTY_RULES: Record<HomePropertyRuleKey, HomePropertyRul
     pageLastUpdated: '2026-05-21',
     readOn: READ_ON,
     verified: true,
+    reviewBy: REVIEW_BY,
   },
   noIncomeFromOccupierNoCgt: {
     rule: 'You keep the full main residence exemption if someone else uses part of your home and you receive no assessable income from them for it.',
@@ -239,6 +262,7 @@ export const AU_HOME_PROPERTY_RULES: Record<HomePropertyRuleKey, HomePropertyRul
     pageLastUpdated: '2026-06-22',
     readOn: READ_ON,
     verified: true,
+    reviewBy: REVIEW_BY,
   },
   lodgerLetShare: {
     rule:
@@ -250,6 +274,7 @@ export const AU_HOME_PROPERTY_RULES: Record<HomePropertyRuleKey, HomePropertyRul
     pageLastUpdated: '2026-06-22',
     readOn: READ_ON,
     verified: true,
+    reviewBy: REVIEW_BY,
   },
   cgtFrom1July2027: {
     rule:
@@ -269,6 +294,7 @@ export const AU_HOME_PROPERTY_RULES: Record<HomePropertyRuleKey, HomePropertyRul
     pageLastUpdated: null,
     readOn: READ_ON,
     verified: true,
+    reviewBy: REVIEW_BY,
   },
   minimumTax30: {
     rule:
@@ -280,6 +306,7 @@ export const AU_HOME_PROPERTY_RULES: Record<HomePropertyRuleKey, HomePropertyRul
     pageLastUpdated: null,
     readOn: READ_ON,
     verified: true,
+    reviewBy: REVIEW_BY,
   },
   negativeGearingNewBuilds: {
     rule:
@@ -290,6 +317,7 @@ export const AU_HOME_PROPERTY_RULES: Record<HomePropertyRuleKey, HomePropertyRul
     pageLastUpdated: '2026-06-29',
     readOn: READ_ON,
     verified: true,
+    reviewBy: REVIEW_BY,
   },
 };
 
