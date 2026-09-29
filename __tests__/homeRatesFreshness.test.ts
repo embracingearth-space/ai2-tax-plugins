@@ -12,8 +12,11 @@ import { analyzeDeductionRates, hasActionableDeductionFindings, shippedDeduction
 import { workFromHomeFixedRate, workFromHomeFixedRateOrEstimate } from '../src/countries/australiaDeductions';
 import { AU_HOME_SPACE_FIGURES } from '../src/decisions/homeSpaceRates';
 import { AU_HOME_PROPERTY_RULES } from '../src/decisions/homePropertyRules';
+import { toYmd } from '../src/data/rateLedger';
 
-const today = new Date().toISOString().slice(0, 10);
+// The local calendar day, the convention the freshness API uses for a Date
+// (see toYmd) — toISOString() would still read 30 June at 00:30 on 1 July in Sydney.
+const today = toYmd(new Date());
 
 describe('freshness gate — fails the build once a home figure is past its review date', () => {
   it(`no home figure or rule is past its reviewBy date today (${today})`, () => {

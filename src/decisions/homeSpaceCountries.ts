@@ -42,7 +42,7 @@
  * between methods (US), with `isAboutEven` deciding "about even".
  */
 
-import { daysInclusive, heldAtLeast12Months, minYmd, overlapDays, parseYmd } from './dates';
+import { daysInclusive, heldAtLeast12Months, overlapDays, parseYmd } from './dates';
 import { DecisionInputError, Problems, type DecisionInputProblem } from './inputGuards';
 import {
   GB_CGT_ANNUAL_EXEMPT_ROWS,
@@ -233,7 +233,7 @@ export function gbBusinessRoomComparison(input: GbBusinessRoomInput): GbBusiness
     : [
         { text: 'A space also used personally: running costs only, and Private Residence Relief is unaffected.', forAccountant: false, sourceUrl: GOVUK.sellWorkFromHome },
       ];
-  if (rates.some((r) => r.estimate)) notes.push({ text: `The ${input.saleDate.slice(0, 4)} CGT figures are not published yet; the latest published ones are used as an estimate.`, forAccountant: false });
+  if (rates.some((r) => r.estimate)) notes.push({ text: `The ${gbLabel(gbYearOf(input.saleDate))} CGT figures are not published yet; the latest published ones are used as an estimate.`, forAccountant: false });
   if (!heldAtLeast12Months(input.ownedFrom, input.saleDate)) notes.push({ text: 'A home owned for under a year: check whether the sale is a trade.', forAccountant: true });
 
   return {
@@ -432,10 +432,11 @@ export function usHomeOfficeComparison(input: UsHomeOfficeInput): UsHomeOfficeRe
 
   let separateStructureTax: number | null = null;
   if (input.separateStructure) {
+    // expectedGrowth is already growth "over the use" (businessUseStart to businessUseEnd/saleDate) per the
+    // input's own contract — not growth over the whole ownership. A further usedDays/ownedDays factor here would
+    // apply that same period a second time and understate the tax when businessUseEnd is before saleDate.
     const growth = Math.max(0, Number(input.expectedGrowth ?? 0));
-    const ownedDays = daysInclusive(input.businessUseStart, input.saleDate);
-    const usedDays = daysInclusive(input.businessUseStart, minYmd(end, input.saleDate));
-    separateStructureTax = cents(growth * bizPct * (usedDays / ownedDays) * (Number(input.longTermCapitalGainsRatePct ?? 0) / 100));
+    separateStructureTax = cents(growth * bizPct * (Number(input.longTermCapitalGainsRatePct ?? 0) / 100));
   }
 
   const notes: CountryNote[] = [

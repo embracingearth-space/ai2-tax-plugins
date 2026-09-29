@@ -64,6 +64,14 @@ describe('GB — a room used only for the business', () => {
     expect(r.notes.map((n) => n.text).join(' ')).toMatch(/estimate/);
   });
 
+  it('the unpublished-year note names the GB tax year (6 April to 5 April), not the calendar year', () => {
+    // 2028-02-01 falls in the 2027-28 GB tax year, not calendar year 2028.
+    const r = gbBusinessRoomComparison({ ...gb, saleDate: '2028-02-01' });
+    const note = r.notes.find((n) => /CGT figures are not published yet/.test(n.text))!.text;
+    expect(note).toMatch(/2027-28 CGT figures/);
+    expect(note).not.toMatch(/2028 CGT figures/);
+  });
+
   it('refuses a sale before 6 April 2025 (no rates recorded) and a bad band', () => {
     const p = validateGbBusinessRoom({ ...gb, saleDate: '2025-01-01', cgtBand: 'top' as never });
     expect(p.map((x) => x.field)).toEqual(expect.arrayContaining(['cgtBand', 'saleDate']));
@@ -125,6 +133,19 @@ describe('US — simplified or regular method', () => {
     const r = usHomeOfficeComparison({ ...us, separateStructure: true, expectedGrowth: 90_000, longTermCapitalGainsRatePct: 15 });
     expect(r.separateStructureTax).toBeCloseTo(90_000 * 0.1 * 0.15, 2);
     expect(r.notes.find((n) => /separate structure/.test(n.text))!.forAccountant).toBe(true);
+  });
+
+  it('a separate structure with businessUseEnd before saleDate: expectedGrowth is not discounted a second time by the days ratio', () => {
+    // expectedGrowth is already "growth over the use" (businessUseStart to businessUseEnd) per the input's own
+    // contract, so no further usedDays/ownedDays factor should apply — it would understate the tax otherwise.
+    const r = usHomeOfficeComparison({
+      ...us,
+      businessUseEnd: '2026-06-30', // well before saleDate (2027-12-31)
+      separateStructure: true,
+      expectedGrowth: 90_000,
+      longTermCapitalGainsRatePct: 15,
+    });
+    expect(r.separateStructureTax).toBeCloseTo(90_000 * 0.1 * 0.15, 2);
   });
 
   it('employees and non-exclusive use get nothing', () => {

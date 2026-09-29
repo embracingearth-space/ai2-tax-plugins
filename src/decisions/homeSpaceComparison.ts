@@ -87,7 +87,7 @@ export interface HomeSpaceComparisonInput {
 export interface UseYearsByIncomeYear {
   /** '2025-26'. */
   label: string;
-  /** Floor-area-weighted years of use in that income year: Σ share × days used ÷ days in the year, ÷ the largest share. */
+  /** Years of use in that income year: days used ÷ days in the income year. Not weighted by floor-area share. */
   fraction: number;
   /** Days of business use in that income year. */
   days: number;
