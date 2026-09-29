@@ -165,19 +165,30 @@ export function validateHomeMixedUse(input: HomeMixedUseInput): DecisionInputPro
   const b = input.business;
   if (!b || typeof b !== 'object') p.add('business', 'expected an object');
   else if (Array.isArray(b.usePeriods)) {
+    if (b.usePeriods.length === 0) p.add('business.usePeriods', 'expected at least one period');
+    const ok: HomeSpaceUsePeriod[] = [];
     b.usePeriods.forEach((u, i) => {
       const f = (k: string) => `business.usePeriods[${i}].${k}`;
       const s = p.date(u?.start, f('start'));
       const e = p.date(u?.end, f('end'));
       p.percent(u?.sharePct, f('sharePct'));
-      if (s && e) p.order(u.start, u.end, f('start'), f('end'));
+      const ordered = s && e ? p.order(u.start, u.end, f('start'), f('end')) : false;
       if (e && sale && u.end > input.saleDate) p.add(f('end'), `must be on or before saleDate (${input.saleDate}), got ${u.end}`);
+      else if (ordered) ok.push(u);
     });
+    // As homeSpaceComparison: dated periods may not overlap (the business share on a day is one figure).
+    const sorted = [...ok].sort((a, c) => a.start.localeCompare(c.start));
+    for (let i = 1; i < sorted.length; i++) {
+      if (sorted[i].start <= sorted[i - 1].end) p.add('business.usePeriods', `periods overlap: ${sorted[i - 1].start}–${sorted[i - 1].end} and ${sorted[i].start}–${sorted[i].end}`);
+    }
   } else {
     p.percent(b.sharePct, 'business.sharePct');
     const s = p.date(b.start, 'business.start');
     if (s && sale) p.order(b.start as string, input.saleDate, 'business.start', 'saleDate');
-    if (b.end !== undefined && p.date(b.end, 'business.end') && s) p.order(b.start as string, b.end, 'business.start', 'business.end');
+    if (b.end !== undefined && p.date(b.end, 'business.end') && s) {
+      p.order(b.start as string, b.end, 'business.start', 'business.end');
+      if (sale && b.end > input.saleDate) p.add('business.end', `must be on or before saleDate (${input.saleDate}), got ${b.end}`);
+    }
   }
 
   const l = input.letting;
@@ -185,9 +196,10 @@ export function validateHomeMixedUse(input: HomeMixedUseInput): DecisionInputPro
   else {
     if (l.sharePct !== undefined) p.percent(l.sharePct, 'letting.sharePct');
     else if (l.exclusivePct !== undefined) {
-      p.percent(l.exclusivePct, 'letting.exclusivePct');
-      if (l.sharedPct !== undefined) p.percent(l.sharedPct, 'letting.sharedPct');
-      if (l.sharedBy !== undefined) p.number(l.sharedBy, 'letting.sharedBy', { min: 1, integer: true, what: 'a whole number of people, at least 1' });
+      const ok = p.percent(l.exclusivePct, 'letting.exclusivePct') && (l.sharedPct === undefined || p.percent(l.sharedPct, 'letting.sharedPct'));
+      const byOk = l.sharedBy === undefined || p.number(l.sharedBy, 'letting.sharedBy', { min: 1, integer: true, what: 'a whole number of people, at least 1' });
+      // As roomOrPartnerArrangement: the lodger's area can't be more than the home.
+      if (ok && byOk && letShareOf(l) > 1 + 1e-9) p.add('letting.exclusivePct', 'exclusivePct + sharedPct ÷ sharedBy exceeds 100%');
     } else p.add('letting.sharePct', 'required, or give exclusivePct (and sharedPct)');
     const s = p.date(l.start, 'letting.start');
     if (s && sale) p.order(l.start, input.saleDate, 'letting.start', 'saleDate');
@@ -221,11 +233,17 @@ export function validateHomeMixedUse(input: HomeMixedUseInput): DecisionInputPro
   return p.list;
 }
 
-/** CGT on a set of share spans, measured the ATO's way: from the first income use, share × days ÷ days to the sale. */
-function cgtOn(spans: Span[], input: HomeMixedUseInput, from: string, marginal: number, ownership: number): MixedCgt & { discountApplies: boolean; basis: HomeMixedUseResult['cgt']['basis']; shareDays: number } {
+/**
+ * CGT on a set of share spans, measured the ATO's way: from the first income use, share × days ÷ days to the sale.
+ *
+ * `origin` is the day `expectedGrowth` and `homeValueAtFirstUse` are measured from. When `from` is later (a use
+ * weighed as if it were the only one), its gain is the growth over its OWN days — the day-rate from `origin` — not
+ * the whole figure over fewer days. Pass `origin = from` only to mimic a separate calculator fed the same figures.
+ */
+function cgtOn(spans: Span[], input: HomeMixedUseInput, from: string, marginal: number, ownership: number, origin: string = from): MixedCgt & { discountApplies: boolean; basis: HomeMixedUseResult['cgt']['basis']; shareDays: number } {
   const sale = input.saleDate;
   const growth = Math.max(0, Number(input.expectedGrowth));
-  const totalDays = daysInclusive(from, sale);
+  const totalDays = daysInclusive(origin, sale);
   const shareDays = spans.reduce((n, s) => n + s.share * overlapDays(s.start, s.end, from, sale), 0);
   const shareDaysPre = spans.reduce((n, s) => n + s.share * overlapDays(s.start, s.end, from, LAST_DISCOUNT_DAY), 0);
   const discountApplies = heldAtLeast12Months(from, sale);
@@ -237,8 +255,8 @@ function cgtOn(spans: Span[], input: HomeMixedUseInput, from: string, marginal: 
   if (!partial) {
     preGain = totalDays > 0 ? (growth * ownership * shareDays) / totalDays : 0;
     basis = 'whole gain — sale before 1 July 2027';
-  } else if (input.homeValueAtFirstUse !== undefined && input.valueAt30June2027 !== undefined && from < AU_CGT_REGIME_2027_FROM) {
-    const preDays = daysInclusive(from, LAST_DISCOUNT_DAY);
+  } else if (input.homeValueAtFirstUse !== undefined && input.valueAt30June2027 !== undefined && origin < AU_CGT_REGIME_2027_FROM) {
+    const preDays = daysInclusive(origin, LAST_DISCOUNT_DAY);
     const valueGain = Math.max(0, Number(input.valueAt30June2027) - Number(input.homeValueAtFirstUse));
     preGain = (valueGain * ownership * shareDaysPre) / preDays;
     basis = 'valuations supplied';
@@ -311,9 +329,12 @@ export function homeMixedUseComparison(input: HomeMixedUseInput): HomeMixedUseRe
   const k = combined.shareDays > 0 ? bizShareDays / combined.shareDays : 0;
   const businessPart = scale(combined, k);
   const letPart = minus(combined, businessPart);
-  // The separate calculators, each from its own first use — what running the two tabs side by side gives.
-  const lettingAlone = lets.length ? cgtOn(lets, input, lets[0].start, marginal, ownership) : { counted: 0, laterAtTodaysRules: 0, wholeAtTodaysRules: 0 };
-  const businessAlone = biz.length ? cgtOn(biz, input, biz[0].start, marginal, ownership) : { counted: 0, laterAtTodaysRules: 0, wholeAtTodaysRules: 0 };
+  const none: MixedCgt = { counted: 0, laterAtTodaysRules: 0, wholeAtTodaysRules: 0 };
+  // The letting as if there were no business use: from its own first day, on the home's growth over ITS days.
+  const lettingAlone = lets.length ? cgtOn(lets, input, lets[0].start, marginal, ownership, firstIncomeUse) : none;
+  // The separate calculators, each from its own first use and each fed the same growth — what running the two tabs side by side gives.
+  const lettingTab = lets.length ? cgtOn(lets, input, lets[0].start, marginal, ownership) : none;
+  const businessTab = biz.length ? cgtOn(biz, input, biz[0].start, marginal, ownership) : none;
 
   // The place-of-business verdict given the letting: the extra CGT a place of business adds on top of the letting.
   const extra = minus(combined, lettingAlone);
@@ -328,10 +349,11 @@ export function homeMixedUseComparison(input: HomeMixedUseInput): HomeMixedUseRe
     cgt: { counted: Math.max(0, extra.counted), laterAtTodaysRules: Math.max(0, extra.laterAtTodaysRules), wholeAtTodaysRules: Math.max(0, extra.wholeAtTodaysRules), laterAtNewRules: null },
   });
 
+  // The combined share is a step function that only rises on a span's first day, so its maximum is on one of them.
   let maxCombined = 0;
   for (const s of all) {
-    const same = all.filter((o) => overlapDays(o.start, o.end, s.start, s.end) > 0).reduce((n, o) => n + o.share, 0);
-    maxCombined = Math.max(maxCombined, same);
+    const onDay = all.filter((o) => o.start <= s.start && s.start <= o.end).reduce((n, o) => n + o.share, 0);
+    maxCombined = Math.max(maxCombined, onDay);
   }
 
   const notes: DecisionNote[] = [
@@ -358,7 +380,7 @@ export function homeMixedUseComparison(input: HomeMixedUseInput): HomeMixedUseRe
       businessPart: round(businessPart),
       letPart: round(letPart),
       lettingAlone: round(lettingAlone),
-      sumOfSeparate: round(add(businessAlone, lettingAlone)),
+      sumOfSeparate: round(add(businessTab, lettingTab)),
       discountApplies: combined.discountApplies,
       basis: combined.basis,
     },

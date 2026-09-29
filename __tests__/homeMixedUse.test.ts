@@ -48,13 +48,12 @@ describe('business 35% + let 20% = 55% non-exempt', () => {
     if (!r.supported) throw new Error('AU');
     expect(r.firstIncomeUse).toBe('2021-07-01');
     expect(r.cgt.combined.wholeAtTodaysRules).not.toBeCloseTo(r.cgt.sumOfSeparate.wholeAtTodaysRules, 1);
-    // The same $100,000 growth is spread over the combined window (from the EARLIER first use, 2021-07-01,
-    // to the sale) rather than the letting's own shorter window (from 2023-01-01). Measured on its own,
-    // the letting's 911 own-days are 100% of its own total days, so it gets the full share (0.20) of growth:
-    // 100,000 * 0.20 * 0.5 discount * 0.32 = $3,200. Attributed out of the combined figure, its 911 days are
-    // only ~62% of the combined 1,461-day window, so its slice is smaller — the business's earlier years
-    // dilute it. This is why the two calculators run separately would overstate the letting's own CGT here.
-    expect(r.cgt.letPart.wholeAtTodaysRules).toBeLessThan(r.cgt.lettingAlone.wholeAtTodaysRules);
+    // The same $100,000 growth runs over the combined window (from the EARLIER first use, 2021-07-01, to the
+    // sale). The letting tab run on its own, fed the same $100,000, measures it over the letting's 912 days
+    // only, so it gets the full share (0.20) of growth: 100,000 * 0.20 * 0.5 discount * 0.32 = $3,200.
+    // Attributed out of the combined figure, its 912 days are ~62% of the 1,461-day window — smaller. This is
+    // why the two calculators run separately overstate the letting's CGT here.
+    expect(r.cgt.letPart.wholeAtTodaysRules).toBeLessThan(r.cgt.sumOfSeparate.wholeAtTodaysRules - r.cgt.businessPart.wholeAtTodaysRules);
   });
 
   it('occupancy deductions are on the business share only; rent and its costs on the let share only', () => {
@@ -136,6 +135,85 @@ describe('business 35% + let 20% = 55% non-exempt', () => {
     });
     if (!r.supported) throw new Error('AU');
     expect(r.businessDeductions.total).toBeCloseTo(9600 * 0.2 * 1 * 0.32 + 9600 * 0.35 * 3 * 0.32, 0);
+  });
+});
+
+describe('review fixes (PR #61)', () => {
+  const staggered: HomeMixedUseInput = {
+    ...sameStart,
+    business: { sharePct: 35, start: '2021-07-01' },
+    letting: { sharePct: 20, start: '2023-01-01', weeklyRent: 300, homeCostsPerYear: 15_000 },
+  };
+
+  it('letting starting after the business: the verdict base measures the letting on the growth over ITS OWN days, not the whole expectedGrowth', () => {
+    const r = homeMixedUseComparison(staggered);
+    if (!r.supported) throw new Error('AU');
+    // expectedGrowth (100,000) runs from the first income use, 2021-07-01, over 1,461 days. With no business use,
+    // the letting would be measured from 2023-01-01 on the growth over its own 912 days: 100,000 * 912/1461 * 0.20
+    // * 0.5 * 0.32 = 1,997.54 — not the whole 100,000 * 0.20 * 0.16 = 3,200.
+    expect(r.cgt.lettingAlone.wholeAtTodaysRules).toBeCloseTo((100_000 * 912 * 0.2 * 0.16) / 1461, 1);
+    // So the extra CGT a place of business adds is the business's own 35% over all 1,461 days: 5,600.
+    expect(r.placeOfBusiness.weighed.cgt).toBeCloseTo(100_000 * 0.35 * 0.16, 0);
+    // Running the two tabs side by side (each fed the same 100,000) still gives 5,600 + 3,200.
+    expect(r.cgt.sumOfSeparate.wholeAtTodaysRules).toBeCloseTo(5600 + 3200, 1);
+  });
+
+  it('letting starting after the business, valuations given: the letting-alone base uses the value growth per day, not all of it over the letting\'s days', () => {
+    const r = homeMixedUseComparison({
+      ...staggered,
+      letting: { ...staggered.letting, start: '2025-07-01' },
+      saleDate: '2029-06-30',
+      homeValueAtFirstUse: 800_000,
+      valueAt30June2027: 900_000,
+    });
+    if (!r.supported) throw new Error('AU');
+    // 100,000 of value growth over 2021-07-01..2027-06-30 (2,191 days); the letting's 730 of them at 20%.
+    expect(r.cgt.lettingAlone.counted).toBeCloseTo((100_000 * 730 * 0.2 * 0.16) / 2191, 1);
+  });
+
+  it('maxCombinedSharePct is the largest share on any one day, not every span that touches the letting', () => {
+    const r = homeMixedUseComparison({
+      ...sameStart,
+      business: {
+        usePeriods: [
+          { start: '2021-07-01', end: '2022-06-30', sharePct: 20 },
+          { start: '2022-07-01', end: '2025-06-30', sharePct: 35 },
+        ],
+      },
+    });
+    if (!r.supported) throw new Error('AU');
+    expect(r.maxCombinedSharePct).toBe(55);
+  });
+
+  it('validation: overlapping business periods are refused, as homeSpaceComparison refuses them', () => {
+    const problems = validateHomeMixedUse({
+      ...sameStart,
+      business: {
+        usePeriods: [
+          { start: '2021-07-01', end: '2023-06-30', sharePct: 40 },
+          { start: '2022-07-01', end: '2025-06-30', sharePct: 40 },
+        ],
+      },
+    });
+    expect(problems.map((p) => p.field)).toContain('business.usePeriods');
+  });
+
+  it('validation: an empty usePeriods list is refused', () => {
+    expect(validateHomeMixedUse({ ...sameStart, business: { usePeriods: [] } }).map((p) => p.field)).toContain('business.usePeriods');
+  });
+
+  it('validation: business.end after the sale is refused (it would add deduction years past the sale)', () => {
+    const problems = validateHomeMixedUse({ ...sameStart, business: { sharePct: 35, start: '2021-07-01', end: '2027-06-30' } });
+    expect(problems.map((p) => p.field)).toEqual(['business.end']);
+  });
+
+  it('validation: exclusivePct + sharedPct ÷ sharedBy over 100% is refused even with no overlapping business use', () => {
+    const problems = validateHomeMixedUse({
+      ...sameStart,
+      business: { sharePct: 0, start: '2021-07-01' },
+      letting: { exclusivePct: 80, sharedPct: 60, sharedBy: 1, start: '2021-07-01', weeklyRent: 300, homeCostsPerYear: 15_000 },
+    });
+    expect(problems.map((p) => p.field)).toEqual(['letting.exclusivePct']);
   });
 });
 
