@@ -381,6 +381,17 @@ export function finnishWageTax(
   const age = options.age;
   const municipalRate = options.localTaxRate ?? year.averageMunicipalRate;
   const churchRate = options.churchTaxRate ?? 0;
+  // Validated HERE, not only in calcIncomeTax's resolveOptions: this function
+  // is exported, and a direct caller passing 1.8 for "1.8%" would otherwise get
+  // church tax a hundred times too high, or a misleading Åland error for 5.3.
+  for (const [k, v] of [['localTaxRate', municipalRate], ['churchTaxRate', churchRate]] as const) {
+    if (typeof v !== 'number' || !Number.isFinite(v) || v < 0 || v >= 1) {
+      throw new RangeError(`${k} must be a fraction between 0 and 1 (e.g. 0.053 for 5.3%), got ${String(v)}`);
+    }
+  }
+  if (age != null && (!Number.isInteger(age) || age < 0 || age > 130)) {
+    throw new RangeError(`age must be a whole number of years, got ${String(age)}`);
+  }
   if (municipalRate >= 0.15) {
     // Only Åland municipalities levy this much (17–20%), because Åland's state
     // scale is 12.64 points lower to compensate. The mainland scale on an Åland
@@ -562,7 +573,12 @@ export function finnishCapitalGainTax(input: FinnishCapitalGainInput): FinnishCa
     totalProceedsThisYear: input.totalProceedsThisYear,
   };
   for (const [k, v] of Object.entries(nums)) {
-    if (v !== undefined && (typeof v !== 'number' || !Number.isFinite(v) || v < 0)) throw new RangeError(`${k} must be a non-negative number, got ${String(v)}`);
+    // proceeds and acquisitionCost are required: skipping them when undefined
+    // let a missing cost silently become NaN and pick the 'deemed' method.
+    const required = k === 'proceeds' || k === 'acquisitionCost';
+    if ((required || v !== undefined) && (typeof v !== 'number' || !Number.isFinite(v) || v < 0)) {
+      throw new RangeError(`${k} must be a non-negative number, got ${String(v)}`);
+    }
   }
   const proceeds = input.proceeds;
   const expenses = input.saleExpenses ?? 0;

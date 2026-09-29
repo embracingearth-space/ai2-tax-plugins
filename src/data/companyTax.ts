@@ -136,6 +136,18 @@ export const COMPANY_TAX_RATES: Record<string, CompanyTaxInfo> = {
         note: 'Flat 20% on a company’s taxable profit, with no small-company rate. The government has proposed cutting it to 18% from 2027 (HE 151/2026); until Parliament passes that, 20% applies.',
         source: 'https://www.vero.fi/en/businesses-and-corporations/taxes-and-charges/limited-companies-and-cooperatives/income-tax/',
       },
+      // 24.5% before the cut. The government's bill of 13 Nov 2013 calls it
+      // "the present 24.5 per cent", which verifies it for 2013 — so the set is
+      // anchored there as "in force at least since", the rate ledger's own
+      // convention for a floor. Without it, a 2013 date fell back to 20%.
+      // Earlier years (26% before 2012) are not verified here and resolve to
+      // this set, the same oldest-set fallback every country gets.
+      {
+        effectiveFrom: '2013-01-01',
+        standardRate: 0.245,
+        note: '24.5% until the end of 2013; cut to 20% from tax year 2014.',
+        source: 'https://valtioneuvosto.fi/en/-/10623/government-proposes-reduction-of-the-corporate-income-tax-rate-to-20-per-cent',
+      },
     ],
   },
 };

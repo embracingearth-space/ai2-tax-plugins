@@ -231,6 +231,15 @@ describe('through the shared income-tax interface', () => {
     expect(() => calcIncomeTax('FI', 50000, '2026', { age: 40.5 })).toThrow(RangeError);
   });
 
+  it('finnishWageTax validates its own options when called directly', () => {
+    const y = resolveFinnishYear('2026')!;
+    expect(() => finnishWageTax(50000, y, { churchTaxRate: 1.8 })).toThrow(/churchTaxRate must be a fraction/);
+    expect(() => finnishWageTax(50000, y, { localTaxRate: 5.3 })).toThrow(/localTaxRate must be a fraction/);
+    expect(() => finnishWageTax(50000, y, { localTaxRate: NaN })).toThrow(RangeError);
+    expect(() => finnishWageTax(50000, y, { localTaxRate: -0.05 })).toThrow(RangeError);
+    expect(() => finnishWageTax(50000, y, { age: 40.5 })).toThrow(/age/);
+  });
+
   it('ignores options for a country that does not read them', () => {
     expect(calcIncomeTax('AU', 90000, '2025-26', { localTaxRate: 5.3 })!.totalTax).toBe(calcIncomeTax('AU', 90000, '2025-26')!.totalTax);
   });
@@ -295,6 +304,9 @@ describe('capital gains', () => {
     expect(r.lossesApplied).toBe(3000);
     expect(r.taxableGain).toBe(7000);
     expect(() => finnishCapitalGainTax({ proceeds: -1, acquisitionCost: 0 })).toThrow(RangeError);
+    // Required fields left out by a JS or MCP caller must throw, not return NaN.
+    expect(() => finnishCapitalGainTax({ proceeds: 5000 } as never)).toThrow(/acquisitionCost/);
+    expect(() => finnishCapitalGainTax({ acquisitionCost: 5000 } as never)).toThrow(/proceeds/);
     expect(() => finnishCapitalGainTax({ proceeds: 5000, acquisitionCost: 0, totalProceedsThisYear: 100 })).toThrow(RangeError);
     expect(finnishCapitalGainTax({ proceeds: 5000, acquisitionCost: 0, taxYear: '2019' })).toBeNull();
   });
@@ -306,5 +318,10 @@ describe('company tax', () => {
     expect(r.rate).toBe(0.2);
     expect(r.usedSmallRate).toBe(false);
     expect(r.note).toMatch(/proposed.*18%/);
+  });
+
+  it('was 24.5% in 2013, before the cut to 20%', () => {
+    expect(getCompanyTaxRate('FI', new Date('2013-12-31'))!.rate).toBe(0.245);
+    expect(getCompanyTaxRate('FI', new Date('2014-01-01'))!.rate).toBe(0.2);
   });
 });
