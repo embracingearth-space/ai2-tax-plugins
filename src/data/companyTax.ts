@@ -121,6 +121,23 @@ export const COMPANY_TAX_RATES: Record<string, CompanyTaxInfo> = {
       },
     ],
   },
+  FI: {
+    countryCode: 'FI',
+    authorityName: 'Verohallinto',
+    label: 'Corporate income tax (yhteisövero)',
+    rates: [
+      // TVL 124 § 2 mom: "Yhteisön tuloveroprosentti on 20." One flat rate, no
+      // small-company rate. The government has PROPOSED 18% from tax year 2027
+      // (HE 151/2026, given 3 Sep 2026) — that is a bill, not law, so no 2027 set
+      // is added until Parliament passes it; the note says so instead.
+      {
+        effectiveFrom: '2014-01-01',
+        standardRate: 0.20,
+        note: 'Flat 20% on a company’s taxable profit, with no small-company rate. The government has proposed cutting it to 18% from 2027 (HE 151/2026); until Parliament passes that, 20% applies.',
+        source: 'https://www.vero.fi/en/businesses-and-corporations/taxes-and-charges/limited-companies-and-cooperatives/income-tax/',
+      },
+    ],
+  },
 };
 
 /** Country codes with a company-tax rate set defined here. */
