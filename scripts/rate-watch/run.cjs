@@ -37,6 +37,39 @@ async function fetchExternalRates() {
   return { available: false, reason: 'live external auto-diff not yet wired — verify via the authority checklist below' };
 }
 
+// Deduction rates (AU WFH fixed rate, cents per km, instant asset write-off).
+// Findings come from analyzeDeductionRates() in src/rateWatch.ts; this only prints
+// them. Like everything here it never edits a rate.
+function renderDeductions(L, d) {
+  if (!d) return;
+  const tag = (x) => `**${x.countryCode}** ${x.label}`;
+  if (d.unverifiedCurrent.length) {
+    L.push('## ❓ Deduction rates with no verified figure for the current income year');
+    for (const u of d.unverifiedCurrent) L.push(`- ${tag(u)} — ${u.incomeYear}: ${u.reason} (row from ${u.effectiveFrom}). Edit \`${u.file}\` once confirmed.`);
+    L.push('');
+  }
+  if (d.staleCitations.length) {
+    L.push('## 🕸️ Stale deduction-rate citations');
+    for (const s of d.staleCitations) L.push(`- ${tag(s)} — last read ${s.readOn} (${s.ageDays} days ago). Re-read ${s.sourceUrl} and update \`readOn\` in \`${s.file}\`.`);
+    L.push('');
+  }
+  if (d.pastReviewBy && d.pastReviewBy.length) {
+    L.push('## ⏰ Past their review date (the freshness test fails the build until these are re-read)');
+    for (const r of d.pastReviewBy) L.push(`- ${tag(r)} — ${r.incomeYear}: review was due ${r.reviewBy} (${r.daysPast} days ago). Re-read ${r.sourceUrl || 'the source'}, then update the row and move \`reviewBy\` in \`${r.file}\`.`);
+    L.push('');
+  }
+  if (d.home && d.home.length) {
+    L.push('## ⏰ Home-decision figures and rules past their review date');
+    for (const h of d.home) L.push(`- **${h.country}** ${h.label} — review was due ${h.reviewBy}. Re-read ${h.sourceUrl} and move \`reviewBy\` in \`${h.file}\`.`);
+    L.push('');
+  }
+  if (d.upcoming.length) {
+    L.push('## 🗓️ Upcoming deduction-rate rows');
+    for (const r of d.upcoming) L.push(`- ${tag(r)} → ${r.incomeYear} from ${r.effectiveFrom}: ${r.value ?? 'no rate published yet'}`);
+    L.push('');
+  }
+}
+
 function pct(n) {
   return `${+(n * 100).toFixed(2)}%`;
 }
@@ -82,7 +115,7 @@ function renderSchedules(L, s) {
   }
 }
 
-function render(f, mode, external, sched) {
+function render(f, mode, external, sched, deductions) {
   const L = [];
   L.push(`# 🪙 Rate Watch — ${f.asOf} (${mode})`);
   L.push('');
@@ -116,6 +149,7 @@ function render(f, mode, external, sched) {
   }
 
   renderSchedules(L, sched);
+  renderDeductions(L, deductions);
 
   L.push('## 🌐 External auto cross-check');
   L.push(external.available ? '- live source diff attached above' : `- _${external.reason}_`);
@@ -142,23 +176,38 @@ async function main({ now = () => new Date(), fetchExternal = fetchExternalRates
   // Required INSIDE main() so a load failure (e.g. dist not built) is caught by the
   // failure handler below and opens a "runner failed" issue, instead of throwing at
   // module load and bypassing the report path entirely. embracingearth.space
-  const { analyzeLedger, hasActionableFindings, analyzeSchedules, hasActionableScheduleFindings } = require('../../dist/rateWatch');
+  const {
+    analyzeLedger,
+    hasActionableFindings,
+    analyzeSchedules,
+    hasActionableScheduleFindings,
+    analyzeDeductionRates,
+    hasActionableDeductionFindings,
+  } = require('../../dist/rateWatch');
+  const { homeFiguresPastReview } = require('../../dist/decisions/homeRatesFreshness');
   // ONE timestamp for the whole run. The awaited external check sits between the
-  // two analyses; if the local date rolled over during it, the ledger and schedule
-  // findings would be computed against different days while the report title only
-  // shows findings.asOf. Capture once, pass everywhere.
+  // analyses; if the local date rolled over during it, the ledger, schedule and
+  // deduction findings would be computed against different days while the report
+  // title only shows findings.asOf. Capture once, pass everywhere.
   const asOf = now();
   const mode = resolveMode(asOf);
   const findings = analyzeLedger(asOf);
+  const deductions = analyzeDeductionRates(asOf);
+  deductions.home = homeFiguresPastReview(asOf);
   const external = await fetchExternal();
   const schedules = analyzeSchedules(asOf);
-  const report = render(findings, mode, external, schedules);
+  const report = render(findings, mode, external, schedules, deductions);
 
   const outPath = path.join(process.cwd(), 'rate-watch-report.md');
   fs.writeFileSync(outPath, report);
 
   // quarterly always opens an issue (the review prompt); weekly only when actionable
-  const shouldOpen = mode === 'quarterly' || hasActionableFindings(findings) || hasActionableScheduleFindings(schedules);
+  const shouldOpen =
+    mode === 'quarterly' ||
+    hasActionableFindings(findings) ||
+    hasActionableScheduleFindings(schedules) ||
+    hasActionableDeductionFindings(deductions) ||
+    deductions.home.length > 0;
   const title = `Rate Watch — ${findings.asOf} (${mode})`;
 
   console.log(report);

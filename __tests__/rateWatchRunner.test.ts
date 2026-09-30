@@ -10,6 +10,8 @@ const fs = require('fs');
 
 const analyzeLedger = jest.fn();
 const analyzeSchedules = jest.fn();
+const analyzeDeductionRates = jest.fn();
+const homeFiguresPastReview = jest.fn();
 
 // The runner requires the BUILT module; mock it virtually so the suite does not
 // depend on `dist/` existing.
@@ -20,7 +22,14 @@ jest.mock(
     analyzeSchedules: (...a: unknown[]) => analyzeSchedules(...a),
     hasActionableFindings: () => false,
     hasActionableScheduleFindings: () => false,
+    analyzeDeductionRates: (...a: unknown[]) => analyzeDeductionRates(...a),
+    hasActionableDeductionFindings: () => false,
   }),
+  { virtual: true },
+);
+jest.mock(
+  '../dist/decisions/homeRatesFreshness',
+  () => ({ homeFiguresPastReview: (...a: unknown[]) => homeFiguresPastReview(...a) }),
   { virtual: true },
 );
 
@@ -56,6 +65,10 @@ describe('rate-watch runner — single asOf', () => {
     process.env.MODE = 'weekly';
     analyzeLedger.mockReset().mockImplementation((d: Date) => emptyFindings(d.toISOString().slice(0, 10)));
     analyzeSchedules.mockReset().mockImplementation((d: Date) => emptySchedules(d.toISOString().slice(0, 10)));
+    analyzeDeductionRates
+      .mockReset()
+      .mockImplementation(() => ({ unverifiedCurrent: [], staleCitations: [], pastReviewBy: [], upcoming: [] }));
+    homeFiguresPastReview.mockReset().mockImplementation(() => []);
     writeSpy = jest.spyOn(fs, 'writeFileSync').mockImplementation(() => undefined);
     logSpy = jest.spyOn(console, 'log').mockImplementation(() => undefined);
   });
@@ -86,6 +99,9 @@ describe('rate-watch runner — single asOf', () => {
     expect(ledgerDate).toBe(scheduleDate); // identical object, captured once
     expect(ledgerDate.getTime()).toBe(new Date(2026, 5, 30, 23, 59, 59).getTime());
     expect(scheduleDate.getTime()).not.toBe(clock.getTime()); // rollover did not leak in
+    // The deduction-rate and home-figure checks from main share the same timestamp.
+    expect(analyzeDeductionRates.mock.calls[0][0]).toBe(ledgerDate);
+    expect(homeFiguresPastReview.mock.calls[0][0]).toBe(ledgerDate);
     expect(fetchExternal).toHaveBeenCalledTimes(1);
   });
 

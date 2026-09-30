@@ -161,7 +161,7 @@ describe('analyzeSchedules — citations and activations', () => {
 describe('analyzeSchedules — the shipped data', () => {
   it('covers every income, retirement and student-loan scheme the engine exports', () => {
     const byDataset = (d: string) => shippedSchedules().filter((s) => s.dataset === d).map((s) => s.countryCode).sort();
-    expect(byDataset('incomeTax')).toEqual(['AU', 'GB', 'IN', 'NZ', 'US']);
+    expect(byDataset('incomeTax')).toEqual(['AU', 'FI', 'GB', 'IN', 'NZ', 'US']);
     expect(byDataset('retirement')).toEqual(['AU']);
     expect(byDataset('studentLoan')).toEqual(['AU']);
   });

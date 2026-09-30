@@ -29,7 +29,7 @@ export {
   toYmd,
 } from './rateLedger';
 
-// Personal Income Tax (take-home estimator — AU, NZ, GB, IN, US)
+// Personal Income Tax (take-home estimator — AU, NZ, GB, IN, US, FI)
 export type {
   IncomeTaxBand,
   IncomeLineItem,
@@ -39,6 +39,7 @@ export type {
   IncomeLevyContext,
   IncomeDeductionContext,
   IncomeYearContext,
+  IncomeTaxOptions,
   IncomeTaxYearOption,
   IncomeTaxScheme,
   MoneyRounding,
@@ -52,6 +53,33 @@ export {
   getIncomeTaxBands,
   localToday,
 } from './incomeTax';
+
+// Finland — wage tax to the tax-card level, municipalities, capital gains
+export type {
+  FinnishBand,
+  FinnishSource,
+  FinnishEarnedIncomeYear,
+  FinnishMunicipality,
+  FinnishWageOptions,
+  FinnishWageBreakdown,
+  FinnishCapitalIncomeYear,
+  FinnishCapitalGainInput,
+  FinnishCapitalGainResult,
+} from './finland';
+export {
+  FI_EARNED_INCOME_YEARS,
+  FI_CAPITAL_INCOME_YEARS,
+  finnishMunicipalities,
+  findFinnishMunicipality,
+  finnishWageTax,
+  finnishTaxCardRate,
+  finnishCapitalGainTax,
+  resolveFinnishYear,
+  resolveFinnishCapitalYear,
+  FI_MUNICIPALITY_ALIASES,
+  FI_ALAND_MUNICIPALITIES,
+} from './finland';
+export { FI_MUNICIPAL_RATES_SOURCE } from './finlandMunicipalRates';
 
 // Company / Corporate Income Tax (headline rates for the CompanyFlatRate forecast strategy)
 export type { CompanyTaxRateSet, CompanyTaxInfo, ResolvedCompanyRate } from './companyTax';

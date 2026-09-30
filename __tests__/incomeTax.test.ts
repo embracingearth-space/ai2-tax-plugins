@@ -194,8 +194,8 @@ describe('every scheme carries real provenance', () => {
     }
   });
 
-  it('covers the five countries the website and the MCP both need', () => {
-    expect(listIncomeTaxCountries().sort()).toEqual(['AU', 'GB', 'IN', 'NZ', 'US']);
+  it('covers the six countries the website and the MCP both need', () => {
+    expect(listIncomeTaxCountries().sort()).toEqual(['AU', 'FI', 'GB', 'IN', 'NZ', 'US']);
   });
 });
 

@@ -8,6 +8,180 @@ member has a value on every rules object that ships, `declineInValue` still
 accepts `daysHeld` / `daysInYear` exactly as before, and a host on 2.1.0 keeps
 working untouched.
 
+### Added — the home-space verdict, like with like (`homeSpaceComparison`, `recommendHomeSpace`)
+
+The app and the website each weighed a place of business against a desk themselves, and the app weighed four years of occupancy deductions against CGT on growth to 30 June 2027 only. For a sale after that date, a place of business looked better when a desk was. One function now does it for both.
+
+- `homeSpaceComparison(input)` counts years of use **by day**, per income year (days used ÷ days in the year), for one period or several dated periods each with its own floor-area share. It returns the deductions a place of business adds and the CGT it costs, split at 30 June 2027; the CGT on the later growth at today's rules (for scale); and, when the home's values are given, an **estimate** under the rules from 1 July 2027: the cost base indexed at an assumed 2.5% CPI a year from the September 2027 quarter, no discount, the marginal rate with the 30% minimum.
+- `recommendHomeSpace(comparison)` returns `placeOfBusiness | desk | even | dependsOnLater | notYet`, the tones for each option (`better | worse | neutral`), and the amounts. For a sale on or after 1 July 2027 it weighs deductions to 30 June 2027 against CGT on growth to then, and checks the later period: if the two disagree, the verdict is `dependsOnLater`. Use starting on or after 1 July 2027 is `notYet`. "About even" is within 5% of the larger side or under 100.
+- Every figure it multiplies by (the 50% discount, the 30% minimum, the CPI assumption) is in `AU_HOME_SPACE_FIGURES` with its source, read date and `reviewBy` date.
+- `homeBusinessSpaceTradeoff` is unchanged in shape and figures.
+
+### Added — a home that is a place of business AND let at the same time (`homeMixedUseComparison`)
+
+The owner asked whether 2Fin can weigh a home that is partly a place of business and partly let, together. Running the business tab and the letting tab separately each assumes the rest of the home stays fully exempt, so side by side they overstate the exemption on both.
+
+- `homeMixedUseComparison(input)` (AU only) takes the business share (one share or dated `usePeriods`, as `homeSpaceComparison`) and the let share (as `roomOrPartnerArrangement`'s lodger), and validates that together they never exceed 100% of the home on any overlapping day.
+- **One CGT figure**, on the combined non-exempt share, measured the ATO's way: from the day the home was FIRST used to produce income (business or letting, whichever is earlier) to the sale, split at 30 June 2027 exactly as `homeSpaceComparison` splits it (with the same optional valuations). `businessPart` / `letPart` attribute that one figure by each use's share of the non-exempt days, for display.
+- Occupancy deductions stay on the business share only; rent and the let share's costs stay on the let share only.
+- `placeOfBusiness`: the business verdict (`recommendHomeSpace`) on the EXTRA CGT a place of business adds on top of the letting alone — not the whole combined figure. `lettingAlone` measures the letting from its own first day on the home's growth over ITS days (the day-rate of `expectedGrowth` / the valuations from the first income use), not the whole growth squeezed into fewer days.
+- Validation matches the siblings: dated business periods may not overlap (or be empty), `business.end` may not be after the sale, and `exclusivePct + sharedPct ÷ sharedBy` may not exceed 100%. `maxCombinedSharePct` is the largest share on any one day.
+- **`sumOfSeparate`** is what running the two calculators apart would give, for comparison. When both uses start the SAME day, the combined figure equals the sum (the maths is linear in share). When they start on DIFFERENT days, it does not: each separate calculator measures from its own first use over its own days, so the one that starts later either gets it own full share of growth (overstating it, if measured on the whole home) or a diluted share when attributed from the combined figure (understating it against running it alone). A test pins both directions with real numbers.
+- Country: AU only. The research (`home-rules-research.md` §6) shows the same combinable structure in GB (an exclusive room by value vs a let part/lodger — see the module doc), US (both reach the sale only through depreciation, against one §121 exclusion), NZ (bright-line's main-home area test counts both together), CA (no effect while ancillary, with no CCA and no structural change) and IN (no exemption to lose) — left for a later PR.
+
+### Added — the home rules stay up to date (`reviewBy`, a freshness gate, estimates for unpublished years)
+
+- Every home figure and rule now carries a `reviewBy` date next to `sourceUrl` and `readOn`. This covers GB/US/NZ rate rows, the AU fixed-rate rows, `AU_HOME_SPACE_FIGURES` and every `AU_HOME_PROPERTY_RULES` row. `homeRateInventory(day)` lists them with the value and tax year in force.
+- `__tests__/homeRatesFreshness.test.ts` uses **today's date**. It fails the build once anything in force is past its `reviewBy`, so a stale figure blocks CI and the release instead of shipping silently.
+- Rate Watch now reports `pastReviewBy` rows, and the runner lists the AU figures and rules past review. Both count as actionable.
+- `workFromHomeFixedRateOrEstimate(year)` gives the last published AU fixed rate for an unpublished year, with `estimate: true` and the app's wording. `workFromHomeFixedRate` is unchanged and still never applies it.
+- The README has a new section, "Keeping the home rules up to date", with the yearly update steps.
+
+### Added — the home-space comparison for the UK and the US
+
+- `gbBusinessRoomComparison`: a room used ONLY for the business against a desk or shared space. The room's floor-area share of fixed costs is deductible (BIM47820). At sale, the gain on that part gets no Private Residence Relief. It is apportioned **by value** (CG64663), and the final 9 months do not cover it (s224(1) TCGA 1992). CGT is 18% or 24% after the £3,000 annual exempt amount. When exclusive use covered only part of the ownership, the time apportionment is labelled a judgement (s224(2) "just and reasonable"). The result feeds `recommendHomeSpace`.
+- `usHomeOfficeComparison`: the simplified method ($5 a sq ft, up to 300, no depreciation) against the regular method. The regular method covers the business share of indirect costs plus 39-year depreciation. At sale, depreciation allowed or allowable after 6 May 1997 is taxed at up to 25%. For someone who itemizes, mortgage interest and taxes do not favour either method. A separate structure's share of the gain is taxed at the long-term rate you give. Employees and areas without exclusive use get `eligible: false`.
+- New watched rate rows: GB CGT basic, higher and annual exempt; the US unrecaptured §1250 maximum and the 39-year recovery period. Topic 509 (reviewed 24 Sep 2026) confirms the US 2026 simplified rate.
+- `resolveHomeRate(rows, day)` handles a year with no verified figure. It uses the latest verified one with `estimate: true`, and returns null when nothing is recorded.
+- The US rule card's note on the 25% rate is now verified (Topic 409).
+
+### Fixed — the 1 July 2027 wording
+
+The apportioning method in s 112-185 is the **Minister's**, by legislative instrument, not the Commissioner's, and none has been made (only a Treasury exposure draft). The `cgtFrom1July2027` rule and the post-2027 note now say so, cite s 112-155(3)(a) (market value just before 1 July 2027 is the default), s 112-160 (the gain to then is deferred and keeps the discount) and the September 2027 quarter for indexation, and state that Subdivision 118-B is not amended. The "even growth by day" split is labelled an assumption: the law uses a market valuation, and the draft method compounds daily.
+
+### Added — individual tax return deduction lines (`individualDeductionLines`)
+
+- `individualDeductionLines(country)` returns the deduction lines of the individual return, in the same spirit as the rental form lines. Each line has a key, ref, the form's own label, which return it is on, a description, an expense type, typical categories and keywords, the AU-IT field it feeds (and sub-fields), and its ATO source with the page date and the read date.
+- **AU:** myTax/paper-return D1–D10 and supplementary D11–D15, read on the ATO's 2026 instructions on 28 Sep 2026 (UTC).
+  - D1 lists both methods: cents per km (capped at `AU_CENTS_PER_KM_MAX_BUSINESS_KM`, 5,000 km) and logbook.
+  - D5 lists the working-from-home fixed-rate and actual-cost methods, which feed `work_from_home`.
+  - `methodRate(method, incomeYear)` resolves the rate through `centsPerKmRate` / `workFromHomeFixedRate`, so no rate is copied into the lines.
+- **GB, US, CA, NZ, IN:** `null`. Their return lines (P87 / SA102, Schedule A, T777 / line 22900, IR3, ITR) have not been verified on the authorities' pages yet.
+
+### Added — the shared decision contract (scenarioFromYears, inputSpecs, handoff v1)
+
+- **`spaceScenario` / `movingScenario` / `lodgerScenario`** turn a "Weigh it up" screen's number of years into the decisions' dated inputs. The mapping is moved here from the app's adapter, so every surface dates a scenario the same way:
+  - business use from 1 July of the current income year, with the sale on 30 June after the last one;
+  - moving out and settling today, with both homes sold `years` later, clamped to the month end;
+  - letting from today, with your share of costs grossed up to the whole home.
+
+  `today` is an input, never the clock. Each function returns `{ input, problems }`, with the guards' problems included.
+- **`INPUT_SPECS`** holds, for each decision and field: label, hint, unit, bounds, whether it's required, the explaining `HomePropertyRuleKey`s, and the handoff key. The bounds are the guards' own (`MAX_HOURS_PER_YEAR`, `MAX_WEEKS_PER_YEAR`, 0–100 %, 1–50 whole years, amounts ≥ 0), and a test checks each against the guards.
+- **Handoff v1** (`encodeHandoff` / `decodeHandoff` / `handoffProblemsOf` / `handoffFields`) is the website → app payload:
+  - the token is `1.<base64url JSON>`, at most 1,200 characters;
+  - the keys are `{v, t, mr, s:{sh,oc,hr,y,g,co,os,rc}, m:{y,r,og,ng}, o:{wk,rm,cm,wh,hc,y,g,wl}}`, as fixed by home-decisions-design.md §5: `co` is the co-owned flag (0/1) and `os` the share when co-owned; `rm`, `cm` and `wh` are the room, shared and whole-home areas in m² (share = (rm + cm ÷ 2) ÷ wh; room + shared > whole is a problem; areas are capped at 100,000 m²); `hc` is the whole home's costs; `rc` (running cost per hour) and `wl` (weeks let) are added as new keys;
+  - it carries numbers only: no free text, no PII;
+  - bounds are strict, and amounts are also capped at `HANDOFF_MAX_AMOUNT` (1e9);
+  - decoding drops unknown keys and other sections, and drops each invalid field while reporting it;
+  - encoding refuses anything it would have to drop;
+  - decoding never throws; a fuzz test runs 3,000 random tokens and payloads through it.
+
+### Fixed — the home and property decisions refuse impossible input
+
+A website user entered 1,000,000 work hours and was shown "$700,000 running costs a year". The decision functions are the shared maths, so they now check their own input before any arithmetic.
+
+- `homeBusinessSpaceTradeoff`, `mainResidenceChoice` and `roomOrPartnerArrangement` refuse these inputs:
+  - hours outside 0–8,760 a year;
+  - percentages outside 0–100 (business, let and ownership shares, and the marginal rate);
+  - negative costs, rents, values or growth;
+  - years outside 1–50 or not whole;
+  - malformed, impossible or reversed dates;
+  - more than 52 weeks let.
+- **How a refusal looks.** The functions throw a `DecisionInputError`, a `RangeError` subclass that lists every problem as `problems: { field, message }[]`. A throw was chosen over an `{ invalid: true }` result for three reasons:
+  - Callers already read `supported: true` as "numbers follow".
+  - The app's adapter already catches a throw and falls back.
+  - A caller that doesn't catch fails loudly instead of printing a wrong figure.
+- **Checking without throwing.** `validateHomeBusinessSpace`, `validateMainResidenceChoice` and `validateRoomOrPartnerArrangement` return the same list without throwing, so a UI can show the problems first.
+- **The weeks limit is now 52.** `weeksLetPerYear` used to accept up to 53; it is now refused above 52, which is a deliberate narrowing to a full year of letting.
+- **Negative growth** is now refused. Before, it was clamped silently to zero.
+- **Hours as input.** `homeBusinessSpaceTradeoff` can take `workHoursPerYear` × `runningCostPerHour` instead of `runningCostsPerYear` (one or the other). The hours are checked against the 8,760 hours in a year.
+- **The marginal rate is stated in every result.** Each result now carries `assumptions: { marginalRatePct, note }`, saying that every tax figure is the amount × that one flat rate and is not a bracket calculation. The space tradeoff also states how running costs were arrived at.
+- **Worked examples unchanged.** The brief's case, Fatima, Thomas, Roya and Jeneen and John all give the same figures as before.
+
+### Added — home rules by country, as data (`homeRulesFor`)
+
+`homeRulesFor(country)` returns one of two shapes:
+- `{ supported, country, taxYear, questions, notes }` for a modelled country, where each question is `{ id, field, prompt, askWhen, options: [{ id, label, effects }] }`;
+- `{ supported: false, country }` for any other country.
+
+`askWhen` checks place facts: the kind, business share > 0, rental share > 0, and the taxpayer role. `effects` gives the deduction basis now (`running_only` | `occupancy_at_share` | `flat_rate` | `none`) and the effect at sale (`exemption_unaffected` | `reduced_by_share` | `reduced_by_value_share` | `not_applicable` | `depreciation_recaptured`). Each effect has a citation `{ url, readOn }`, and so does every numeric figure (a test enforces both). `homeQuestionsFor` / `shouldAsk` filter the questions for a place.
+
+Only claims verified on the authority's page (read 28 Sep 2026, UTC) drive a question or a number. Search-excerpt and unverified claims are `notes` with `forAccountant: true`.
+
+- **AU**: as the app behaves today. Business use is a `home_office` (running costs only, exemption unaffected) or a `place_of_business` (occupancy costs at the share, exemption reduced by the share). The rental arrangement is `domestic` / `commercial` for a home and `commercial` / `below_market` for other kinds. There is no role question.
+- **GB**:
+  - role: an employee gets no deduction from 2026-27 (£6/week up to 2025-26); the self-employed get flat rates of £10 / £18 / £26 a month;
+  - an exclusive business room: fixed costs at the share, and Private Residence Relief reduced by *value* share;
+  - Rent a Room £7,500 (£3,750 shared); a single lodger leaves PRR intact; lettings relief is capped at £40,000.
+- **US**:
+  - role: employees get no home office;
+  - regular and exclusive use: the simplified method at $5/sq ft up to 300 sq ft (nothing to recapture), or the regular method with depreciation recaptured;
+  - §121 $250,000 / $500,000 is not reduced for an in-home office;
+  - a lodger means depreciation is recaptured; renting under 15 days is ignored.
+- **CA**:
+  - role: employees need a T2200 and meet the conditions (salaried: running costs; commission adds tax and insurance);
+  - the self-employed with the principal place or exclusive use plus clients;
+  - the principal residence exemption stays intact for ancillary use with no CCA; CCA or a structural change reduces it.
+- **NZ**:
+  - role: an employee claims nothing; a company pays a fair reimbursement;
+  - the square-metre rate is $57.30/m² for the 2026 income year;
+  - the boarder standard cost is $245/week each, for 1 to 4 boarders;
+  - no CGT outside the bright-line.
+- **IN**:
+  - a let-out part is separate house property with a 30% standard deduction;
+  - salaried people get no home office, and there is no main-residence exemption (s54, 1961 Act, noted). Business use is an accountant note;
+  - only two mappings to the Income-tax Act, 2025 are confirmed: s115BAC → s202 and s44AD/ADA/AE → s58.
+- Rate Watch now also watches GB Rent a Room, the US simplified-method rate and NZ's square-metre rate and boarder standard cost (`src/decisions/homeRuleRates.ts`). As of 28 Sep 2026 it flags the US for 2026 and NZ for the 2027 income year as having no verified figure yet.
+
+### Added — home and property decisions (`src/decisions/homeProperty.ts`)
+
+Pure decision maths the app, the marketing site and the Tax MCP all call, so they show the same numbers. AU first. Any other country returns `{ supported: false, authority }` with the country's tax authority link and no numbers. Every rule is a row in `AU_HOME_PROPERTY_RULES` with its source URL, the page's own last-updated date, and the date it was read (27 September 2026). Every result lists the notes and rules it relied on.
+
+- `homeBusinessSpaceTradeoff` compares a desk or shared room with a place of business:
+  - running costs are claimable in both; occupancy costs only in a place of business, where the same floor-area share loses the main residence exemption;
+  - a co-owner who does not run the business keeps the full exemption;
+  - returns deductions per year and in total, their tax value, the CGT on the business share under the discount rules, the net result and the break-even growth;
+  - worked case: 35% share, $9,600 occupancy a year, 4 years, 32% → $4,300.80 of extra deduction value; CGT $2,800 / $5,600 / $14,000 at $50k / $100k / $250k growth; break-even $76,800.
+- The **1 July 2027 CGT changes are law, not announced**. The Treasury Laws Amendment (Tax Reform No. 1) Act 2026 (No. 49, https://www.legislation.gov.au/C2026A00049/latest) was assented 26 June 2026, and the ATO page (updated 29 June 2026) says "These measures are now law".
+  - For gains accruing after 1 July 2027 the Act generally replaces the 50% discount with cost-base indexation, for an Australian resident who held the asset at least 12 months (s 110-36(1A), Division 114). A 30% minimum tax may apply (Division 119). A qualifying new residential dwelling or affordable housing keeps at least 50% (s 115-102, s 115-125).
+  - Every CGT result carries `preJuly2027`: current-law figures for the gain to 30 June 2027, measured by even growth by day or from supplied valuations.
+  - Every CGT result also carries `postJuly2027`: `{ applies: false, note }` for a sale before 1 July 2027, and `{ applies: true, computable: false, note }` for a sale from that date. The 1 July 2027 apportioning method (s 112-185) is not yet published, and future CPI is unknown. Results with a sale after that date are flagged `complete: false`.
+- The 1 July 2027 date lives in one place: `AU_CGT_REGIME_2027_FROM` re-exports `AU_CGT_INDEXATION_FROM` from the AU income tax plugin (added in #52), and the last discount day is derived from it.
+- `mainResidenceChoice` works out which of two homes the exemption should cover while you own both. It applies:
+  - the 6-year rule (counted as in the ATO's Roya example);
+  - one main residence at a time;
+  - the 6-month moving-house rule (it reproduces the ATO's Jeneen and John example: 90 of 8,675 days);
+  - a note on the spouse rule.
+- `roomOrPartnerArrangement`:
+  - `domestic`: no income, no deductions, exemption unaffected.
+  - `lodger`: rent assessable, the let share of costs deductible, and the let share of the gain outside the exemption from first letting. It reproduces the ATO's Thomas example (35% share, $140,000 → $70,000 after the discount) and Fatima's days apportionment.
+
+### Changed — AU instant asset write-off: $20,000 from 1 July 2023, no end date
+
+- The ATO's *Instant asset write-off for eligible businesses* page (last updated 28 August 2026, read 27 September 2026), Table 1: "On or after 1 July 2023 | $20,000". The Treasury Laws Amendment (Tax Reform No. 2) Act 2026 (No. 71, 2026, assented 26 August 2026 — confirmed on the Federal Register of Legislation) made the threshold permanent from 1 July 2026. The $20,000 row now runs on from 1 July 2023 with no successor; the 2026-27 row (enacted $1,000, `proposed` $20,000) is removed. The row carries `sourceUrl` and `readOn` (new optional fields on `AuWriteOffRow`). `AU_DEPRECIATION_AUTHORITY_URLS.instantAssetWriteOff` added.
+- `auSmallBusinessPoolWriteOff` reads the verified $20,000 for 2026-27 onwards (a pool balance under $20,000 is deducted in full) and now answers only against a *verified* limit.
+
+### Added — AU per-unit deduction rates, effective-dated by income year
+
+- `workFromHomeFixedRate(incomeYearOrDate)` and `centsPerKmRate(incomeYearOrDate)` → `{ rate, verified, incomeYear, sourceUrl, readOn, note, lastPublished? }`, over `AU_WFH_FIXED_RATE_ROWS` and `AU_CENTS_PER_KM_ROWS`. `auIncomeYear`, `formatAuCents`, `AU_CENTS_PER_KM_MAX_BUSINESS_KM` (5,000), `AU_WFH_REVISED_METHOD_FROM`, `AU_DEDUCTION_RATE_AUTHORITY_URLS` exported.
+- Fixed rate — ATO *Fixed rate method* (last updated 8 June 2026): 52c 2020-21 and 2021-22; 67c 2022-23 and 2023-24; 70c 2024-25 and 2025-26. **2026-27: not published** — `rate: null, verified: false`, and the note names 70c for 2025-26 without applying it.
+- Cents per km — the Commissioner's determinations under s 28-25(4) ITAA 1997, read from the Federal Register of Legislation: 68c 2018-19 and 2019-20 (F2018L01023); 72c 2020-21 and 2021-22 (F2020L00676); 78c 2022-23 (F2022L00813); 85c 2023-24 (F2023L00767); 88c 2024-25 and 2025-26 (F2024L00697); **91c 2026-27** (F2026L00785 — 89c base plus a one-off 2c uplift, for that year only). 2027-28 is a `null` row: the ATO will index the 89c base, so 91c must not run on.
+- AU-IT `getFormSchema({ incomeYear })` builds the car-expense and working-from-home help text from those rows for the return's income year (default: today's income year, the same default `calcAuTax` uses), replacing the hard-coded "67c/hour" and "88c/km 2025-26". `TaxFilingPlugin.getFormSchema` accepts an optional `incomeYear` (additive). `auWorkFromHomeHelpText` / `auCarExpensesHelpText` exported.
+- AU-IT capital gains help text: the old text ("After applying 50% CGT discount if held >12 months") gave the discount no end date. The Treasury Laws Amendment (Tax Reform No. 1) Act 2026 (No. 49, [legislation.gov.au/C2026A00049](https://www.legislation.gov.au/C2026A00049/latest)) is law — the ATO page, last updated 29 June 2026, says "These measures are now law". The text is now built for the return's income year by `auCapitalGainsHelpText`:
+  - up to 2026-27: the 50% discount for assets owned at least 12 months, not counting the acquisition and CGT-event days;
+  - from 2027-28: the discount generally only to 30 June 2027. After that date the cost base *may* be indexed, for an Australian resident who held the asset at least 12 months (s 110-36(1A), s 114-10(1), s 114-25). A qualifying new residential dwelling or affordable housing keeps a discount of at least 50% (s 115-102, s 115-125). A 30% minimum tax *may* apply to the later gain; it excludes those gains and anyone who received listed support payments such as the age pension (s 119-5(2), s 119-15). The return does not calculate it.
+  `AU_CGT_INDEXATION_FROM` (`'2027-07-01'`) and `AU_CGT_AUTHORITY_URLS` are exported.
+- Rate Watch: `analyzeDeductionRates()` / `hasActionableDeductionFindings()` / `shippedDeductionSeries()` watch the fixed rate, cents per km and the instant asset write-off — a current income year with no verified row and a citation older than 365 days are actionable; upcoming rows are FYI. The runner prints them and opens the issue when actionable.
+
+### Added — landlord small-item rules (`landlordSmallItemDeduction`)
+
+- `DepreciationRules.landlordSmallItemDeduction?(onDate)` — optional, returning `LandlordSmallItemInfo` (`InstantAssetWriteOffInfo` plus an optional `pool`). The per-item rule for a landlord who is **not** carrying on a business, which differs from the business `instantAssetWriteOff` in every country surveyed. Absent (the generic rules, IE) means "not published". A host should act only on `verified: true` with a non-null `limit`, and default nothing for any other answer. Every answer carries a `note` that the plugin provides for the host to display. Whether the note is shown depends on the host; the core app's current release does not call this method yet.
+- **AU** — $300 or less deducted in full (s 40-80(2) ITAA 1997), `boundary: 'up_to'`, with the three conditions (non-business income, not part of a set over $300, not identical items over $300 together) in the note; `pool`: low-value pool, less than $1,000 (`'under'`), 18.75% then 37.5%, once-allocated rule in the note. From 1 July 2001; unverified before. `AU_LOW_VALUE_POOL_RATES` exported. ATO pages 403 to non-browser clients — confirmed from the ATO's own low-value-pools content and the search index of the two rental pages; re-read before the next release.
+- **NZ** — the s EE 38 low value asset threshold applies to rental income too (IR264 *Rental income*, March 2026): $1,000 / $5,000 / $500 by date, all `'up_to'`. Figures derived from `NZ_LOW_VALUE_ASSET_ROWS`, so they cannot drift.
+- **US** — the de minimis safe harbor election for a rental activity (Pub 527; tangible property regulations page): $2,500 per item or invoice without an AFS, `'up_to'`, from 2016; the note carries the annual-election condition. Unverified before 2016.
+- **GB, CA, IN, SG, ZA** — `verified: false, limit: null` with the rule stated in words and no figure (ZA: for assets acquired on or after 11 November 2009; see the ZA bullet below). GB: no small-item deduction; replacement of domestic items relief only (PIM3010, PIM3210). CA: furniture is Class 8; Class 12 is a category, not a cost test. IN: house-property income takes a flat standard deduction, nothing item by item (authority page 403 — unverified). SG: passive rental income claims no capital allowances. ZA: IN47 (Issue 5) — the small-item write-off does not apply to assets a lessor acquires for letting. `limit: 0` was rejected because the core app's `deductNowDecision` would read it as "over the $0 limit — depreciate", which is wrong in each case.
+- **ZA, by acquisition date** — IN47 (Issue 5) footnote 33 dates the lessor exclusion: it "applies to any asset acquired on or after" 11 November 2009, and the earlier note "did not prevent lessors from claiming the small items write-off of R7 000 for years of assessment commencing on or after 1 January 2009". So an asset acquired from 1 March 2009 to 10 November 2009 takes the R7,000 figure from `zaSmallItemThreshold` (`verified: true`, `boundary: 'under'`, with the year-of-assessment condition in the note), and an asset acquired before 1 March 2009 stays unverified with no figure. `zaLandlordSmallItemDeduction` and `ZA_LESSOR_SMALL_ITEM_EXCLUDED_FROM` are exported.
+
 ### Added — regime machinery (`src/depreciation.ts`)
 
 - `InstantAssetWriteOffInfo.proposed` — an announced-but-unenacted threshold, kept strictly OUT of `limit`, which only ever carries the figure a taxpayer can rely on today. A budget announcement is not a rate: the enabling bill can lapse, change, or commence from another date. AU 2026-27 is the first row to use it: the enacted `limit` is **$1,000** (the standing simplified-depreciation threshold, which is what applies once the 2023-24 to 2025-26 temporary $20,000 ended on 30 June 2026), with **$20,000** carried in `proposed`. Treasury Laws Amendment (Tax Reform No. 2) Bill 2026 passed both Houses on 19 August 2026, but passage is not Royal Assent — as at 26 August 2026 no matching Act appeared on the Federal Register of Legislation, while the sibling Tax Reform No. 1 Act 2026 (No. 49) did. When assent is confirmed, move the figure into `limit` and drop `proposed`.

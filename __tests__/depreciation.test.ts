@@ -7,21 +7,18 @@
  * plugin disagrees with the ATO — do not "fix" the test.
  *
  * The instant-asset-write-off block is an honesty test, not an arithmetic one.
- * $20,000 is law for 2023-24 to 2025-26. From 1 July 2026 the enacted figure is
- * the standing $1,000: Treasury Laws Amendment (Tax Reform No. 2) Bill 2026
- * passed both Houses on 19 August 2026 but had NOT received Royal Assent as at
- * 26 August 2026, and no matching Act appears on the Federal Register of
- * Legislation while the sibling Tax Reform No. 1 Act 2026 (No. 49) does.
- * Passage is not assent, so a 2026-27 date must come back $1,000, verified,
- * with $20,000 beside it in `proposed`.
+ * $20,000 is law from 1 July 2023 with no end date. The ATO's "Instant asset
+ * write-off for eligible businesses" page (last updated 28 August 2026, read
+ * 27 September 2026) states "On or after 1 July 2023 | $20,000" in Table 1,
+ * because the Treasury Laws Amendment (Tax Reform No. 2) Act 2026 (No. 71,
+ * 2026, assented 26 August 2026) made the threshold permanent from 1 July
+ * 2026. So a 2026-27 date — or any later one — comes back $20,000, verified,
+ * with nothing in `proposed`.
  *
- * This block has been written both ways round and each way was wrong on its
- * own. A bare $1,000 with no `proposed` hides nineteen thousand dollars of
- * pending deduction; a verified $20,000 claims against an Act that does not
- * exist, and a shortfall is the direction the ATO penalises. The PAIR — the
- * enacted figure in `limit`, the pending one in `proposed` — is the only shape
- * that is true today. When assent is confirmed, move the figure across and
- * delete `proposed`; do not "fix" these tests before that.
+ * Until assent this block pinned the other shape: the standing $1,000 in
+ * `limit` and the pending $20,000 in `proposed`, because passage is not
+ * assent. That was right while it was true. If a future change is announced
+ * but not yet law, that is the shape to return to — in a NEW dated row.
  */
 
 import {
@@ -512,19 +509,39 @@ describe('AU depreciation — the decline never exceeds the opening value', () =
     expect(unknown.verified).toBe(false);
   });
 
-  it('answers the pool question against the enacted 2026-27 $1,000', () => {
-    // A pool balance under the standing threshold is written off in full.
-    const under = auSmallBusinessPoolWriteOff(900, '2026-09-01');
+  it('answers the pool question against the verified 2026-27 $20,000', () => {
+    // The pool rule reads the write-off limit for the date. With $20,000 now
+    // law from 1 July 2026, a balance under it is written off in full.
+    const under = auSmallBusinessPoolWriteOff(4_500, '2026-09-01');
     expect(under.deductWholeBalance).toBe(true);
-    expect(under.amount).toBe(900);
-    expect(under.limit).toBe(1_000);
+    expect(under.amount).toBe(4_500);
+    expect(under.limit).toBe(20_000);
+    expect(under.verified).toBe(true);
 
-    // A balance above it is not — and this is exactly the balance that WOULD be
-    // written off in full if the pending $20,000 were treated as law, so it is
-    // the case that fails loudly if someone moves the figure before assent.
-    const over = auSmallBusinessPoolWriteOff(4_500, '2026-09-01');
+    // A balance above it is not.
+    const over = auSmallBusinessPoolWriteOff(25_000, '2026-09-01');
     expect(over.deductWholeBalance).toBe(false);
     expect(over.amount).toBe(0);
+  });
+
+  it('the pool boundary is "less than" $20,000 on both sides of 1 July 2026', () => {
+    for (const date of ['2026-06-30', '2026-07-01']) {
+      expect(auSmallBusinessPoolWriteOff(20_000, date).deductWholeBalance).toBe(false);
+      expect(auSmallBusinessPoolWriteOff(19_999.99, date).deductWholeBalance).toBe(true);
+    }
+  });
+
+  it('never answers against an unverified row, even one that carries a number', () => {
+    // Defence in depth: the shipped rows never pair a number with
+    // verified: false, but the pool rule must not trust that.
+    const r = resolveWriteOffRow(
+      [{ effectiveFrom: '2000-07-01', limit: 5000, verified: false, note: 'A number nobody confirmed.' }],
+      '2010-01-01',
+    );
+    expect(r.limit).toBe(5000);
+    expect(r.verified).toBe(false);
+    // The shipped pool rule on a date with no verified limit answers null.
+    expect(auSmallBusinessPoolWriteOff(900, '1995-01-01').deductWholeBalance).toBeNull();
   });
 });
 
@@ -620,58 +637,54 @@ describe('write-off boundary — which side of the limit qualifies is country la
   });
 });
 
-describe('AU instant asset write-off — 2026-27 is the enacted $1,000, $20,000 pending', () => {
-  // Treasury Laws Amendment (Tax Reform No. 2) Bill 2026 passed both Houses on
-  // 19 August 2026, but passage is not Royal Assent. As at 26 August 2026 no
-  // matching Act appeared on the Federal Register of Legislation, while the
-  // sibling Tax Reform No. 1 Act 2026 (No. 49) did — a control that makes the
-  // absence mean something. Until assent, $20,000 is a pending figure.
-  it('is the standing $1,000 from 1 July 2026, verified', () => {
-    const r = au.instantAssetWriteOff(new Date('2026-07-01'));
-    expect(r.limit).toBe(1_000);
-    expect(r.verified).toBe(true);
-  });
-
-  it('carries the pending $20,000 in `proposed`, never in `limit`', () => {
-    // Publishing the pending figure is the point. A host that shows nothing
-    // lets a small business assume last year's $20,000 simply rolled over.
-    const r = au.instantAssetWriteOff(new Date('2026-07-01'));
-    expect(r.proposed?.limit).toBe(20_000);
-    expect(r.limit).not.toBe(20_000);
-    expect(r.note).toMatch(/not yet law|Royal Assent/i);
-  });
-
-  it('excludes an asset at exactly $1,000 — the threshold is "less than"', () => {
-    // The boundary is the whole difference between a deduction and a pool
-    // entry for an asset priced right on it. Asserting the FLAG alone would
-    // pass even if the production comparison were `<=`, so the equality case
-    // is exercised through the arithmetic that actually consumes it.
-    expect(au.instantAssetWriteOff(new Date('2026-07-01')).boundary).toBe('under');
-
-    const exactly = auSmallBusinessPoolWriteOff(1_000, '2026-09-01');
-    expect(exactly.deductWholeBalance).toBe(false);
-    expect(exactly.amount).toBe(0);
-
-    // And a cent under it does qualify — the pair is what pins the boundary.
-    const justUnder = auSmallBusinessPoolWriteOff(999.99, '2026-09-01');
-    expect(justUnder.deductWholeBalance).toBe(true);
-  });
-
-  it('does not silently expire into an older row in later years', () => {
-    // Whichever figure this row carries, it must run forward: a 2035 date
-    // falling through to a row written for an earlier window is the failure
-    // this ledger is shaped to prevent.
-    for (const date of ['2027-03-01', '2029-01-01', '2035-06-30']) {
-      const r = au.instantAssetWriteOff(new Date(date));
-      expect({ date, limit: r.limit }).toEqual({ date, limit: 1_000 });
+describe('AU instant asset write-off — $20,000 from 1 July 2023, with no end date', () => {
+  // ATO, "Instant asset write-off for eligible businesses", Table 1 (last
+  // updated 28 August 2026, read 27 September 2026): "On or after 1 July 2023
+  // | $20,000". Treasury Laws Amendment (Tax Reform No. 2) Act 2026 (No. 71).
+  it('is $20,000, verified, on both sides of 1 July 2026', () => {
+    for (const [date, d] of [['2026-06-30', new Date(2026, 5, 30)], ['2026-07-01', new Date(2026, 6, 1)]] as const) {
+      const r = au.instantAssetWriteOff(d);
+      expect({ date, limit: r.limit, verified: r.verified }).toEqual({ date, limit: 20_000, verified: true });
     }
   });
 
-  it('leaves the 2025-26 year untouched at $20,000', () => {
-    // The row that IS law for its own year must not move.
-    const r = au.instantAssetWriteOff(new Date('2026-06-30'));
-    expect(r.limit).toBe(20000);
+  it('carries nothing in `proposed` — the figure is law, not pending', () => {
+    const r = au.instantAssetWriteOff(new Date('2026-07-01'));
     expect(r.proposed).toBeUndefined();
+    expect(r.note).not.toMatch(/not yet law|Royal Assent|\$1,000/i);
+    expect(r.note).toMatch(/permanent/i);
+  });
+
+  it('starts on 1 July 2023: 30 June 2023 is still the previous regime', () => {
+    // Local-part Dates: new Date('2023-07-01') parses as UTC midnight, which is
+    // still 30 June on the calendar of any zone west of UTC.
+    expect(au.instantAssetWriteOff(new Date(2023, 5, 30)).verified).toBe(false);
+    expect(au.instantAssetWriteOff(new Date(2023, 6, 1)).limit).toBe(20_000);
+  });
+
+  it('excludes an asset at exactly $20,000 — the threshold is "less than"', () => {
+    // Asserting the FLAG alone would pass even if the production comparison
+    // were `<=`, so the equality case is exercised through the arithmetic that
+    // actually consumes it.
+    expect(au.instantAssetWriteOff(new Date('2026-07-01')).boundary).toBe('under');
+    expect(auSmallBusinessPoolWriteOff(20_000, '2026-09-01').deductWholeBalance).toBe(false);
+    expect(auSmallBusinessPoolWriteOff(19_999.99, '2026-09-01').deductWholeBalance).toBe(true);
+  });
+
+  it('runs forward without expiring into an older row', () => {
+    for (const date of ['2027-03-01', '2029-01-01', '2035-06-30']) {
+      const r = au.instantAssetWriteOff(new Date(date));
+      expect({ date, limit: r.limit, verified: r.verified }).toEqual({ date, limit: 20_000, verified: true });
+    }
+  });
+
+  it('there is no separate 2026-27 row: the $20,000 row is the newest and cites its page', () => {
+    const newest = sortWriteOffRowsNewestFirst(AU_INSTANT_ASSET_WRITE_OFF_ROWS)[0];
+    expect(newest.effectiveFrom).toBe('2023-07-01');
+    expect(newest.limit).toBe(20_000);
+    expect(newest.sourceUrl).toMatch(/simpler-depreciation-for-small-business\/instant-asset-write-off$/);
+    expect(newest.readOn).toBe('2026-09-27');
+    expect(AU_INSTANT_ASSET_WRITE_OFF_ROWS.some((r) => r.effectiveFrom === '2026-07-01')).toBe(false);
   });
 
   it('the temporary full expensing window carries no threshold', () => {
