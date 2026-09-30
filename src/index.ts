@@ -153,6 +153,7 @@ export type {
   DeclineInValueOutcome,
   EffectiveLifeCategory,
   InstantAssetWriteOffInfo,
+  LandlordSmallItemInfo,
   BalancingAdjustmentInput,
   BalancingAdjustmentOutcome,
 } from './depreciation';
@@ -167,12 +168,182 @@ export {
   AU_DEPRECIATION_AUTHORITY_URLS,
   auInstantAssetWriteOff,
   auSmallBusinessPoolWriteOff,
+  auLandlordSmallItemDeduction,
+  AU_LANDLORD_SMALL_ITEM_ROWS,
+  AU_LOW_VALUE_POOL_RATES,
   resolveWriteOffRow,
   sortWriteOffRowsNewestFirst,
   AU_DAY_FRACTION_DENOMINATOR,
 } from './countries/australiaDepreciation';
 
-export type { AuWriteOffRow } from './countries/australiaDepreciation';
+export type { AuWriteOffRow, AuLandlordSmallItemRow } from './countries/australiaDepreciation';
+
+// Home and property decisions — pure decision maths shared by the app, the website and the Tax MCP (AU first).
+export {
+  homeBusinessSpaceTradeoff,
+  mainResidenceChoice,
+  roomOrPartnerArrangement,
+  daysBeyondSixYears,
+  AU_CGT_REGIME_2027_FROM,
+  validateHomeBusinessSpace,
+  validateMainResidenceChoice,
+  validateRoomOrPartnerArrangement,
+  DecisionInputError,
+  MAX_HOURS_PER_YEAR,
+  MAX_WEEKS_PER_YEAR,
+} from './decisions/homeProperty';
+export type {
+  UnsupportedCountry,
+  MarginalRateAssumption,
+  DecisionInputProblem,
+  PreJuly2027Cgt,
+  PostJuly2027Cgt,
+  HomeBusinessSpaceInput,
+  HomeBusinessSpaceResult,
+  SpaceOption,
+  HomeTimeline,
+  MainResidenceChoiceInput,
+  MainResidenceChoiceResult,
+  MainResidenceOption,
+  HomeOutcome,
+  DomesticArrangementInput,
+  LodgerArrangementInput,
+  DomesticArrangementResult,
+  LodgerArrangementResult,
+} from './decisions/homeProperty';
+export { AU_HOME_PROPERTY_RULES, AU_HOME_PROPERTY_URLS } from './decisions/homePropertyRules';
+
+// Desk or shared room vs a place of business, like with like (day-accurate years, split at 30 June 2027), and the verdict.
+export {
+  homeSpaceComparison,
+  validateHomeSpaceComparison,
+  recommendHomeSpace,
+  isAboutEven as isHomeSpaceAboutEven,
+  HOME_SPACE_EVEN_SHARE,
+  HOME_SPACE_EVEN_FLOOR,
+} from './decisions/homeSpaceComparison';
+export type {
+  HomeSpaceComparisonInput,
+  HomeSpaceComparison,
+  HomeSpaceUsePeriod,
+  UseYearsByIncomeYear,
+  HomeSpaceRecommendation,
+  HomeSpaceVerdict,
+  HomeSpaceTone,
+} from './decisions/homeSpaceComparison';
+
+// A home that is a place of business AND let at the same time: one CGT figure on the combined non-exempt share.
+export { homeMixedUseComparison, validateHomeMixedUse } from './decisions/homeMixedUse';
+export type { HomeMixedUseInput, HomeMixedUseResult, MixedCgt } from './decisions/homeMixedUse';
+export { AU_HOME_SPACE_FIGURES } from './decisions/homeSpaceRates';
+// Keeping the home rules up to date: every figure with its source, read date and review date.
+export { homeRateInventory, homeRatesPastReview, homeFiguresPastReview } from './decisions/homeRatesFreshness';
+export type { HomeRateInventoryItem } from './decisions/homeRatesFreshness';
+// The same comparison under the UK and US rules (verified figures only).
+export { gbBusinessRoomComparison, validateGbBusinessRoom, usHomeOfficeComparison, validateUsHomeOffice } from './decisions/homeSpaceCountries';
+export type {
+  GbBusinessRoomInput,
+  GbBusinessRoomResult,
+  UsHomeOfficeInput,
+  UsHomeOfficeResult,
+  UsMethodOutcome,
+  UsedRate,
+  CountryNote,
+} from './decisions/homeSpaceCountries';
+export type { SourcedFigure } from './decisions/homeSpaceRates';
+
+// Home rules by country, as data — which questions change a filer's figures, and what each answer does.
+export { homeRulesFor, homeQuestionsFor, shouldAsk, allFigures } from './decisions/homeRules';
+
+// The deduction lines of the individual tax return (AU: myTax D1–D15), for tagging categories with their return line.
+export {
+  individualDeductionLines,
+  individualDeductionLine,
+  methodRate,
+  INDIVIDUAL_DEDUCTION_LINES_CHECKED,
+} from './data/individualDeductionLines';
+export type {
+  IndividualDeductionForm,
+  IndividualDeductionLine,
+  DeductionMethod,
+  DeductionRateLookup,
+  DeductionLineSource,
+} from './data/individualDeductionLines';
+
+// The shared decision contract: years → dated inputs, form specs, and the website → app handoff codec.
+export { spaceScenario, movingScenario, lodgerScenario, addYears, auIncomeYearStartOf, dayOf } from './decisions/scenarioFromYears';
+export type {
+  Scenario,
+  SpaceScenarioInput,
+  MovingScenarioInput,
+  MovingHome,
+  LodgerScenarioInput,
+} from './decisions/scenarioFromYears';
+export { INPUT_SPECS, withinSpec, MAX_AREA_M2 } from './decisions/inputSpecs';
+export type { DecisionKind, InputSpec, InputUnit } from './decisions/inputSpecs';
+export {
+  encodeHandoff,
+  decodeHandoff,
+  problemsOf as handoffProblemsOf,
+  handoffFields,
+  HANDOFF_VERSION,
+  HANDOFF_MAX_LENGTH,
+  HANDOFF_MAX_AMOUNT,
+} from './decisions/handoff';
+export type { HandoffV1, HandoffSpace, HandoffMoving, HandoffSomeone, DecodeResult } from './decisions/handoff';
+export type {
+  HomeRules,
+  HomeRulesUnsupported,
+  Question as HomeRuleQuestion,
+  QuestionOption as HomeRuleOption,
+  AskWhen as HomeRuleAskWhen,
+  Effects as HomeRuleEffects,
+  Figure as HomeRuleFigure,
+  Citation as HomeRuleCitation,
+  HomeRuleNote,
+  DeductionBasis,
+  SaleEffect,
+  TaxpayerRole,
+  PlaceFactsForQuestions,
+} from './decisions/homeRules';
+export {
+  GB_RENT_A_ROOM_ROWS,
+  US_SIMPLIFIED_METHOD_ROWS,
+  NZ_SQUARE_METRE_RATE_ROWS,
+  NZ_BOARDER_STANDARD_COST_ROWS,
+  GB_CGT_BASIC_RATE_ROWS,
+  GB_CGT_HIGHER_RATE_ROWS,
+  GB_CGT_ANNUAL_EXEMPT_ROWS,
+  US_UNRECAPTURED_1250_MAX_RATE_ROWS,
+  US_HOME_OFFICE_RECOVERY_YEARS_ROWS,
+  HOME_RULES_READ_ON,
+  resolveHomeRate,
+} from './decisions/homeRuleRates';
+export type { HomeRateRow, ResolvedHomeRate } from './decisions/homeRuleRates';
+export type { HomePropertyRule, HomePropertyRuleKey, DecisionNote } from './decisions/homePropertyRules';
+
+// Australia — per-unit deduction rates (WFH fixed rate, cents per km), effective-dated by income year.
+export {
+  workFromHomeFixedRate,
+  workFromHomeFixedRateOrEstimate,
+  centsPerKmRate,
+  auIncomeYear,
+  formatAuCents,
+  AU_WFH_FIXED_RATE_ROWS,
+  AU_WFH_REVISED_METHOD_FROM,
+  AU_CENTS_PER_KM_ROWS,
+  AU_CENTS_PER_KM_MAX_BUSINESS_KM,
+  AU_DEDUCTION_RATE_AUTHORITY_URLS,
+} from './countries/australiaDeductions';
+
+export type {
+  AuDeductionRateRow,
+  AuDeductionRate,
+  AuFixedRateOrEstimate,
+  AuIncomeYear,
+  AuIncomeYearInput,
+  AuRateUnit,
+} from './countries/australiaDeductions';
 
 // New Zealand — Inland Revenue's rate-per-asset regime (IR265 rates, whole-month part years).
 export {
@@ -187,6 +358,8 @@ export {
   nzRateFor,
   nzWholeMonthsUsed,
   nzLowValueThreshold,
+  nzLandlordSmallItemDeduction,
+  NZ_LANDLORD_SMALL_ITEM_ROWS,
   nzInvestmentBoost,
   nzInvestmentBoostSplit,
 } from './countries/newZealandDepreciation';
@@ -203,6 +376,8 @@ export type {
 export {
   UK_DEPRECIATION_RULES,
   UK_AIA_ROWS,
+  UK_LANDLORD_SMALL_ITEM_ROWS,
+  ukLandlordSmallItemDeduction,
   UK_CAR_BAND_ROWS,
   UK_CASH_BASIS_RESTRICTION,
   UK_DEPRECIATION_AUTHORITY_URLS,
@@ -268,9 +443,11 @@ export {
   usBonusPercent,
   usAutoCap,
   usDeMinimis,
+  usLandlordSmallItemDeduction,
+  US_LANDLORD_SMALL_ITEM_ROWS,
 } from './countries/unitedStatesDepreciation';
 
-export type { UsPropertyClassRow } from './countries/unitedStatesDepreciation';
+export type { UsPropertyClassRow, UsLandlordSmallItemRow } from './countries/unitedStatesDepreciation';
 
 // India — the CBDT's block-of-assets regime (Income-tax Act 2025 s.33, Income-tax Rules 2026 Appendix I).
 export {
@@ -335,6 +512,8 @@ export {
   ZA_SMALL_ITEM_LIMIT_FROM,
   zaWriteOffPeriod,
   zaSmallItemThreshold,
+  zaLandlordSmallItemDeduction,
+  ZA_LESSOR_SMALL_ITEM_EXCLUDED_FROM,
 } from './countries/southAfricaDepreciation';
 
 export type { ZaSmallItemRow } from './countries/southAfricaDepreciation';
@@ -395,6 +574,19 @@ export {
   calcIncomeTax,
   getIncomeTaxBands,
   localToday,
+  // Finland (wage tax to the tax card, municipalities, capital gains)
+  FI_EARNED_INCOME_YEARS,
+  FI_CAPITAL_INCOME_YEARS,
+  FI_MUNICIPAL_RATES_SOURCE,
+  finnishMunicipalities,
+  findFinnishMunicipality,
+  finnishWageTax,
+  finnishTaxCardRate,
+  finnishCapitalGainTax,
+  resolveFinnishYear,
+  resolveFinnishCapitalYear,
+  FI_MUNICIPALITY_ALIASES,
+  FI_ALAND_MUNICIPALITIES,
   COUNTRY_TAX_RATES,
   getTaxRateInfo,
   getStandardTaxRate,
@@ -434,6 +626,16 @@ export type {
   IncomeLevyContext,
   IncomeDeductionContext,
   IncomeYearContext,
+  IncomeTaxOptions,
+  FinnishBand,
+  FinnishSource,
+  FinnishEarnedIncomeYear,
+  FinnishMunicipality,
+  FinnishWageOptions,
+  FinnishWageBreakdown,
+  FinnishCapitalIncomeYear,
+  FinnishCapitalGainInput,
+  FinnishCapitalGainResult,
   IncomeTaxYearOption,
   IncomeTaxScheme,
   MoneyRounding,
@@ -487,4 +689,12 @@ export { default as australiaIncomeTaxPlugin } from './countries/australiaIncome
 // Ground truth for the AU-IT legislated first-bracket-rate cuts — exported so
 // tests assert against real logic instead of re-deriving it inline.
 export { calcAuTax, currentFyStartYear, firstBracketRate } from './countries/australiaIncomeTax';
+// Year-specific help text, built from the deduction-rate rows above.
+export {
+  auWorkFromHomeHelpText,
+  auCarExpensesHelpText,
+  auCapitalGainsHelpText,
+  AU_CGT_INDEXATION_FROM,
+  AU_CGT_AUTHORITY_URLS,
+} from './countries/australiaIncomeTax';
 export { default as canadaIncomeTaxPlugin } from './countries/canadaIncomeTax';

@@ -148,7 +148,9 @@ Private use is not applied to the decline at all: it is computed on the full bas
 
 Australia's effective lives are read from Table B of the Income Tax Assessment (Effective Life of Depreciating Assets) Determination 2025 (F2025L01097), which commenced on 16 September 2025 and replaced the withdrawn TR 2022/1 line of rulings; fifteen common categories ship, each carrying the exact Table B wording it came from. The list is short on purpose — an asset that could not be read straight out of the determination is left out for you to look up or self-assess, because a wrong effective life is a wrong deduction every year for the life of the asset. Everywhere else `effectiveLife()` returns null and `effectiveLifeCategories()` returns an empty list rather than a guess.
 
-`instantAssetWriteOff(date)` is effective-dated and stops at 30 June 2026 deliberately. The ATO states $20,000 per asset for the 2023-24, 2024-25 and 2025-26 income years and states nothing at all for 2026-27, so a 2026-27 date comes back as `{ limit: null, verified: false }` with a note asking you to confirm the current limit. $20,000 is not carried forward and the $1,000 statutory reversion is not assumed, because an unverified statutory threshold that looks confident is worse than a blank — nobody checks a number that looks sure of itself. Show the note, not a figure. The related low-pool-balance rule, which deducts the whole pool where the balance before deductions sits under the write-off limit, is exposed as `auSmallBusinessPoolWriteOff()` instead of being applied quietly inside `declineInValue`, and it answers `null` rather than `false` for a date whose limit is unverified.
+`instantAssetWriteOff(date)` is effective-dated. The ATO's *Instant asset write-off for eligible businesses* page (last updated 28 August 2026) states $20,000 per asset "on or after 1 July 2023" with no end date — the Treasury Laws Amendment (Tax Reform No. 2) Act 2026 made it permanent from 1 July 2026 — so any date from 1 July 2023 comes back `{ limit: 20000, verified: true, boundary: 'under' }`. A window the ATO states nothing for is a row of its own with `{ limit: null, verified: false }` and a note, never a number carried forward, because an unverified threshold that looks confident is worse than a blank. Show the note, not a figure. The related low-pool-balance rule, which deducts the whole pool where the balance before deductions is less than the write-off limit, is exposed as `auSmallBusinessPoolWriteOff()` instead of being applied quietly inside `declineInValue`; it answers only against a verified limit, and returns `null` rather than `false` for a date whose limit is unverified.
+
+The working from home fixed rate and the cents per kilometre rate are effective-dated the same way, by income year: `workFromHomeFixedRate(incomeYearOrDate)` and `centsPerKmRate(incomeYearOrDate)` take `'2025-26'` or a day and return `{ rate, verified, incomeYear, sourceUrl, readOn, note }`, with `rate` in dollars per unit. A year with no published rate — the fixed rate for 2026-27, cents per km for 2027-28 — returns `rate: null, verified: false`, and the note and `lastPublished` name the last published rate and its year without applying it. The AU income tax return's help text is built from these rows for the return's income year (`getFormSchema({ incomeYear })`), and Rate Watch flags a current year with no verified row, a citation older than a year, and upcoming rows.
 
 ```ts
 import { getPluginForCountry, getDepreciationRules } from '@ai2/tax-plugins';
@@ -169,9 +171,9 @@ rules.declineInValue({
   daysInYear: 365,   // AU fixes the denominator at 365; the rules enforce it
 }); // → { declineInValue: 66.85, closingAdjustableValue: 1933.15, rate: 0.1 }
 
-const writeOff = rules.instantAssetWriteOff(new Date('2026-07-01'));
-writeOff.limit;      // null
-writeOff.verified;   // false — render writeOff.note, never a number
+const writeOff = rules.instantAssetWriteOff(new Date(2026, 6, 1)); // 1 July 2026, local day
+writeOff.limit;      // 20000
+writeOff.verified;   // true — boundary 'under': the asset must cost less than $20,000
 ```
 
 ### Depreciation regimes
@@ -274,6 +276,94 @@ Annual reports are the ones lodged separately from the activity statement, and A
 Those six are exactly what the ATO's *TPAR contractor details to report* says the report must include. Contractor phone number, email address and bank account details are deliberately absent: the ATO lists those separately as extra information it *may ask for* about a contractor, not as data the annual report carries, so collecting them here would tell you to send the ATO something the TPAR does not report.
 
 Amounts are whole dollars with no cents, and a contractor whose ABN changed during the year gets one row per ABN, so payee identity for the report is the ABN rather than the name. Two different tests decide whether you lodge, and each service carries the one that applies to it. Cleaning, courier and road freight, information technology, and security, investigation or surveillance use the ordinary 10% test — payments received for that service are 10% or more of your business income, with courier and road freight counted together. Building and construction is not exempt from a test; it has a different one. You primarily operate in building and construction services, and so lodge, if 50% or more of your current-year business income is earned from providing them, **or** 50% or more of your current-year business activity relates to them, **or** 50% or more of the immediately preceding year's business income was earned from providing them — that last limb catching a year that is itself under the threshold. `auTprsQualifies()` evaluates the applicable test, inclusive at the boundary, and throws rather than answering "no" when it is given nothing to test. The report is prepared here for you to check before lodging — it is not the ATO lodgment file, which needs an accredited SBR channel — so lodge it through ATO online services, compatible business software, or your registered tax or BAS agent.
+
+## Home and property decisions
+
+Three pure functions answer the home questions people ask, with the same numbers wherever they are asked: `homeBusinessSpaceTradeoff`, `mainResidenceChoice` and `roomOrPartnerArrangement`. They cover Australia; any other country returns `{ supported: false, authority }` with a link and no figures.
+
+```ts
+import { homeBusinessSpaceTradeoff } from '@ai2/tax-plugins';
+
+const r = homeBusinessSpaceTradeoff({
+  incomeYear: '2023-24', years: 4, businessSharePct: 35,
+  occupancyCostsPerYear: 9600, runningCostsPerYear: 1200, marginalRatePct: 32,
+  businessUseStart: '2023-07-01', saleDate: '2027-06-30', expectedGrowth: 50_000,
+});
+// r.extraDeductions.taxValue → 4300.8; r.cgt.currentLaw.tax → 2800; r.breakEvenGrowth.currentLaw → 76800
+```
+
+Every rule is a row in `AU_HOME_PROPERTY_RULES`. Each row has its ATO or legislation URL, the page's own last-updated date and the day it was read. Every result lists the notes and rules it used. Gains are assumed to accrue evenly by day, which is how the ATO apportions them.
+
+The 1 July 2027 CGT changes are law: the Treasury Laws Amendment (Tax Reform No. 1) Act 2026 generally replaces the 50% discount with cost-base indexation (for an Australian resident who held the asset at least 12 months) and a possible 30% minimum tax for gains accruing after that date. A qualifying new residential dwelling or affordable housing keeps a discount of at least 50%. Every CGT figure is therefore split into two parts:
+- `preJuly2027` gives the current-law figures for the gain up to 30 June 2027 (the whole gain, for an earlier sale).
+- `postJuly2027` is `{ applies: false, note }` for a sale before 1 July 2027, and `{ applies: true, computable: false, note }` for a sale from that date. The home is taken to be sold just before 1 July 2027 at market value (s 112-155) or, by choice, under an apportioning method the **Minister** determines (s 112-185). That method has not been made (only an exposure draft exists), and indexation needs CPI figures that have not been released.
+
+### The verdict: `homeSpaceComparison` and `recommendHomeSpace`
+
+Use these to decide between a desk or shared room and a place of business. The app, the website and the Tax MCP all call them, so they give the same answer.
+
+```ts
+import { homeSpaceComparison, recommendHomeSpace } from '@ai2/tax-plugins';
+
+const c = homeSpaceComparison({
+  businessSharePct: 35, occupancyCostsPerYear: 9600, marginalRatePct: 32,
+  businessUseStart: '2025-07-01', saleDate: '2029-06-30', expectedGrowth: 100_000,
+});
+const v = recommendHomeSpace(c); // { verdict: 'desk', amount: 648, weighed: { scope: 'toJune2027', deductions: 2150, cgt: 2798 }, later: { deductions: 2150, cgt: 2802, … } }
+```
+
+- **Years of use.** They are counted by day in each income year: the days used divided by the days in that year. You can pass several dated periods (`usePeriods`), each with its own share.
+- **Sales on or after 1 July 2027.** The verdict weighs deductions to 30 June 2027 against CGT on growth to that date, and checks the later period separately:
+  - if the later period points the other way, the verdict is `dependsOnLater`;
+  - if use starts on or after 1 July 2027, it is `notYet`.
+- **The later CGT estimate.** When the home's values are given, the later CGT is estimated under the new rules: CPI indexation at an assumed 2.5% a year and a 30% minimum. The result states this assumption.
+- **About even.** The two sides count as "about even" when they are within 5% of each other or under 100 apart.
+- **Tones.** `tones` gives each option `better`, `worse` or `neutral`. A host must show the word with the colour.
+- **Other countries.**
+  - `gbBusinessRoomComparison` covers the UK: an exclusive room, with Private Residence Relief lost by value share.
+  - `usHomeOfficeComparison` covers the US: the simplified or the regular method, with depreciation taxed at up to 25% at sale.
+  - CA, NZ and IN have rule cards through `homeRulesFor`.
+  - Every other country returns `unsupported`.
+
+### Keeping the home rules up to date
+
+Every figure and rule the home decisions use carries four fields:
+- `sourceUrl`;
+- `readOn`;
+- `reviewBy`, the day by which a person must read the source again;
+- a tax year: the row's `effectiveFrom`, or `taxYear` on a figure.
+
+`homeRateInventory(day)` lists them all.
+
+- **The build fails when a figure is stale.** `__tests__/homeRatesFreshness.test.ts` uses today's date. It fails once any figure or rule in force is past its `reviewBy`, so stale figures block CI and the release instead of shipping silently.
+- **Rate Watch reports them too.** The weekly run (`scripts/rate-watch/run.cjs`) lists the same items under "Past their review date" and opens an issue.
+- **A year with no published figure falls back to an estimate when an earlier verified figure exists.** `resolveHomeRate(rows, day)` returns the latest verified figure with `estimate: true`. `workFromHomeFixedRateOrEstimate(year)` does the same for the AU fixed rate. Both return `null` when no earlier verified figure is recorded (for example `workFromHomeFixedRateOrEstimate('2019-20')`), so a host still needs a no-figure path. Its note matches the app's wording: "The 2026–27 rate is not published yet. The 2025–26 rate (70c an hour) is used as an estimate only — or use actual costs."
+- **The return lookup is unchanged.** `workFromHomeFixedRate` still never applies an unpublished year's rate.
+
+**The yearly update, per figure**, when the test or Rate Watch names one:
+
+1. Open the `sourceUrl` and read the authority's page. Do not use a search excerpt or a summary.
+2. **The figure is unchanged for the new year:**
+   - add a row for the new year (or extend the note to say which years it covers);
+   - set `readOn` to today;
+   - set `reviewBy` to the day before the year after runs out, or to one year from today, whichever is earlier.
+3. **The figure has changed:** add a new row from the new year's first day, with the new value, `verified: true`, `readOn` and `reviewBy`. Leave the old row as it is.
+4. **Nothing is published yet:** keep the `value: null, verified: false` row, and move its `reviewBy` to the next date worth checking.
+   - The hosts will show last year's figure, labelled as an estimate.
+   - Never type a number you have not read on the authority's page.
+5. **A rule's text** (`AU_HOME_PROPERTY_RULES`) or a figure in `AU_HOME_SPACE_FIGURES`: re-read the page, fix the wording, and move `readOn` and `reviewBy`.
+6. Run `npm run typecheck && npm test`, then open a PR that cites each page and the day you read it.
+
+The files, by figure:
+
+| Figures | File |
+|---|---|
+| AU fixed rate | `src/countries/australiaDeductions.ts` |
+| GB, US and NZ rows | `src/decisions/homeRuleRates.ts` |
+| AU 2027 figures and the CPI assumption | `src/decisions/homeSpaceRates.ts` |
+| AU rules | `src/decisions/homePropertyRules.ts` |
+
+Items for an accountant stay notes, never numbers.
 
 ## Development
 

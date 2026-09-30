@@ -163,10 +163,13 @@ describe('the documented row and country counts are exact', () => {
   const countries = new Set(RATE_LEDGER.map((r) => r.countryCode));
   const datedCountries = new Set(dated.map((r) => r.countryCode));
 
-  it('has 105 rows, 71 of them floor-anchored', () => {
-    expect(RATE_LEDGER.length).toBe(105);
+  // 105 -> 107 on 2026-09-22: Finland's reduced-rate cut (14% -> 13.5% from
+  // 1 Jan 2026) and Kazakhstan's announced 5% -> 10% reduced-rate step (1 Jan
+  // 2027) each add a dated row. Neither adds a floor-anchored row.
+  it('has 107 rows, 71 of them floor-anchored', () => {
+    expect(RATE_LEDGER.length).toBe(107);
     expect(RATE_LEDGER.length - dated.length).toBe(71);
-    expect(dated.length).toBe(34);
+    expect(dated.length).toBe(36);
   });
 
   it('covers 88 countries: 26 with a real date, 62 floor-only', () => {
