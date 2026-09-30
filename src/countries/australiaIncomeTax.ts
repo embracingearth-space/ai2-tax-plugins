@@ -16,6 +16,15 @@ import type {
 } from '../types';
 import { getStudentLoanRepayment } from '../data/studentLoan';
 import { toCsv } from '../exportUtils';
+import {
+  AU_CENTS_PER_KM_MAX_BUSINESS_KM,
+  AU_WFH_REVISED_METHOD_FROM,
+  auIncomeYear,
+  centsPerKmRate,
+  workFromHomeFixedRate,
+  type AuDeductionRate,
+  type AuIncomeYearInput,
+} from './australiaDeductions';
 
 const TAX_FREE = 18200;
 
@@ -44,6 +53,97 @@ export function calcAuTax(taxable: number, fyStartYear = currentFyStartYear()): 
   return Math.round(tax);
 }
 
+// ─── Year-specific help text ────────────────────────────────────────────────
+//
+// The fixed rate and the cents-per-km rate change by income year, so the help
+// text is BUILT from the effective-dated rows in ./australiaDeductions for the
+// return's income year — never typed in. A hard-coded "67c/hour" went stale
+// the day the ATO moved to 70c, and nothing failed. A year with no published
+// rate says so and names the last published one without applying it.
+
+/**
+ * "no rate is published for 2026-27 yet (last published: 70c per work hour, for
+ * 2025-26 — it does not carry over)." A year before the recorded rows has no
+ * last-published rate and says it is not recorded instead.
+ */
+function unpublished(r: AuDeductionRate, unit: string): string {
+  if (!r.lastPublished) return `the rate for ${r.incomeYear} is not recorded here — check it with the ATO.`;
+  const last = `${Math.round(r.lastPublished.rate * 100)}c ${unit}, for ${r.lastPublished.incomeYear}`;
+  return `no rate is published for ${r.incomeYear} yet (last published: ${last} — it does not carry over).`;
+}
+
+/** The work-from-home help text for an income year, built from AU_WFH_FIXED_RATE_ROWS. */
+export function auWorkFromHomeHelpText(incomeYear: AuIncomeYearInput): string {
+  const r = workFromHomeFixedRate(incomeYear);
+  if (r.verified && r.rate !== null) {
+    const covers =
+      auIncomeYear(r.incomeYear).startYmd >= AU_WFH_REVISED_METHOD_FROM
+        ? '(covers energy, internet, phone, stationery and computer consumables; claim depreciation of equipment and furniture separately)'
+        : '(the earlier fixed rate method — check what it covers with the ATO)';
+    return `Fixed rate: ${Math.round(r.rate * 100)}c per work hour for ${r.incomeYear} ${covers}. Or actual cost method.`;
+  }
+  return `Fixed rate: ${unpublished(r, 'per work hour')} Or actual cost method.`;
+}
+
+/** The car-expenses help text for an income year, built from AU_CENTS_PER_KM_ROWS. */
+export function auCarExpensesHelpText(incomeYear: AuIncomeYearInput): string {
+  const r = centsPerKmRate(incomeYear);
+  // Grouped by hand, not toLocaleString: the output must not depend on the host's ICU build.
+  const km = String(AU_CENTS_PER_KM_MAX_BUSINESS_KM).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  const cap = `max ${km} business km per car`;
+  if (r.verified && r.rate !== null) {
+    return `Cents per km (${Math.round(r.rate * 100)}c/km ${r.incomeYear}, ${cap}) or logbook`;
+  }
+  return `Cents per km: ${unpublished(r, 'per km')} ${cap[0].toUpperCase()}${cap.slice(1)}. Or logbook.`;
+}
+
+// ─── Capital gains: the discount has an end date ────────────────────────────
+//
+// The 50% CGT discount does NOT run on indefinitely. The Treasury Laws
+// Amendment (Tax Reform No. 1) Act 2026 (No. 49, assented 26 June 2026) is
+// law — the ATO: "These measures are now law" (page last updated 29 June
+// 2026, read 27 September 2026). For CGT events from 1 July 2027 the discount
+// applies only to the gain that accrued to 30 June 2027; the gain after it is
+// worked out on a cost base indexed for inflation, with a 30% minimum tax
+// (Division 119 ITAA 1997). Help text that says "50% discount if held 12
+// months" with no date would be wrong for every 2027-28 return.
+
+/** The first day CGT events fall under the indexation and minimum-tax rules. */
+export const AU_CGT_INDEXATION_FROM = '2027-07-01';
+
+export const AU_CGT_AUTHORITY_URLS = {
+  cgtDiscount: 'https://www.ato.gov.au/individuals-and-families/investments-and-assets/capital-gains-tax/cgt-discount',
+  taxReform2027:
+    'https://www.ato.gov.au/about-ato/new-legislation/in-detail/individuals/tax-reform-boosting-home-ownership-reforming-negative-gearing-and-capital-gains-tax',
+  taxReformAct: 'https://www.legislation.gov.au/C2026A00049/latest',
+} as const;
+
+/** The capital-gains help text for an income year. */
+export function auCapitalGainsHelpText(incomeYear: AuIncomeYearInput): string {
+  const year = auIncomeYear(incomeYear);
+  if (year.startYmd < AU_CGT_INDEXATION_FROM) {
+    // "you owned the asset for at least 12 months ... You exclude the day of acquisition and the day of the CGT event"
+    return (
+      `After applying the 50% CGT discount to gains on assets you owned for at least 12 months (not counting the day ` +
+      `you acquired it or the day of the sale contract). ${year.label} is before the 1 July 2027 changes.`
+    );
+  }
+  // Qualified, as the Act is (read 27 September 2026):
+  // - a new residential dwelling (s 115-102) or affordable housing (s 115-125) keeps a discount of at least 50%
+  //   (s 115-1, s 115-100(a));
+  // - those gains are outside the minimum tax (s 119-5(2)(b)-(c)), and so is anyone who received a listed
+  //   support payment in the year, such as the age pension (s 119-15);
+  // - indexation is conditional too: s 110-36(1A) requires Division 114 — the asset acquired at least 12 months
+  //   before the CGT event (s 114-10(1)) — and does not extend to foreign or temporary residents (s 114-25).
+  return (
+    `For CGT events from 1 July 2027 the 50% discount generally applies only to the gain up to 30 June 2027. For the ` +
+    `gain after it, the cost base may be indexed for inflation if you are an Australian resident and held the asset ` +
+    `for at least 12 months (Treasury Laws Amendment (Tax Reform No. 1) Act 2026). A qualifying new residential dwelling or affordable housing can still get a discount of at least 50%. ` +
+    `A 30% minimum tax may apply to the later gain, except on those assets or if you received certain support ` +
+    `payments such as the age pension. This return does not calculate the minimum tax.`
+  );
+}
+
 const auItPlugin: TaxFilingPlugin = {
   countryCode: 'AU-IT',
   displayName: 'Individual Tax Return (ITR)',
@@ -57,7 +157,12 @@ const auItPlugin: TaxFilingPlugin = {
   taxFamily: 'INCOME_TAX',
   isFullPlugin: true,
 
-  getFormSchema(): FormSection[] {
+  /**
+   * `opts.incomeYear` is the return's income year ('2025-26', or a day in it).
+   * Omitted, it is the income year of today — the same default calcAuTax uses.
+   */
+  getFormSchema(opts?: { incomeYear?: string | Date }): FormSection[] {
+    const year = auIncomeYear(opts?.incomeYear ?? new Date()).label;
     return [
       {
         id: 'income',
@@ -70,7 +175,7 @@ const auItPlugin: TaxFilingPlugin = {
           { id: 'franked_dividends', label: 'Franked dividends (grossed up)', type: 'currency', editable: true, required: false, helpText: 'Include franking credits as income' },
           { id: 'franking_credits', label: 'Franking credits', type: 'currency', editable: true, required: false },
           { id: 'rental_income', label: 'Net rental income', type: 'currency', editable: true, required: false },
-          { id: 'capital_gains', label: 'Net capital gains', type: 'currency', editable: true, required: false, helpText: 'After applying 50% CGT discount if held >12 months' },
+          { id: 'capital_gains', label: 'Net capital gains', type: 'currency', editable: true, required: false, helpText: auCapitalGainsHelpText(year) },
           { id: 'other_income', label: 'Other income', type: 'currency', editable: true, required: false },
           { id: 'reportable_super', label: 'Reportable super contributions', type: 'currency', editable: true, required: false, helpText: 'Salary-sacrifice + personal deductible super. Not assessable income, but counts toward study/training loan repayment income.' },
           { id: 'reportable_fringe_benefits', label: 'Reportable fringe benefits', type: 'currency', editable: true, required: false, helpText: 'From your payment summary/income statement. Not assessable income, but counts toward study/training loan repayment income.' },
@@ -82,10 +187,10 @@ const auItPlugin: TaxFilingPlugin = {
         id: 'deductions',
         title: 'Deductions',
         fields: [
-          { id: 'work_related_car', label: 'Work-related car expenses', type: 'currency', editable: true, required: false, helpText: 'Cents per km (88c/km 2025-26, max 5,000 km) or logbook' },
+          { id: 'work_related_car', label: 'Work-related car expenses', type: 'currency', editable: true, required: false, helpText: auCarExpensesHelpText(year) },
           { id: 'work_related_travel', label: 'Work-related travel expenses', type: 'currency', editable: true, required: false },
           { id: 'work_related_clothing', label: 'Clothing, laundry, dry-cleaning', type: 'currency', editable: true, required: false },
-          { id: 'work_from_home', label: 'Working from home expenses', type: 'currency', editable: true, required: false, helpText: 'Fixed rate: 67c/hour. Or actual cost method.' },
+          { id: 'work_from_home', label: 'Working from home expenses', type: 'currency', editable: true, required: false, helpText: auWorkFromHomeHelpText(year) },
           { id: 'self_education', label: 'Self-education expenses', type: 'currency', editable: true, required: false },
           { id: 'donations', label: 'Gifts and donations', type: 'currency', editable: true, required: false },
           { id: 'tax_agent_fee', label: 'Cost of managing tax affairs', type: 'currency', editable: true, required: false },

@@ -37,6 +37,7 @@
  * exactly the bug this file's history records.
  */
 import { resolveEffectiveDated } from './effectiveDating';
+import { FI_EARNED_INCOME_YEARS, finnishMunicipalities, finnishWageTax, type FinnishEarnedIncomeYear } from './finland';
 
 export interface IncomeTaxBand {
   upTo: number | null;
@@ -71,6 +72,8 @@ export interface IncomeTaxResult {
   takeHome: number;
   marginalRate: number;
   averageRate: number;
+  /** What the estimate assumed — present only for schemes that state it. */
+  assumptions?: string[];
 }
 
 /**
@@ -106,6 +109,37 @@ export interface IncomeYearContext {
   taxYearLabel: string;
   /** The resolved set's effective date, for hooks keyed by date rather than label. */
   effectiveFrom: string;
+  /** The caller's personal circumstances, validated. Empty for every country
+   *  that does not declare `optionsSupported` — see IncomeTaxOptions. */
+  options: Readonly<IncomeTaxOptions>;
+}
+
+/**
+ * PERSONAL CIRCUMSTANCES THAT CHANGE THE ANSWER.
+ *
+ * AU/NZ/GB/IN/US are modelled on gross income alone. Finland cannot be: roughly
+ * a third of a Finnish wage earner's tax is MUNICIPAL, at a rate each
+ * municipality sets (Helsinki and the national average differ by more than two
+ * points); church members pay church tax on the same base; and the employee
+ * pension contribution is higher between 53 and 62. Estimating everyone at the
+ * averages is still an honest default — it is what the result's `assumptions`
+ * say was used — but a caller who knows their municipality should get their own
+ * number, not the average's.
+ *
+ * Every field is optional and a country only reads the ones it declares in
+ * `optionsSupported`; passing one a country ignores is not an error, because a
+ * multi-country UI sends the same shape to every country.
+ */
+export interface IncomeTaxOptions {
+  /** Local (municipal) income-tax rate as a fraction, e.g. 0.053 for 5.3%.
+   *  Omit to use the country's published average for the year. */
+  localTaxRate?: number;
+  /** Church-tax rate as a fraction for a member of a church that levies one.
+   *  Omit or 0 for a non-member. */
+  churchTaxRate?: number;
+  /** Age in whole years at the end of the tax year, where a contribution rate
+   *  depends on it. Omit to assume the rate for most working ages. */
+  age?: number;
 }
 
 /** Context passed to a country's offsets() — credits applied to the computed tax. */
@@ -149,6 +183,17 @@ export interface IncomeTaxScheme {
   deduction?: (ctx: IncomeDeductionContext) => number;
   levies: (ctx: IncomeLevyContext) => IncomeLineItem[];
   offsets: (ctx: IncomeOffsetContext) => IncomeLineItem[];
+  /** Which IncomeTaxOptions this country reads. Absent = none; the options are
+   *  then not even validated, so a shared multi-country form cannot break it. */
+  optionsSupported?: readonly (keyof IncomeTaxOptions)[];
+  /** Named local rates a UI can offer as presets (FI municipalities), per tax
+   *  year label, each with its source. The average is `defaultLocalTaxRate`. */
+  localTaxRates?: Readonly<Record<string, readonly { name: string; rate: number }[]>>;
+  /** The default local rate for a year label (FI: the published average). */
+  defaultLocalTaxRate?: (taxYearLabel: string) => number;
+  /** Plain statements of what the estimate assumed, so a figure that depends on
+   *  a default (average municipal rate, no church tax) says so beside itself. */
+  assumptions?: (ctx: IncomeYearContext & { gross: number }) => string[];
   note: string;
   /** Optional regional caveat (UK = England/Wales/NI only; Scotland differs). */
   region?: string;
@@ -204,13 +249,14 @@ function liabilityAt(
   set: IncomeBracketSet,
   gross: number,
   q: MoneyRounding = wholeUnits,
+  options: Readonly<IncomeTaxOptions> = NO_OPTIONS,
 ): Liability {
   const g = grossOf(gross);
 
-  // The resolved year and rounding policy, forwarded to every hook so a
-  // year-scoped constant is read against the SAME year as the bands, and so
-  // every hook rounds the same way this call was asked to.
-  const year = { taxYearLabel: set.taxYearLabel, effectiveFrom: set.effectiveFrom, q };
+  // The resolved year, rounding policy and personal options, forwarded to
+  // every hook so a year-scoped constant is read against the SAME year as the
+  // bands, and every hook rounds the same way this call was asked to.
+  const year = { taxYearLabel: set.taxYearLabel, effectiveFrom: set.effectiveFrom, q, options };
 
   // 1. Pre-band deduction (capped at gross so taxable can't go negative).
   const deduction = c.deduction ? Math.min(g, c.deduction({ gross: g, ...year })) : 0;
@@ -271,10 +317,50 @@ const MARGINAL_STEP = 1;
  * exactly the hand-tuned thing this change exists to delete. Removing the
  * rounding removes the reason to widen at all.
  */
-function marginalRateFor(c: IncomeTaxScheme, set: IncomeBracketSet, gross: number): number {
-  const here = liabilityAt(c, set, gross, exact).totalTax;
-  const next = liabilityAt(c, set, gross + MARGINAL_STEP, exact).totalTax;
+function marginalRateFor(
+  c: IncomeTaxScheme,
+  set: IncomeBracketSet,
+  gross: number,
+  options: Readonly<IncomeTaxOptions> = NO_OPTIONS,
+): number {
+  const here = liabilityAt(c, set, gross, exact, options).totalTax;
+  const next = liabilityAt(c, set, gross + MARGINAL_STEP, exact, options).totalTax;
   return (next - here) / MARGINAL_STEP;
+}
+
+const NO_OPTIONS: Readonly<IncomeTaxOptions> = Object.freeze({});
+
+/**
+ * Keep only the options this scheme reads, and refuse nonsense loudly.
+ *
+ * A rate is a FRACTION: 5.3 for "5.3%" is the likeliest caller mistake and it
+ * would multiply municipal tax by a hundred, so anything outside [0, 1) is a
+ * RangeError rather than a silently absurd take-home. Options a scheme does not
+ * declare are dropped unvalidated — a shared multi-country form sends the same
+ * shape everywhere, and AU must not start failing because a field it ignores
+ * holds a value meant for Finland.
+ */
+function resolveOptions(c: IncomeTaxScheme, options?: IncomeTaxOptions | null): Readonly<IncomeTaxOptions> {
+  if (!options || !c.optionsSupported?.length) return NO_OPTIONS;
+  const out: IncomeTaxOptions = {};
+  const rate = (key: 'localTaxRate' | 'churchTaxRate') => {
+    const v = options[key];
+    if (v === undefined || v === null) return;
+    if (typeof v !== 'number' || !Number.isFinite(v) || v < 0 || v >= 1) {
+      throw new RangeError(`${key} must be a fraction between 0 and 1 (e.g. 0.053 for 5.3%), got ${String(v)}`);
+    }
+    out[key] = v;
+  };
+  if (c.optionsSupported.includes('localTaxRate')) rate('localTaxRate');
+  if (c.optionsSupported.includes('churchTaxRate')) rate('churchTaxRate');
+  if (c.optionsSupported.includes('age') && options.age !== undefined && options.age !== null) {
+    const a = options.age;
+    if (typeof a !== 'number' || !Number.isInteger(a) || a < 0 || a > 130) {
+      throw new RangeError(`age must be a whole number of years, got ${String(a)}`);
+    }
+    out.age = a;
+  }
+  return Object.freeze(out);
 }
 
 // Australia thresholds are stable across these years; only the first taxed
@@ -542,7 +628,62 @@ export const INCOME_TAX_SCHEMES: Record<string, IncomeTaxScheme> = {
     citationDate: '2026-08-20',
     verified: true,
   },
+  FI: {
+    code: 'FI', country: 'Finland', currency: 'EUR', locale: 'fi-FI', timeZone: 'Europe/Helsinki',
+    // Calendar tax year. The arithmetic lives in finland.ts (see its header for
+    // the order Vero computes in); these hooks only project it onto the shared
+    // shape: bands = the STATE scale, deduction = everything between gross and
+    // the one taxable income state and municipal tax share, offsets = the part
+    // of the earned-income credit the taxes can absorb, levies = the rest.
+    sets: FI_EARNED_INCOME_YEARS.map((y) => ({ effectiveFrom: y.effectiveFrom, taxYearLabel: y.taxYear, bands: y.stateBands.map((b) => ({ ...b })) })),
+    optionsSupported: ['localTaxRate', 'churchTaxRate', 'age'],
+    defaultLocalTaxRate: (label) => finnishYearFor(label).averageMunicipalRate,
+    localTaxRates: Object.fromEntries(
+      FI_EARNED_INCOME_YEARS.map((y) => [
+        y.taxYear,
+        finnishMunicipalities(y.taxYear).filter((m) => !m.aland).map((m) => ({ name: m.name, rate: m.municipalRate })),
+      ]),
+    ),
+    deduction: ({ gross, taxYearLabel, options }) => {
+      const b = finnishWageTax(gross, finnishYearFor(taxYearLabel), options, 'exact');
+      return b.gross - b.taxableIncome;
+    },
+    offsets: ({ gross, taxYearLabel, options, q }) => {
+      const b = finnishWageTax(gross, finnishYearFor(taxYearLabel), options, 'exact');
+      const used = q.round(b.workCreditUsed);
+      return used > 0 ? [{ name: 'Earned income tax credit (työtulovähennys)', amount: used }] : [];
+    },
+    levies: ({ gross, taxYearLabel, options, q }) => {
+      const b = finnishWageTax(gross, finnishYearFor(taxYearLabel), options, 'exact');
+      const items: IncomeLineItem[] = [
+        { name: `Municipal tax (${+(b.municipalRate * 100).toFixed(2)}%)`, amount: q.round(b.municipalTax) },
+        { name: `Church tax (${+(b.churchRate * 100).toFixed(2)}%)`, amount: q.round(b.churchTax) },
+        { name: 'Health insurance: medical care contribution', amount: q.round(b.medicalCare) },
+        { name: 'Health insurance: daily allowance contribution', amount: q.round(b.dailyAllowance) },
+        { name: 'YLE tax', amount: q.round(b.yleTax) },
+        { name: `Employee pension contribution (TyEL ${+(b.pensionRate * 100).toFixed(2)}%)`, amount: q.round(b.pension) },
+        { name: 'Employee unemployment insurance contribution', amount: q.round(b.unemployment) },
+      ];
+      return items.filter((i) => i.amount > 0);
+    },
+    assumptions: ({ gross, taxYearLabel, options }) =>
+      finnishWageTax(gross, finnishYearFor(taxYearLabel), options, 'exact').assumptions,
+    note: 'Resident wage earner in mainland Finland: state income tax, municipal tax, church tax for parish members, the health-insurance contributions, YLE tax and the employee pension and unemployment contributions, less the earned-income tax credit — computed in the order the Finnish Tax Administration sets tax cards, and checked against its published examples. Municipal tax defaults to the national average; pass a municipality for its own rate. Excludes Åland, children, commuting and other deductions, and pension or benefit income.',
+    region: 'Mainland Finland — Åland is not modelled',
+    source: 'https://www.vero.fi/syventavat-vero-ohjeet/paatokset/47363/verohallinnon-paatos-ennakonpidatysprosenttien-laskentaperusteista-palkkatuloa-varten-ja-ennakonkannossa-maarattavan-ennakkoveron-laskentaperusteista-vuodelle-2026/',
+    authorityName: 'Finnish Tax Administration (Verohallinto)',
+    citationDate: '2026-09-29',
+    verified: true,
+  },
 };
+
+/** The Finnish year for a set label — the label always comes from `sets`,
+ *  which is built from the same array, so a miss is a programming error. */
+function finnishYearFor(label: string): FinnishEarnedIncomeYear {
+  const y = FI_EARNED_INCOME_YEARS.find((x) => x.taxYear === label);
+  if (!y) throw new Error(`No Finnish earned-income parameters for ${label}`);
+  return y;
+}
 
 // Frozen at module load. This record is re-exported from src/index.ts, so a
 // consumer of the published package could otherwise reassign a country's rate
@@ -557,6 +698,12 @@ for (const scheme of Object.values(INCOME_TAX_SCHEMES)) {
     Object.freeze(set);
   }
   Object.freeze(scheme.sets);
+  for (const list of Object.values(scheme.localTaxRates ?? {})) {
+    list.forEach(Object.freeze);
+    Object.freeze(list);
+  }
+  if (scheme.localTaxRates) Object.freeze(scheme.localTaxRates);
+  if (scheme.optionsSupported) Object.freeze(scheme.optionsSupported);
   Object.freeze(scheme);
 }
 Object.freeze(INCOME_TAX_SCHEMES);
@@ -623,20 +770,28 @@ export function getIncomeTaxYears(countryCode: string): IncomeTaxYearOption[] {
  * `taxYear` was given but that year is not defined (fails loudly rather than
  * silently substituting the current year's figures).
  */
-export function calcIncomeTax(countryCode: string, gross: number, taxYear?: string): IncomeTaxResult | null {
+export function calcIncomeTax(
+  countryCode: string,
+  gross: number,
+  taxYear?: string,
+  options?: IncomeTaxOptions | null,
+): IncomeTaxResult | null {
   const c = getIncomeTaxScheme(countryCode);
   if (!c) return null;
   const set = resolveIncomeSet(c, taxYear);
   if (!set) return null;
-  const { taxable, incomeTax, offsets, levies, totalTax } = liabilityAt(c, set, gross);
+  const opts = resolveOptions(c, options);
+  const { taxable, incomeTax, offsets, levies, totalTax } = liabilityAt(c, set, gross, wholeUnits, opts);
   const g = grossOf(gross);
+  const assumptions = c.assumptions?.({ gross: g, taxYearLabel: set.taxYearLabel, effectiveFrom: set.effectiveFrom, q: wholeUnits, options: opts });
 
   return {
     code: c.code, country: c.country, currency: c.currency, locale: c.locale,
     taxYear: set.taxYearLabel,
     gross: g, taxable, incomeTax, levies, offsets, totalTax, takeHome: g - totalTax,
-    marginalRate: g > 0 ? marginalRateFor(c, set, g) : 0,
+    marginalRate: g > 0 ? marginalRateFor(c, set, g, opts) : 0,
     averageRate: g > 0 ? totalTax / g : 0,
+    ...(assumptions ? { assumptions } : {}),
   };
 }
 

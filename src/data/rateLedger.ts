@@ -15,7 +15,7 @@
  * period (before/after a change) and keep historical filings correct — FOR THE
  * PART OF HISTORY A ROW ACTUALLY DATES.
  *
- * THE CAVEAT THAT MATTERS: 71 of the 105 rows carry RATE_FLOOR (2000-01-01) as
+ * THE CAVEAT THAT MATTERS: 71 of the 107 rows carry RATE_FLOOR (2000-01-01) as
  * their effectiveFrom, meaning "known true since at least this anchor," not
  * "became true on this date." Most are annotated in their own `note` as
  * long-standing or stable for decades, but the ledger records no actual change
