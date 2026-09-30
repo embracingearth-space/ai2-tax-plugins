@@ -22,6 +22,8 @@ import {
   IE_CAR_SPECIFIED_LIMIT,
   ieAllowableCost,
   ieWearAndTear,
+  getDepreciationRules,
+  getPluginForCountry,
 } from '../src';
 
 const ie = IE_DEPRECIATION_RULES;
@@ -340,5 +342,36 @@ describe("IE explainer — Fin's voice, Revenue's words, revenue.ie links only",
     const a = ie.explainer();
     a.howItWorks.push('tampered');
     expect(ie.explainer().howItWorks).not.toContain('tampered');
+  });
+});
+
+/**
+ * The registry wiring, not the rules themselves.
+ *
+ * Ireland's depreciation rules were written, exported and correct — and
+ * unreachable. Every EU member state in this package shares one VAT-return
+ * factory, and that factory never offered `getDepreciationRules`, so the
+ * resolver fell through to the generic rules for Ireland along with everyone
+ * else. A host asking for Irish capital allowances got a straight line over
+ * whatever life it happened to pass, apportioned by days: neither the 12.5%
+ * rate of s.284 TCA 1997 nor its full-year shape.
+ *
+ * Depreciation is not harmonised across the EU, so the factory answers for the
+ * member states whose rules are written here and leaves the rest on the
+ * generic fallback.
+ */
+describe('Ireland is reachable through the registry', () => {
+  it('resolves to the Irish rules, not the generic ones', () => {
+    const rules = getDepreciationRules(getPluginForCountry('IE'));
+    expect(rules.regime).toBe('straight_line_fixed');
+    expect(rules.countryCode).toBe('IE');
+    expect(rules).toBe(IE_DEPRECIATION_RULES);
+  });
+
+  it('leaves an EU member state with no rules of its own on the generic ones', () => {
+    for (const code of ['DE', 'FR']) {
+      const rules = getDepreciationRules(getPluginForCountry(code));
+      expect(rules.regime).toBe('generic');
+    }
   });
 });
