@@ -7,7 +7,8 @@
 The rate ledger grows from 88 countries to 199 (every UN member and observer, plus Kosovo, Taiwan, Hong Kong and Macao), and from one sub-national row (Ontario HST) to 64 jurisdictions: every US state plus DC (state-level rate; local taxes are named in each note, not modelled) and every Canadian province and territory. 107 rows become 299. Rows were researched on 2026-10-06 against official sources; 35 are `verified: false` with the reason in the note.
 
 - `RateLedgerRow.rateIsIndicative` (optional) and `isRateIndicative(row)`: a figure that must not be presented as fact. `getStandardRateAsOf` answers 0 for it, `activeNationalRows(asOf, { includeIndicative })` leaves it out by default, and so do `COUNTRY_TAX_RATES`, `getStandardTaxRate` and `getTaxRateInfo`. Rate Watch still lists it as unverified. Applied to Syria, Cuba, Somalia, South Sudan, Chad, Afghanistan, Liberia's 2027 VAT and Louisiana's 2030 rate.
-- History behind three existing countries, read on the authorities' own pages: Singapore 3% / 4% / 5% / 7% / 8% (IRAS), Switzerland 7.5% / 7.6% / 8.0% / 7.7% (ESTV) and Sri Lanka 12% / 15% (IRD).
+- History behind three existing countries, read on the authorities' own pages: Singapore 3% / 4% / 5% / 7% / 8% before today's 9% (IRAS), Switzerland 7.5% / 7.6% / 8.0% / 7.7% before today's 8.1% (ESTV) and Sri Lanka 12% / 15% before today's 18% (IRD).
+- Rate Watch marks an indicative rate with `indicative: true` in `recentlyActivated`, `upcomingChanges` and `reviewChecklist`, so no finding carries such a figure unqualified.
 
 Depreciation regimes — New Zealand, the United Kingdom, Canada, the United States, India,
 Singapore, Ireland and South Africa. Additive: every new `DepreciationRules`

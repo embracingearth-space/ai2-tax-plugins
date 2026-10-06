@@ -197,6 +197,17 @@ describe('indicative rates are flagged and never served as fact', () => {
     const flagged = f.unverified.filter((u) => /indicative/.test(u.reason)).map((u) => u.countryCode).sort();
     expect(flagged).toEqual(['AF', 'CU', 'SO', 'SS', 'SY', 'TD']);
   });
+
+  it('Rate Watch never lists an indicative rate unqualified', () => {
+    const now = analyzeLedger(TODAY);
+    const checklistMarked = now.reviewChecklist.filter((c) => c.indicative).map((c) => c.countryCode).sort();
+    expect(checklistMarked).toEqual(['AF', 'CU', 'SO', 'SS', 'SY', 'TD']);
+    expect(now.upcomingChanges.find((u) => u.countryCode === 'LR')?.indicative).toBe(true);
+    expect(now.upcomingChanges.find((u) => u.countryCode === 'KZ')?.indicative).toBeUndefined();
+    // Liberia's VAT row has just come into force.
+    const jan = analyzeLedger('2027-01-10');
+    expect(jan.recentlyActivated.find((r) => r.countryCode === 'LR')?.indicative).toBe(true);
+  });
 });
 
 describe('surcharged rates and confirmed history', () => {
