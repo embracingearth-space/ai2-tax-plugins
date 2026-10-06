@@ -337,6 +337,11 @@ describe('migrateIndiaGstr3bValues (v1 saved statements)', () => {
     expect(out.t4b1_iamt).toBeUndefined();
   });
 
+  it('splits a v1 late fee only when it was just migrated and no SGST fee is saved', () => {
+    expect(migrateIndiaGstr3bValues({ late_fee: 40, t51_fee_camt: 40, t51_fee_samt: 0 } as FieldValues)).toMatchObject({ t51_fee_camt: 40, t51_fee_samt: 0 });
+    expect(migrateIndiaGstr3bValues({ late_fee: 40, t51_fee_samt: 5 } as FieldValues)).toMatchObject({ t51_fee_camt: 40, t51_fee_samt: 5 });
+  });
+
   it('never overwrites a value already under the new id', () => {
     expect(migrateIndiaGstr3bValues({ igst: 10, t31a_iamt: 99 }).t31a_iamt).toBe(99);
   });

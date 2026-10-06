@@ -263,9 +263,14 @@ export function migrateIndiaGstr3bValues(values: FieldValues): FieldValues {
     late_fee: 't51_fee_camt',
   };
   const out: FieldValues = { ...values };
+  const isEmpty = (v: unknown) => v === undefined || v === null || v === '';
+  const written = new Set<string>();
   for (const [oldId, newId] of Object.entries(legacy)) {
     if (!(oldId in values)) continue;
-    if (out[newId] === undefined || out[newId] === null || out[newId] === '') out[newId] = values[oldId];
+    if (isEmpty(out[newId])) {
+      out[newId] = values[oldId];
+      written.add(newId);
+    }
     delete out[oldId];
   }
   // v1 kept one reversal figure with no head. Spread it over the heads in
@@ -296,7 +301,8 @@ export function migrateIndiaGstr3bValues(values: FieldValues): FieldValues {
     delete out.itc_reversed;
   }
   // v1 split the late fee nowhere; the Act charges it half CGST, half SGST.
-  if ('late_fee' in values && out.t51_fee_camt === values.late_fee) {
+  // Only when the v1 figure was just written to t51_fee_camt and no SGST fee is saved.
+  if ('late_fee' in values && written.has('t51_fee_camt') && isEmpty(values.t51_fee_samt)) {
     const fee = num(values.late_fee);
     out.t51_fee_camt = r2(fee / 2);
     out.t51_fee_samt = r2(fee - r2(fee / 2));
