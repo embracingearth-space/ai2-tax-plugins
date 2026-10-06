@@ -373,3 +373,12 @@ describe('migrateSavedValues (the contract hook)', () => {
     expect(inPlugin.migrateSavedValues!(once)).toEqual(once);
   });
 });
+
+describe('autoPopulateFrom', () => {
+  it('every mapped field names its first aggregate, and no unmapped field claims one', () => {
+    const mapped = new Map(inPlugin.getAutoPopulateMapping().map((m) => [m.fieldId, m.aggregateKey]));
+    for (const f of inPlugin.getFormSchema().flatMap((s) => s.fields)) {
+      expect(f.autoPopulateFrom).toBe(mapped.get(f.id));
+    }
+  });
+});

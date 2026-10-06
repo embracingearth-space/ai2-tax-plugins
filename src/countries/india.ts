@@ -335,6 +335,18 @@ const MAPPING: AggregationMapping[] = (() => {
   return m;
 })();
 
+/**
+ * Each mapped field names the aggregate it fills from, read off MAPPING so the
+ * schema and the mapping cannot drift (hosts use it to mark inferred figures).
+ */
+function withAutoPopulateFrom(sections: FormSection[]): FormSection[] {
+  const from = new Map(MAPPING.map((m) => [m.fieldId, m.aggregateKey]));
+  return sections.map((s) => ({
+    ...s,
+    fields: s.fields.map((fld) => (from.has(fld.id) ? { ...fld, autoPopulateFrom: from.get(fld.id) } : fld)),
+  }));
+}
+
 // ─── Plugin ─────────────────────────────────────────────────────────────────
 
 const inPlugin: TaxFilingPlugin = {
@@ -351,7 +363,7 @@ const inPlugin: TaxFilingPlugin = {
   isFullPlugin: true,
 
   getFormSchema() {
-    return [
+    return withAutoPopulateFrom([
       {
         id: 'outward',
         title: '3.1 — Outward supplies and inward supplies liable to reverse charge',
@@ -485,7 +497,7 @@ const inPlugin: TaxFilingPlugin = {
           },
         ],
       },
-    ];
+    ]);
   },
 
   getFilingPeriods: () => ({
