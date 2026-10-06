@@ -17,9 +17,10 @@
  *  - per-unit deduction rates (analyzeDeductionRates, below): a current
  *    income year with no verified row, stale citations, upcoming rows
  */
-import { RATE_LEDGER, activeNationalRows, toYmd, INCOME_TAX_SCHEMES, RETIREMENT_SCHEMES, STUDENT_LOAN_SCHEMES, COMPANY_TAX_RATES, FI_CAPITAL_INCOME_YEARS } from './data';
+import { RATE_LEDGER, activeNationalRows, isRateIndicative, toYmd, INCOME_TAX_SCHEMES, RETIREMENT_SCHEMES, STUDENT_LOAN_SCHEMES, COMPANY_TAX_RATES, FI_CAPITAL_INCOME_YEARS } from './data';
 import type { RateLedgerRow } from './data';
 import { addOneYear } from './data/effectiveDating';
+import { CAPITAL_GAINS_RULES } from './data/capitalGains';
 
 import { AU_CENTS_PER_KM_ROWS, AU_WFH_FIXED_RATE_ROWS, auIncomeYear, formatAuCents } from './countries/australiaDeductions';
 import { AU_INSTANT_ASSET_WRITE_OFF_ROWS } from './countries/australiaDepreciation';
@@ -50,10 +51,11 @@ export interface RateWatchFindings {
   asOf: string;
   unverified: Array<{ countryCode: string; countryName: string; reason: string }>;
   staleCitations: Array<{ countryCode: string; citationDate: string; ageDays: number }>;
-  recentlyActivated: Array<{ countryCode: string; standardRate: number; effectiveFrom: string }>;
-  upcomingChanges: Array<{ countryCode: string; standardRate: number; effectiveFrom: string }>;
+  /** `indicative: true` marks a rate that must not be presented as fact (`isRateIndicative`). */
+  recentlyActivated: Array<{ countryCode: string; standardRate: number; effectiveFrom: string; indicative?: true }>;
+  upcomingChanges: Array<{ countryCode: string; standardRate: number; effectiveFrom: string; indicative?: true }>;
   coverageGaps: Array<{ countryCode: string; taxType: string; stateProvince: string | null; endedOn: string }>;
-  reviewChecklist: Array<{ countryCode: string; countryName: string; standardRate: number; authority: string; url: string }>;
+  reviewChecklist: Array<{ countryCode: string; countryName: string; standardRate: number; authority: string; url: string; indicative?: true }>;
 }
 
 const DAY_MS = 86_400_000;
@@ -64,6 +66,9 @@ export function daysBetween(from: string, to: string): number {
   const b = Date.parse(`${to.slice(0, 10)}T00:00:00Z`);
   return Math.round((b - a) / DAY_MS);
 }
+
+/** `{ indicative: true }` for a rate that must not be read as fact, else nothing. */
+const indicativeMark = (r: RateLedgerRow): { indicative?: true } => (isRateIndicative(r) ? { indicative: true } : {});
 
 const groupKey = (r: RateLedgerRow) => `${r.countryCode}|${r.taxType}|${r.stateProvince ?? ''}`;
 
@@ -83,13 +88,17 @@ export function analyzeLedger(asOf?: string | Date, opts: RateWatchOptions = {})
     reviewChecklist: [],
   };
 
-  // current national rows: verification + staleness + review checklist
-  for (const r of activeNationalRows(today)) {
+  // current national rows: verification + staleness + review checklist.
+  // includeIndicative: a country whose rate is only indicative is hidden from
+  // the flat view, which is exactly why it must still reach a human here.
+  for (const r of activeNationalRows(today, { includeIndicative: true })) {
     if (!r.source.verified) {
       findings.unverified.push({
         countryCode: r.countryCode,
         countryName: r.countryName,
-        reason: r.source.url ? 'not verified against authority' : 'no authority url',
+        reason: isRateIndicative(r)
+          ? 'rate is indicative (placeholder, partial, low-confidence or conflicting) - not served as fact'
+          : r.source.url ? 'not verified against authority' : 'no authority url',
       });
     } else {
       const ageDays = daysBetween(r.source.citationDate, today);
@@ -101,7 +110,7 @@ export function analyzeLedger(asOf?: string | Date, opts: RateWatchOptions = {})
     // scheduled change that just took effect matters regardless of citation status.
     const age = daysBetween(r.effectiveFrom, today);
     if (age >= 0 && age <= activatedWithinDays && r.effectiveFrom !== '2000-01-01') {
-      findings.recentlyActivated.push({ countryCode: r.countryCode, standardRate: r.standardRate, effectiveFrom: r.effectiveFrom });
+      findings.recentlyActivated.push({ countryCode: r.countryCode, standardRate: r.standardRate, effectiveFrom: r.effectiveFrom, ...indicativeMark(r) });
     }
     findings.reviewChecklist.push({
       countryCode: r.countryCode,
@@ -109,13 +118,14 @@ export function analyzeLedger(asOf?: string | Date, opts: RateWatchOptions = {})
       standardRate: r.standardRate,
       authority: r.source.authority,
       url: r.source.url,
+      ...indicativeMark(r),
     });
   }
 
   // future-dated rows (announced changes not yet in force)
   for (const r of RATE_LEDGER) {
     if (r.effectiveFrom > today) {
-      findings.upcomingChanges.push({ countryCode: r.countryCode, standardRate: r.standardRate, effectiveFrom: r.effectiveFrom });
+      findings.upcomingChanges.push({ countryCode: r.countryCode, standardRate: r.standardRate, effectiveFrom: r.effectiveFrom, ...indicativeMark(r) });
     }
   }
 
@@ -473,14 +483,32 @@ const INCOME_TAX_FILE: Readonly<Record<string, string>> = { FI: 'src/data/finlan
 export function shippedSchedules(): ScheduleSeries[] {
   const out: ScheduleSeries[] = [];
   for (const s of Object.values(INCOME_TAX_SCHEMES)) {
+    const grace = graceFor('incomeTax', s.code);
     out.push({
       dataset: 'incomeTax',
       countryCode: s.code,
-      sets: s.sets,
+      // A set with its own citation (every data-built country) is judged on it.
+      sets: s.sets.map((set) => ({
+        effectiveFrom: set.effectiveFrom,
+        taxYearLabel: set.taxYearLabel,
+        ...(set.citationDate && set.verified !== undefined ? { citation: { citationDate: set.citationDate, verified: set.verified } } : {}),
+      })),
       citation: { citationDate: s.citationDate, verified: s.verified },
-      rolloverGraceDays: graceFor('incomeTax', s.code),
-      file: INCOME_TAX_FILE[s.code] ?? 'src/data/incomeTax.ts',
+      rolloverGraceDays: grace,
+      file: s.file ?? INCOME_TAX_FILE[s.code] ?? 'src/data/incomeTax.ts',
     });
+    // Sub-national series (provinces, states, Scotland) are watched on their
+    // own, as '<country>-<region>', with the country's grace: a province's
+    // year is published when the federal one is.
+    for (const r of Object.values(s.regions ?? {})) {
+      out.push({
+        dataset: 'incomeTax',
+        countryCode: `${s.code}-${r.code}`,
+        sets: r.sets.map((set) => ({ effectiveFrom: set.effectiveFrom, taxYearLabel: set.taxYearLabel, citation: { citationDate: set.citationDate, verified: set.verified } })),
+        rolloverGraceDays: grace,
+        file: r.file,
+      });
+    }
   }
   for (const s of Object.values(RETIREMENT_SCHEMES)) out.push({ dataset: 'retirement', countryCode: s.countryCode, sets: s.schemes, file: 'src/data/superannuation.ts' });
   for (const s of Object.values(STUDENT_LOAN_SCHEMES)) out.push({ dataset: 'studentLoan', countryCode: s.countryCode, sets: s.schemes, file: 'src/data/studentLoan.ts' });
@@ -504,6 +532,25 @@ export function shippedSchedules(): ScheduleSeries[] {
     rolloverGraceDays: graceFor('capitalGains', 'FI'),
     file: 'src/data/finland.ts',
   });
+  // Capital gains for every other country (src/data/capitalGains). FI is the
+  // series above; GB's rates and annual exempt amount are watched as deduction
+  // series (GB.cgt*, below), so neither is listed twice. A CGT rule holds until
+  // it changes (annual: false), except where a set carries one year's indexed
+  // thresholds (US, DK). Per-set citations, so the set in force is the one judged.
+  for (const c of Object.values(CAPITAL_GAINS_RULES)) {
+    if (c.code === 'FI' || c.code === 'GB') continue;
+    out.push({
+      dataset: 'capitalGains',
+      countryCode: c.code,
+      annual: c.annual === true,
+      sets: c.sets.map((s) => ({
+        effectiveFrom: s.effectiveFrom,
+        taxYearLabel: s.taxYearLabel ?? `from ${s.effectiveFrom}`,
+        ...(s.citationDate ? { citation: { citationDate: s.citationDate, verified: s.verified } } : {}),
+      })),
+      file: c.code === 'AU' ? 'src/data/capitalGains.ts' : 'src/data/capitalGains.data.ts',
+    });
+  }
   return out;
 }
 

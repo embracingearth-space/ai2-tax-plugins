@@ -164,7 +164,7 @@ describe('tax-year resolution', () => {
 
   it('an unsupported country returns null, never a guessed figure', () => {
     expect(calcIncomeTax('ZZ', 90000)).toBeNull();
-    expect(calcIncomeTax('FR', 90000)).toBeNull();
+    expect(calcIncomeTax('AQ', 90000)).toBeNull();
   });
 
   it('every scheme resolves to a year that has actually started', () => {
@@ -187,18 +187,26 @@ describe('tax-year resolution', () => {
 });
 
 describe('every scheme carries real provenance', () => {
-  it('names an authority, a source URL, and a citation date for every country', () => {
+  it('names an authority, a source URL, and a citation date for every country — and an unverified set says why', () => {
     for (const code of listIncomeTaxCountries()) {
       const scheme = INCOME_TAX_SCHEMES[code]!;
       expect(scheme.authorityName.length).toBeGreaterThan(0);
       expect(scheme.source).toMatch(/^https:\/\//);
       expect(scheme.citationDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
-      expect(scheme.verified).toBe(true);
+      for (const set of scheme.sets) {
+        if (set.verified === false) expect((set.verificationNote ?? '').length).toBeGreaterThan(0);
+        if (set.source) expect(set.source).toMatch(/^https:\/\//);
+      }
     }
   });
 
-  it('covers the seven countries the website and the MCP both need', () => {
-    expect(listIncomeTaxCountries().sort()).toEqual(['AU', 'CA', 'FI', 'GB', 'IN', 'NZ', 'US']);
+  it('the six hand-written countries plus Finland stay verified', () => {
+    for (const code of ['AU', 'CA', 'FI', 'GB', 'IN', 'NZ', 'US']) expect(INCOME_TAX_SCHEMES[code]!.verified).toBe(true);
+  });
+
+  it('covers the original seven plus every data-built country', () => {
+    expect(listIncomeTaxCountries()).toEqual(expect.arrayContaining(['AU', 'CA', 'FI', 'GB', 'IN', 'NZ', 'US', 'DE', 'FR', 'IE', 'JP', 'SG', 'ZA']));
+    expect(listIncomeTaxCountries().length).toBeGreaterThanOrEqual(54);
   });
 });
 
@@ -418,14 +426,14 @@ describe('marginal rate is differenced from liability, not read off the bands', 
 describe('Canada (federal) — scheme and provenance', () => {
   const ca = INCOME_TAX_SCHEMES.CA!;
 
-  it('is cited, verified and says federal only beside every figure', () => {
+  it('is cited, verified and says federal only (unless a province is selected) beside every figure', () => {
     expect(ca.authorityName).toBe('Canada Revenue Agency (CRA)');
     expect(ca.source).toMatch(/^https:\/\/www\.canada\.ca\//);
     expect(ca.verified).toBe(true);
     expect(ca.citationDate).toBe('2026-10-06');
-    expect(ca.region).toBe('Federal only — provincial/territorial tax is additional');
-    expect(ca.note).toMatch(/FEDERAL income tax only/);
-    expect(ca.note).toMatch(/provincial or territorial income tax is additional and is NOT included/);
+    expect(ca.region).toBe('Federal only unless a province or territory is selected (options.region) — provincial/territorial tax is then added');
+    expect(ca.note).toMatch(/FEDERAL income tax by default/);
+    expect(ca.note).toMatch(/without one this is not your full tax or take-home/);
   });
 
   it('carries 2026 and 2025, newest first, calendar years', () => {
