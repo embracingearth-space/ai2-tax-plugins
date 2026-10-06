@@ -118,6 +118,22 @@ export const AU_CGT_AUTHORITY_URLS = {
   taxReformAct: 'https://www.legislation.gov.au/C2026A00049/latest',
 } as const;
 
+/**
+ * Provenance for the CGT rules above, as data rather than a comment, so
+ * coverage() can report it. Re-read 2026-10-06: the ATO CGT discount page
+ * (last updated 29 June 2026) — "you can reduce your capital gain by 50%" if
+ * owned at least 12 months and an Australian resident — and the ATO reform page
+ * ("These measures are now law ... apply from 1 July 2027"). What is covered is
+ * the RULE (help text on the AU-IT return); the return takes net capital gains
+ * as an input and does not calculate them or the 30% minimum tax.
+ */
+export const AU_CGT_PROVENANCE = {
+  sourceUrl: AU_CGT_AUTHORITY_URLS.cgtDiscount,
+  citationDate: '2026-10-06',
+  verified: true,
+  scope: 'The 50% CGT discount and its replacement by cost-base indexation from 1 July 2027, as AU-IT return guidance. Net capital gains are an input; the gain and the 30% minimum tax are not calculated.',
+} as const;
+
 /** The capital-gains help text for an income year. */
 export function auCapitalGainsHelpText(incomeYear: AuIncomeYearInput): string {
   const year = auIncomeYear(incomeYear);

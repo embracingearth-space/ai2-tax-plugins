@@ -45,3 +45,13 @@ export function resolveEffectiveDated<T extends EffectiveDated>(
     schemes[schemes.length - 1]
   );
 }
+
+/**
+ * YYYY-MM-DD one calendar year after `ymd` — the day after the last day of a
+ * tax year that starts on `ymd`. 29 February rolls to 1 March in a common year
+ * rather than inventing a date.
+ */
+export function addOneYear(ymd: string): string {
+  const [y, m, d] = ymd.slice(0, 10).split('-').map(Number) as [number, number, number];
+  return new Date(Date.UTC(y + 1, m - 1, d)).toISOString().slice(0, 10);
+}

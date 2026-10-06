@@ -11,6 +11,7 @@
  * - Treatments: GENERIC_TREATMENTS, getTreatmentsForPlugin (transaction → box mapping)
  * - Depreciation: GENERIC_DEPRECIATION_RULES, getDepreciationRules, computePoolPeriod, computeClassPeriod, computeMacrsYear, computeBlockPeriod (capital allowances)
  * - Annual reports: AnnualReportDefinition (AU TPAR)
+ * - Coverage: coverage() — per-capability country coverage with provenance
  */
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -560,6 +561,11 @@ export type { PluginValidationIssue, PluginValidationResult } from './validation
 export { createAdaptiveGenericPlugin } from './adaptiveGeneric';
 export { createEUPlugin } from './countries/euTemplate';
 
+// ─── Coverage manifest — what the engine covers, with provenance ─────────────
+// The single answer the app, the website and every MCP read their coverage from.
+export { coverage, COVERAGE_CAPABILITIES } from './coverage';
+export type { CoverageManifest, CoverageEntry, CoverageCount, CoverageCapability } from './coverage';
+
 // ─── Country Reference Data ──────────────────────────────────────────────────
 export {
   CURRENCY_INFO,
@@ -598,6 +604,11 @@ export {
   getStandardRateAsOf,
   activeNationalRows,
   toYmd,
+  // Canada — federal personal income-tax parameters (CA scheme + CA-IT plugin)
+  CA_FEDERAL_YEARS,
+  CA_FEDERAL_URLS,
+  canadaFederalYear,
+  canadaBasicPersonalAmount,
   // Company / corporate income tax (headline rates for the forecast engine)
   COMPANY_TAX_RATES,
   listCompanyTaxCountries,
@@ -643,6 +654,8 @@ export type {
   CountryTaxRateInfo,
   RateLedgerRow,
   RateSource,
+  CanadaFederalYear,
+  CanadaFederalSource,
   CompanyTaxRateSet,
   CompanyTaxInfo,
   ResolvedCompanyRate,
@@ -696,5 +709,6 @@ export {
   auCapitalGainsHelpText,
   AU_CGT_INDEXATION_FROM,
   AU_CGT_AUTHORITY_URLS,
+  AU_CGT_PROVENANCE,
 } from './countries/australiaIncomeTax';
 export { default as canadaIncomeTaxPlugin } from './countries/canadaIncomeTax';

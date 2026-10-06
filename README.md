@@ -49,7 +49,26 @@ const result = plugin.calculate({
 });
 ```
 
+## Coverage: what the engine covers, with its sources
+
+`coverage(asOf?)` is the one answer to "which countries does it do X for?". The app, the website and every MCP read it instead of keeping their own lists.
+
+```ts
+import { coverage } from '@ai2/tax-plugins';
+
+const m = coverage();            // or coverage('2027-01-01')
+m.counts.incomeTax;              // { countries: 7, verified: 7 }
+m.incomeTax.filter((e) => e.verified).map((e) => e.code);
+// each entry: { code, verified, citationDate, sourceUrl, taxYear?, scope? }
+```
+
+- Capabilities: `gstVat`, `incomeTax`, `companyTax`, `cgt`, `studentLoan`, `retirement`.
+- Every entry is **derived** from the registry holding the figures (the rate ledger, `INCOME_TAX_SCHEMES`, `COMPANY_TAX_RATES`, the Finnish capital-income years, the AU and GB CGT provenance, the student-loan and retirement schemes). There is no second list to keep in step, and the tests pin each count to its registry.
+- `verified` means the figures were confirmed on the official page on `citationDate` **and**, for a yearly schedule, a set covers the tax year `asOf` falls in. A country whose newest income-tax year has ended is still listed, but as unverified. Present only `verified` entries as fact.
+- `scope` says when coverage is partial: Canadian and US income tax are federal only, AU CGT is the discount rule rather than a calculation, and company tax is the headline rate.
+
 ## Tax treatments
+
 
 Every activity statement is a sum of classified transactions, so the package ships a catalogue of **tax treatments**: jurisdiction-neutral codes that a host app stores once per category or transaction, which each country plugin then translates into its own vocabulary and into the official boxes it feeds. The codes are deliberately small in number and mean the same thing everywhere; the plugin supplies the local label, the rate, whether tax is in the price, whether a credit is claimable, and the box list.
 

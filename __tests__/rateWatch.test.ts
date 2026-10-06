@@ -106,7 +106,7 @@ describe('analyzeSchedules — rollover', () => {
   it('flags a year that rolled over with no successor set', () => {
     const f = analyzeSchedules('2027-02-15', {}, only2026);
     expect(f.rollovers).toEqual([
-      { dataset: 'incomeTax', countryCode: 'US', latestLabel: '2026', latestEffectiveFrom: '2026-01-01', ageDays: 410 },
+      { dataset: 'incomeTax', countryCode: 'US', latestLabel: '2026', latestEffectiveFrom: '2026-01-01', ageDays: 410, uncoveredFrom: '2027-01-01' },
     ]);
     expect(hasActionableScheduleFindings(f)).toBe(true);
   });
@@ -159,9 +159,11 @@ describe('analyzeSchedules — citations and activations', () => {
 });
 
 describe('analyzeSchedules — the shipped data', () => {
-  it('covers every income, retirement and student-loan scheme the engine exports', () => {
+  it('covers every income, retirement, student-loan, company-tax and capital-gains schedule the engine exports', () => {
     const byDataset = (d: string) => shippedSchedules().filter((s) => s.dataset === d).map((s) => s.countryCode).sort();
-    expect(byDataset('incomeTax')).toEqual(['AU', 'FI', 'GB', 'IN', 'NZ', 'US']);
+    expect(byDataset('incomeTax')).toEqual(['AU', 'CA', 'FI', 'GB', 'IN', 'NZ', 'US']);
+    expect(byDataset('companyTax')).toEqual(['AU', 'CA', 'FI', 'GB', 'IN', 'US']);
+    expect(byDataset('capitalGains')).toEqual(['FI']);
     expect(byDataset('retirement')).toEqual(['AU']);
     expect(byDataset('studentLoan')).toEqual(['AU']);
   });
@@ -176,5 +178,134 @@ describe('analyzeSchedules — the shipped data', () => {
   it('WILL flag the US in early 2027 unless the 2027 brackets are appended — the point of the check', () => {
     const f = analyzeSchedules('2027-03-01');
     expect(f.rollovers.map((r) => `${r.dataset}:${r.countryCode}`)).toContain('incomeTax:US');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Rollover by COVERAGE. The age rule ("newest set older than 365 + 30 days")
+// could not see a year that is enacted before it starts: Finland's 2026 scale
+// would have been served for all of January 2027 without a flag.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('analyzeSchedules — rollover is by coverage, with a per-series grace', () => {
+  it('flags Finland income tax on 1 January 2027 — the age rule alone would not', () => {
+    const f = analyzeSchedules('2027-01-01');
+    const fi = f.rollovers.find((r) => r.dataset === 'incomeTax' && r.countryCode === 'FI');
+    expect(fi).toEqual({
+      dataset: 'incomeTax',
+      countryCode: 'FI',
+      latestLabel: '2026',
+      latestEffectiveFrom: '2026-01-01',
+      ageDays: 365,
+      uncoveredFrom: '2027-01-01',
+      file: 'src/data/finland.ts',
+    });
+    // Why the old rule missed it: it fired only once the newest set was MORE
+    // than 365 + 30 days old. On this date it is 365.
+    expect(fi!.ageDays > 365 + 30).toBe(false);
+    expect(hasActionableScheduleFindings(f)).toBe(true);
+  });
+
+  it('flags Finnish capital income and Canada income tax the same day, and nothing on the eve', () => {
+    const on = analyzeSchedules('2027-01-01').rollovers.map((r) => `${r.dataset}:${r.countryCode}`);
+    expect(on).toEqual(expect.arrayContaining(['capitalGains:FI', 'incomeTax:CA']));
+    expect(analyzeSchedules('2026-12-31').rollovers).toEqual([]);
+  });
+
+  it('keeps the 30-day grace for everyone else (the US is not flagged on 1 January)', () => {
+    expect(analyzeSchedules('2027-01-01').rollovers.map((r) => r.countryCode)).not.toContain('US');
+    expect(analyzeSchedules('2027-01-31').rollovers.map((r) => `${r.dataset}:${r.countryCode}`)).toContain('incomeTax:US');
+  });
+
+  it('a series grace overrides the option, and the option overrides the default', () => {
+    const fixture = (rolloverGraceDays?: number): ScheduleSeries[] => [
+      { dataset: 'incomeTax', countryCode: 'ZZ', sets: [{ effectiveFrom: '2026-01-01', taxYearLabel: '2026' }], citation: { citationDate: '2026-08-20', verified: true }, rolloverGraceDays },
+    ];
+    expect(analyzeSchedules('2027-01-01', {}, fixture(0)).rollovers).toHaveLength(1);
+    expect(analyzeSchedules('2027-01-01', { rolloverGraceDays: 90 }, fixture(0)).rollovers).toHaveLength(1);
+    expect(analyzeSchedules('2027-01-01', { rolloverGraceDays: 0 }, fixture()).rollovers).toHaveLength(1);
+    expect(analyzeSchedules('2027-01-01', {}, fixture()).rollovers).toHaveLength(0);
+  });
+
+  it('measures a year by the calendar, not 365 days (a leap year is covered to its last day)', () => {
+    const leap: ScheduleSeries[] = [{ dataset: 'incomeTax', countryCode: 'ZZ', sets: [{ effectiveFrom: '2028-01-01', taxYearLabel: '2028' }], rolloverGraceDays: 0 }];
+    expect(analyzeSchedules('2028-12-31', {}, leap).rollovers).toEqual([]);
+    expect(analyzeSchedules('2029-01-01', {}, leap).rollovers).toHaveLength(1);
+  });
+});
+
+describe('analyzeSchedules — company tax', () => {
+  const company = (citation: { citationDate: string; verified: boolean } | undefined, effectiveFrom = '2021-07-01'): ScheduleSeries[] => [
+    { dataset: 'companyTax', countryCode: 'ZZ', annual: false, sets: [{ effectiveFrom, taxYearLabel: `from ${effectiveFrom}`, citation }] },
+  ];
+
+  it('watches every company-tax country the engine ships', () => {
+    const cc = shippedSchedules().filter((s) => s.dataset === 'companyTax').map((s) => s.countryCode).sort();
+    expect(cc).toEqual(['AU', 'CA', 'FI', 'GB', 'IN', 'US']);
+  });
+
+  it('never rolls over — a rate holds until it is changed', () => {
+    const f = analyzeSchedules('2035-01-01');
+    expect(f.rollovers.filter((r) => r.dataset === 'companyTax')).toEqual([]);
+    expect(analyzeSchedules('2035-01-01', {}, company({ citationDate: '2034-06-01', verified: true })).rollovers).toEqual([]);
+  });
+
+  it('flags a stale company citation', () => {
+    const f = analyzeSchedules('2027-10-07', {}, company({ citationDate: '2026-10-06', verified: true }));
+    expect(f.staleCitations).toEqual([{ dataset: 'companyTax', countryCode: 'ZZ', citationDate: '2026-10-06', ageDays: 366 }]);
+    expect(hasActionableScheduleFindings(f)).toBe(true);
+  });
+
+  it('the shipped company sets go stale a year after the 2026-10-06 audit, and not before', () => {
+    const stale = (d: string) => analyzeSchedules(d).staleCitations.filter((s) => s.dataset === 'companyTax').map((s) => s.countryCode).sort();
+    expect(stale('2027-10-06')).toEqual([]);
+    expect(stale('2027-10-07')).toEqual(['AU', 'CA', 'FI', 'GB', 'IN', 'US']);
+  });
+
+  it('flags an unverified company set, and judges the set IN FORCE, not the newest', () => {
+    const sets: ScheduleSeries[] = [{
+      dataset: 'companyTax', countryCode: 'ZZ', annual: false,
+      sets: [
+        { effectiveFrom: '2027-01-01', taxYearLabel: 'from 2027-01-01', citation: { citationDate: '2026-10-06', verified: false } },
+        { effectiveFrom: '2014-01-01', taxYearLabel: 'from 2014-01-01', citation: { citationDate: '2026-10-06', verified: true } },
+      ],
+    }];
+    expect(analyzeSchedules('2026-10-06', {}, sets).unverified).toEqual([]);
+    expect(analyzeSchedules('2026-10-06', {}, sets).upcoming.map((u) => u.taxYearLabel)).toEqual(['from 2027-01-01']);
+    expect(analyzeSchedules('2027-01-02', {}, sets).unverified).toEqual([{ dataset: 'companyTax', countryCode: 'ZZ' }]);
+  });
+
+  it('flags a country with no set in force — the resolver would silently fall back to the oldest', () => {
+    const f = analyzeSchedules('2026-10-06', {}, company({ citationDate: '2026-10-06', verified: true }, '2027-01-01'));
+    expect(f.missing).toEqual([{ dataset: 'companyTax', countryCode: 'ZZ' }]);
+    expect(hasActionableScheduleFindings(f)).toBe(true);
+  });
+
+  it('flags a set with no citation at all as undated', () => {
+    expect(analyzeSchedules('2026-10-06', {}, company(undefined)).undated).toEqual([{ dataset: 'companyTax', countryCode: 'ZZ' }]);
+  });
+});
+
+describe('analyzeSchedules — the shipped data, 2026-10-06 audit', () => {
+  it('is clean: nothing missing, unverified, stale or rolled over', () => {
+    const f = analyzeSchedules('2026-10-06');
+    expect(f.missing).toEqual([]);
+    expect(f.unverified).toEqual([]);
+    expect(f.staleCitations).toEqual([]);
+    expect(f.rollovers).toEqual([]);
+  });
+
+  it('watches Finnish capital income with its per-year citation', () => {
+    const fi = shippedSchedules().find((s) => s.dataset === 'capitalGains' && s.countryCode === 'FI')!;
+    expect(fi.rolloverGraceDays).toBe(0);
+    expect(fi.sets.map((s) => s.taxYearLabel)).toEqual(['2026', '2025']);
+    for (const s of fi.sets) expect(s.citation).toEqual({ citationDate: '2026-09-29', verified: true });
+  });
+
+  it('sends a person to the file that actually holds the next year', () => {
+    const file = (d: string, c: string) => shippedSchedules().find((s) => s.dataset === d && s.countryCode === c)!.file;
+    expect(file('incomeTax', 'FI')).toBe('src/data/finland.ts');
+    expect(file('incomeTax', 'CA')).toBe('src/data/canadaFederal.ts');
+    expect(file('incomeTax', 'US')).toBe('src/data/incomeTax.ts');
+    expect(file('companyTax', 'GB')).toBe('src/data/companyTax.ts');
   });
 });

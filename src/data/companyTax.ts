@@ -19,6 +19,15 @@
  * every set, it falls back to the oldest defined set.
  * This mirrors the effective-dated pattern used by the income-tax brackets so
  * a future budget-year change is a data edit, not a code change.
+ *
+ * PROVENANCE: every set carries its `source`, the `citationDate` it was last
+ * read against that source, and `verified` — TRUE only when the rate was
+ * actually confirmed on the official authority's page that day. A set that
+ * could not be confirmed stays `verified: false` with a `verificationNote`
+ * saying why, and the rate watch (analyzeSchedules, dataset 'companyTax')
+ * reports it. To change a rate, never edit a set in place: add a new set with
+ * the new `effectiveFrom` above it, so the old window keeps answering for the
+ * dates it covered.
  */
 
 import { resolveEffectiveDated } from './effectiveDating';
@@ -37,6 +46,12 @@ export interface CompanyTaxRateSet {
   note: string;
   /** Authoritative source URL for the rate. */
   source: string;
+  /** YYYY-MM-DD the rate was last read against `source`. */
+  citationDate: string;
+  /** TRUE only when the rate was confirmed on the official authority page on `citationDate`. */
+  verified: boolean;
+  /** Why a set is not verified, or what the check did and did not cover. */
+  verificationNote?: string;
 }
 
 export interface CompanyTaxInfo {
@@ -62,7 +77,13 @@ export const COMPANY_TAX_RATES: Record<string, CompanyTaxInfo> = {
         standardRate: 0.30,
         smallCompanyRate: 0.25, // base-rate entity (aggregated turnover < $50m, ≤80% passive)
         note: 'Base-rate entities (aggregated turnover under $50m, no more than 80% passive income) pay 25%; all other companies 30%.',
-        source: 'https://www.ato.gov.au/rates/changes-to-company-tax-rates/',
+        // The old /rates/changes-to-company-tax-rates/ URL redirects here. Read
+        // 2026-10-06 (page last updated 4 September 2026): "2021–22 and future
+        // years $50m 25.0% 30.0%", and the base-rate-entity test (turnover
+        // under the threshold, 80% or less base rate entity passive income).
+        source: 'https://www.ato.gov.au/tax-rates-and-codes/company-tax-rate-changes',
+        citationDate: '2026-10-06',
+        verified: true,
       },
     ],
   },
@@ -75,7 +96,11 @@ export const COMPANY_TAX_RATES: Record<string, CompanyTaxInfo> = {
         effectiveFrom: '2018-01-01',
         standardRate: 0.21, // federal flat rate (TCJA). State corporate tax is additional.
         note: 'Flat 21% federal rate. Most states levy an additional corporate income tax (0%–~12%) not included here.',
+        // Instructions for Form 1120 (2025), Schedule J line 1a: "Multiply
+        // taxable income (page 1, line 30) by 21% (0.21)." Read 2026-10-06.
         source: 'https://www.irs.gov/instructions/i1120',
+        citationDate: '2026-10-06',
+        verified: true,
       },
     ],
   },
@@ -89,7 +114,14 @@ export const COMPANY_TAX_RATES: Record<string, CompanyTaxInfo> = {
         standardRate: 0.25, // main rate
         smallCompanyRate: 0.19, // small-profits rate (profits ≤ £50k); marginal relief £50k–£250k
         note: 'Main rate 25% (profits over £250k). Small-profits rate 19% (profits under £50k), with marginal relief in between.',
+        // gov.uk, read 2026-10-06: "The Corporation Tax rate for company profits
+        // is 25%", "small profits rate, which is 19%" for profits of £50,000 or
+        // less, Marginal Relief between £50,000 and £250,000. The 1 April 2023
+        // start is from HMRC's Marginal Relief guidance: "From 1 April 2023 the
+        // Corporation Tax rate changes to: 19% ... 25% ...".
         source: 'https://www.gov.uk/corporation-tax-rates',
+        citationDate: '2026-10-06',
+        verified: true,
       },
     ],
   },
@@ -102,8 +134,16 @@ export const COMPANY_TAX_RATES: Record<string, CompanyTaxInfo> = {
         effectiveFrom: '2019-09-20',
         standardRate: 0.25, // domestic company, turnover ≤ ₹400cr (plus surcharge + 4% cess, not modelled)
         smallCompanyRate: 0.22, // concessional regime u/s 115BAA (no incentives)
-        note: 'Domestic companies: 25% (turnover up to ₹400cr) or 22% concessional regime. Surcharge and 4% health & education cess apply on top and are not included.',
-        source: 'https://www.incometax.gov.in/iec/foportal/help/company/return-applicable-1',
+        note: 'Domestic companies: 25% (turnover up to ₹400cr) or 22% concessional regime. Other domestic companies pay 30%. Surcharge and 4% health & education cess apply on top and are not included.',
+        // The previous URL (.../return-applicable-1) now 404s. This page, read
+        // 2026-10-06 ("Domestic Company for AY 2026-27", last reviewed
+        // 08-Aug-2026): 25% where turnover in the relevant previous year does
+        // not exceed ₹400 crores, 30% for any other domestic company, 22% under
+        // s.115BAA, cess 4% on tax plus surcharge.
+        source: 'https://www.incometax.gov.in/iec/foportal/help/company/return-applicable',
+        citationDate: '2026-10-06',
+        verified: true,
+        verificationNote: 'Rates confirmed for AY 2026-27. The 2019-09-20 start of the 115BAA regime was not re-read.',
       },
     ],
   },
@@ -117,7 +157,12 @@ export const COMPANY_TAX_RATES: Record<string, CompanyTaxInfo> = {
         standardRate: 0.15, // federal general rate (after abatement). Provincial tax is additional.
         smallCompanyRate: 0.09, // federal small-business rate (CCPC, first $500k active income)
         note: 'Federal general rate 15%; small-business rate 9% (CCPC, first $500k). Provincial/territorial corporate tax is additional and varies.',
+        // canada.ca, read 2026-10-06 (modified 2025-05-30): "After the general
+        // tax reduction, the net tax rate is 15%"; for CCPCs claiming the small
+        // business deduction "the net tax rate is 9%"; business limit $500,000.
         source: 'https://www.canada.ca/en/revenue-agency/services/tax/businesses/topics/corporations/corporation-tax-rates.html',
+        citationDate: '2026-10-06',
+        verified: true,
       },
     ],
   },
@@ -134,7 +179,13 @@ export const COMPANY_TAX_RATES: Record<string, CompanyTaxInfo> = {
         effectiveFrom: '2014-01-01',
         standardRate: 0.20,
         note: 'Flat 20% on a company’s taxable profit, with no small-company rate. The government has proposed cutting it to 18% from 2027 (HE 151/2026); until Parliament passes that, 20% applies.',
+        // vero.fi, read 2026-10-06 (updated 1 Jan 2026): "The income tax rate
+        // of 20% applies to the profits of limited liability companies,
+        // cooperative societies and other corporate entities."
         source: 'https://www.vero.fi/en/businesses-and-corporations/taxes-and-charges/limited-companies-and-cooperatives/income-tax/',
+        citationDate: '2026-10-06',
+        verified: true,
+        verificationNote: 'HE 151/2026 (18% from tax year 2027) was not confirmed as passed on 2026-10-06; vero.fi still describes it as a government proposal.',
       },
       // 24.5% before the cut. The government's bill of 13 Nov 2013 calls it
       // "the present 24.5 per cent", which verifies it for 2013 — so the set is
@@ -146,7 +197,12 @@ export const COMPANY_TAX_RATES: Record<string, CompanyTaxInfo> = {
         effectiveFrom: '2013-01-01',
         standardRate: 0.245,
         note: '24.5% until the end of 2013; cut to 20% from tax year 2014.',
+        // Finnish Government release of 13 Nov 2013, read 2026-10-06: "reduced
+        // from the present 24.5 per cent to 20 per cent". Confirms the rate in
+        // 2013 only — the set is anchored at 2013 for exactly that reason.
         source: 'https://valtioneuvosto.fi/en/-/10623/government-proposes-reduction-of-the-corporate-income-tax-rate-to-20-per-cent',
+        citationDate: '2026-10-06',
+        verified: true,
       },
     ],
   },
@@ -179,6 +235,8 @@ export interface ResolvedCompanyRate {
   note: string;
   source: string;
   effectiveFrom: string;
+  citationDate: string;
+  verified: boolean;
 }
 
 /**
@@ -219,5 +277,7 @@ export function getCompanyTaxRate(
     note: set.note,
     source: set.source,
     effectiveFrom: set.effectiveFrom,
+    citationDate: set.citationDate,
+    verified: set.verified,
   };
 }
