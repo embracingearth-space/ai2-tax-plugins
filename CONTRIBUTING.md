@@ -49,6 +49,21 @@ Rates are **effective-dated** — a row is valid over `[effectiveFrom, effective
   `effectiveFrom`. The resolver activates it automatically on that date — no redeploy.
 - Always fill `source` (`authority` + official `url` + `citationDate`) and set
   `verified: true` only when you have checked the rate against that authority.
+  The `url` must be `https://` on every row: if the authority only serves plain
+  http, cite the closest https official page (or a mirror) and leave the row
+  unverified with the reason in `note`.
+- **Start date unknown?** Use `RATE_FLOOR` (2000-01-01) and say so in the note -
+  never a placeholder such as the citation date or 1970-01-01. The exception is a
+  tax (or jurisdiction) known to have started after 2000: then start the row at
+  the documented start, because a floor row would claim the tax existed before it did.
+- `effectiveTo` is **exclusive**: a rate whose last day is 31 Dec 2026 ends `2027-01-01`.
+- **A figure that must not be shown as fact** (a placeholder, a rate covering only
+  part of the economy, a low-confidence or conflicting figure) gets
+  `rateIsIndicative: true` with `verified: false`. The row stays on record but
+  `getStandardRateAsOf` answers 0 and `activeNationalRows` / `COUNTRY_TAX_RATES`
+  / `getTaxRateInfo` leave it out.
+- A surcharged rate (Cameroon 19.25% = 17.5% + 10% communal centimes) is stored as
+  the rate actually charged, with the statutory base in the note.
 
 The test suite (`__tests__/rateLedger.test.ts`, run by the CI Quality Gate) fails the
 PR on overlapping/duplicate effective windows, out-of-range rates, or missing
