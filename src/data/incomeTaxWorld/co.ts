@@ -50,10 +50,10 @@ export const CO_INCOME_TAX: CountryIncomeTaxData = {
   locale: 'es-CO',
   timeZone: 'America/Bogota',
   file: 'src/data/incomeTaxWorld/co.ts',
-  note: 'Single resident employee: income tax on the cédula general under the art. 241 ET table (0%–39%, in UVT) after the mandatory pension, solidarity-fund and health contributions and the 25% labour exemption (capped at 790 UVT). Excludes dependants, other deductions (interest, prepaid health, voluntary pension), the 1% e-invoice deduction, and the contributions themselves as charges.',
+  note: 'Single resident employee: income tax on the cédula general under the art. 241 ET table (0%–39%, in UVT) after the 25% labour exemption (capped at 790 UVT). Employee pension, solidarity-fund and health contributions are not subtracted (their rates are unverified), so taxable income and tax may be overstated. Excludes dependants, other deductions (interest, prepaid health, voluntary pension), the 1% e-invoice deduction, and the contributions themselves as charges.',
   assumptions: [
     'Single resident employee, ordinary (non-integral) salary, paid the same salary every month, no dependants and no other income.',
-    'Employee social-security contributions (pension 4%, Fondo de Solidaridad Pensional 1–2% from 4 SMMLV, health 4%, on a monthly base capped at 25 SMMLV) are subtracted as non-taxable income as the law provides, but are not included as charges.',
+    'Employee social-security contributions (pension 4%, Fondo de Solidaridad Pensional 1–2% from 4 SMMLV, health 4%, on a monthly base capped at 25 SMMLV) are not subtracted from taxable income (their employee rates are unverified, so taxable income ignores them) and are not included as charges.',
     'Only the 25% labour exemption is claimed; no other exempt income or deductions.',
   ],
   years: [
@@ -73,7 +73,7 @@ export const CO_INCOME_TAX: CountryIncomeTaxData = {
       // 790 UVT = COP 41,375,000 (art. 868 rounding).
       deductions: [exemption(41375000)],
       source: ET,
-      authorityName: 'DIAN / Estatuto Tributario (Secretaría General del Senado)',
+      authorityName: 'DIAN / Estatuto Tributario (Normograma DIAN)',
       citationDate: '2026-10-06',
       verified: true,
     },
@@ -93,7 +93,7 @@ export const CO_INCOME_TAX: CountryIncomeTaxData = {
       // 790 UVT = COP 39,341,000.
       deductions: [exemption(39341000)],
       source: ET,
-      authorityName: 'DIAN / Estatuto Tributario (Secretaría General del Senado)',
+      authorityName: 'DIAN / Estatuto Tributario (Normograma DIAN)',
       citationDate: '2026-10-06',
       verified: true,
     },

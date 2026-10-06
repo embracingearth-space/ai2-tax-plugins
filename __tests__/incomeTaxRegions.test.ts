@@ -30,6 +30,10 @@ describe('selecting a region', () => {
     expect(calcIncomeTax('AU', 90000, '2025-26', { region: 'ON' })!.totalTax).toBe(calcIncomeTax('AU', 90000, '2025-26')!.totalTax);
   });
 
+  it('getIncomeTaxBands ignores a region for a country that has none, as calcIncomeTax does', () => {
+    expect(getIncomeTaxBands('AU', '2025-26', 'ON')).toEqual(getIncomeTaxBands('AU', '2025-26'));
+  });
+
   it('without a region, CA and US stay federal only, exactly as before', () => {
     const ca = calcIncomeTax('CA', 50000, '2026')!;
     expect(ca.region).toBeUndefined();

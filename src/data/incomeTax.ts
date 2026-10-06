@@ -1073,7 +1073,7 @@ export function calcIncomeTax(
   const prov = incomeTaxSetProvenance(c, set);
   const caveats: string[] = [];
   if (!prov.verified) {
-    caveats.push(`${c.country} ${set.taxYearLabel} figures are not verified${prov.verificationNote ? `: ${prov.verificationNote}` : ''}. Confirm with ${prov.authorityName} (${prov.source}).`);
+    caveats.push(`${c.country} ${set.taxYearLabel} figures are not verified${prov.verificationNote ? `: ${prov.verificationNote.replace(/\.\s*$/, '')}` : ''}. Confirm with ${prov.authorityName} (${prov.source}).`);
   }
   const current = taxYear ? true : coversDay(set.effectiveFrom, localToday(c.timeZone));
   if (!current) {
@@ -1091,7 +1091,7 @@ export function calcIncomeTax(
       caveats.push(`${regional.region.name} figures for ${set.taxYearLabel} are not on file yet; the ${rs.taxYearLabel} figures are used instead. Confirm with ${rs.authorityName} (${rs.source}).`);
     }
     if (!rs.verified) {
-      caveats.push(`${regional.region.name} ${rs.taxYearLabel} figures are not verified${rs.verificationNote ? `: ${rs.verificationNote}` : ''}. Confirm with ${rs.authorityName} (${rs.source}).`);
+      caveats.push(`${regional.region.name} ${rs.taxYearLabel} figures are not verified${rs.verificationNote ? `: ${rs.verificationNote.replace(/\.\s*$/, '')}` : ''}. Confirm with ${rs.authorityName} (${rs.source}).`);
     }
   }
 
@@ -1126,7 +1126,8 @@ export function getIncomeTaxBands(countryCode: string, taxYear?: string, region?
   const set = resolveIncomeSet(c, taxYear);
   if (!set) return [];
   let bands = set.bands;
-  if (region) {
+  // Same gate as calcIncomeTax: a region is ignored for a scheme that has none.
+  if (region && c.optionsSupported?.includes('region')) {
     const r = resolveRegion(c, set, { region: normaliseRegion(c, region) });
     if (r?.region.mode === 'replacesBands') bands = r.set.bands;
   }
