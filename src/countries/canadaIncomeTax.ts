@@ -3,16 +3,19 @@
  * Canada Revenue Agency (CRA)
  * Reference: https://www.canada.ca/en/revenue-agency/services/tax/individuals/topics/about-your-tax-return.html
  * ARCHITECTURE: Compound-key plugin 'CA-IT' alongside 'CA' (GST/HST Return).
- *   Federal brackets year-selected: 2026 = 14/20.5/26/29/33% (lowest rate cut
- *   from 15% -> 14.5% blended 2025 -> 14% from 2026; thresholds indexed 2.0%).
- *   BPA: $16,129 (2025) / $16,452 (2026), credited at the lowest rate.
- *   CPP: 5.95% on $3,500 up to YMPE $71,300 (2025) / $74,600 (2026).
+ *   FEDERAL ONLY — provincial/territorial income tax is additional and is not
+ *   computed here. Year-selected federal parameters (brackets, basic personal
+ *   amount and its reduction above the 29% bracket, CPP limits, RRSP dollar
+ *   limit) live in ../data/canadaFederal.ts with their CRA sources, shared with
+ *   the take-home scheme in ../data/incomeTax.ts so the two cannot quote
+ *   different brackets.
  *   (CPP2 second-ceiling contributions not modelled yet.)
  *   FY: Jan-Dec. Filing deadline: Apr 30 (Jun 15 for self-employed, but payment Apr 30).
  *   Quarterly instalment payments if tax >$3,000 net.
  */
 
 import { toCsv } from '../exportUtils';
+import { canadaBasicPersonalAmount, canadaFederalYear } from '../data/canadaFederal';
 
 import type {
   TaxFilingPlugin, FormSection, FieldValues, CalculatedFields,
@@ -20,53 +23,38 @@ import type {
   SubJurisdiction,
 } from '../types';
 
-const CPP_RATE = 0.0595;
-const CPP_EXEMPTION = 3500;
-
 function currentTaxYear(now = new Date()): number {
   return now.getFullYear();
 }
 
-// 2025: lowest rate is the CRA blended 14.5% (15% Jan-Jun, 14% Jul-Dec);
-// thresholds per CRA 2025 indexation. 2026: 14% full-year, thresholds
-// indexed 2.0%, YMPE $74,600, BPA $16,452.
-const YEAR_PARAMS = {
-  2025: {
-    brackets: [
-      [0, 57375, 0.145], [57375, 114750, 0.205], [114750, 177882, 0.26],
-      [177882, 253414, 0.29], [253414, Infinity, 0.33],
-    ] as const,
-    bpa: 16129, lowestRate: 0.145, cppMaxEarnings: 71300,
-  },
-  2026: {
-    brackets: [
-      [0, 58523, 0.14], [58523, 117045, 0.205], [117045, 181440, 0.26],
-      [181440, 258482, 0.29], [258482, Infinity, 0.33],
-    ] as const,
-    bpa: 16452, lowestRate: 0.14, cppMaxEarnings: 74600,
-  },
-};
+const paramsForYear = canadaFederalYear;
 
-function paramsForYear(year: number) {
-  return year >= 2026 ? YEAR_PARAMS[2026] : YEAR_PARAMS[2025];
-}
-
+/**
+ * Federal tax less the basic personal amount credit. The BPA is reduced on a
+ * straight line above the start of the 29% bracket (CRA line 30000); before
+ * 2026-10 this ignored the reduction and over-credited every filer with net
+ * income above $177,882 (2025) / $181,440 (2026).
+ */
 function calcFederalTax(taxable: number, year = currentTaxYear()): number {
   const p = paramsForYear(year);
   let tax = 0;
-  for (const [lower, upper, rate] of p.brackets) {
-    if (taxable > lower) tax += Math.min(taxable - lower, upper - lower) * rate;
+  let lower = 0;
+  for (const b of p.bands) {
+    const upper = b.upTo ?? Infinity;
+    if (taxable > lower) tax += (Math.min(taxable, upper) - lower) * b.rate;
+    lower = upper;
   }
   // Basic personal amount credit (non-refundable, at the lowest rate)
-  tax -= p.bpa * p.lowestRate;
+  tax -= canadaBasicPersonalAmount(taxable, p) * p.lowestRate;
   return Math.max(0, Math.round(tax * 100) / 100);
 }
 
 function calcCPP(selfEmploymentIncome: number, year = currentTaxYear()): number {
   const p = paramsForYear(year);
-  const pensionableEarnings = Math.min(Math.max(0, selfEmploymentIncome - CPP_EXEMPTION), p.cppMaxEarnings - CPP_EXEMPTION);
+  const { ympe, basicExemption, employeeRate } = p.cpp;
+  const pensionableEarnings = Math.min(Math.max(0, selfEmploymentIncome - basicExemption), ympe - basicExemption);
   // Self-employed pay both employee + employer portions
-  return Math.round(pensionableEarnings * CPP_RATE * 2 * 100) / 100;
+  return Math.round(pensionableEarnings * employeeRate * 2 * 100) / 100;
 }
 
 const CA_PROVINCES: SubJurisdiction[] = [
@@ -102,7 +90,7 @@ const caItPlugin: TaxFilingPlugin = {
           { id: 'interest_income', label: 'Interest and investment income', officialLabel: 'Line 12100', type: 'currency', editable: true, required: false },
           { id: 'dividend_income', label: 'Taxable dividends', officialLabel: 'Line 12000', type: 'currency', editable: true, required: false },
           { id: 'rental_income', label: 'Net rental income', officialLabel: 'Line 12600', type: 'currency', editable: true, required: false },
-          { id: 'capital_gains', label: 'Taxable capital gains', officialLabel: 'Line 12700', type: 'currency', editable: true, required: false, helpText: '50% inclusion rate (changing to 2/3 for gains >$250K from Jun 2024)' },
+          { id: 'capital_gains', label: 'Taxable capital gains', officialLabel: 'Line 12700', type: 'currency', editable: true, required: false, helpText: '50% inclusion rate. The proposed increase to 2/3 was cancelled on 21 March 2025 and never took effect.' },
           { id: 'other_income', label: 'Other income', officialLabel: 'Line 13000', type: 'currency', editable: true, required: false },
           { id: 'total_income', label: 'Total income', officialLabel: 'Line 15000', type: 'currency', calculated: true, editable: false, required: true },
         ],
@@ -111,7 +99,7 @@ const caItPlugin: TaxFilingPlugin = {
         id: 'deductions',
         title: 'Deductions (Net Income)',
         fields: [
-          { id: 'rrsp_deduction', label: 'RRSP deduction', officialLabel: 'Line 20800', type: 'currency', editable: true, required: false, helpText: '18% of prior year earned income, max $31,560 (2025)' },
+          { id: 'rrsp_deduction', label: 'RRSP deduction', officialLabel: 'Line 20800', type: 'currency', editable: true, required: false, helpText: `18% of prior year earned income, up to the RRSP dollar limit ($${paramsForYear(currentTaxYear()).rrspDollarLimit.toLocaleString('en-CA')} for ${paramsForYear(currentTaxYear()).taxYear})` },
           { id: 'union_dues', label: 'Union / professional dues', officialLabel: 'Line 21200', type: 'currency', editable: true, required: false },
           { id: 'child_care', label: 'Child care expenses', officialLabel: 'Line 21400', type: 'currency', editable: true, required: false },
           { id: 'moving_expenses', label: 'Moving expenses', officialLabel: 'Line 21900', type: 'currency', editable: true, required: false },
@@ -126,7 +114,7 @@ const caItPlugin: TaxFilingPlugin = {
         collapsed: true,
         fields: [
           { id: 'medical_expenses', label: 'Medical expenses', officialLabel: 'Line 33099', type: 'currency', editable: true, required: false },
-          { id: 'charitable_donations', label: 'Charitable donations', officialLabel: 'Line 34900', type: 'currency', editable: true, required: false, helpText: '15% on first $200, 29-33% on excess' },
+          { id: 'charitable_donations', label: 'Charitable donations', officialLabel: 'Line 34900', type: 'currency', editable: true, required: false, helpText: 'Lowest federal rate (14.5% for 2025, 14% for 2026) on the first $200; 29% on the rest (33% on the part paid from income in the top bracket, not modelled here)' },
           { id: 'disability_amount', label: 'Disability amount', type: 'currency', editable: true, required: false },
         ],
       },
@@ -136,7 +124,7 @@ const caItPlugin: TaxFilingPlugin = {
         fields: [
           { id: 'taxable_income', label: 'Taxable income', officialLabel: 'Line 26000', type: 'currency', calculated: true, editable: false, required: true },
           { id: 'federal_tax', label: 'Federal tax', type: 'currency', calculated: true, editable: false, required: true },
-          { id: 'cpp_contributions', label: 'CPP contributions on SE income', type: 'currency', calculated: true, editable: false, required: false, helpText: 'Self-employed pay both portions: 11.9% on $3,500-$71,300' },
+          { id: 'cpp_contributions', label: 'CPP contributions on SE income', type: 'currency', calculated: true, editable: false, required: false, helpText: `Self-employed pay both portions: 11.9% on $3,500-$${paramsForYear(currentTaxYear()).cpp.ympe.toLocaleString('en-CA')} (${paramsForYear(currentTaxYear()).taxYear})` },
           { id: 'total_federal_payable', label: 'Total federal tax payable', type: 'currency', calculated: true, editable: false, required: true },
         ],
       },
@@ -185,7 +173,11 @@ const caItPlugin: TaxFilingPlugin = {
     const donations = Number(v.charitable_donations) || 0;
     let donationCredit = 0;
     if (donations > 0) {
-      donationCredit = Math.min(donations, 200) * 0.15 + Math.max(0, donations - 200) * 0.29;
+      // The first $200 is credited at the LOWEST rate, which is 14.5% for 2025
+      // and 14% for 2026 (Finance Canada: "Only the first $200 of an
+      // individual's charitable donation claim is subject to the lowest income
+      // tax rate"). This used the pre-2025 15% until 2026-10.
+      donationCredit = Math.min(donations, 200) * paramsForYear(currentTaxYear()).lowestRate + Math.max(0, donations - 200) * 0.29;
     }
 
     const total_federal_payable = Math.max(0, Math.round((federal_tax + cpp_contributions - donationCredit) * 100) / 100);
@@ -206,7 +198,12 @@ const caItPlugin: TaxFilingPlugin = {
   validateForm(v: FieldValues): ValidationResult[] {
     const r: ValidationResult[] = [];
     const rrsp = Number(v.rrsp_deduction) || 0;
-    if (rrsp > 31560) r.push({ fieldId: 'rrsp_deduction', message: '2025 RRSP deduction limit is $31,560', severity: 'warning' });
+    // $31,560 was quoted here as the 2025 limit; it is the 2024 one. The CRA's
+    // dollar limit is $32,490 for 2025 and $33,810 for 2026.
+    const p = paramsForYear(currentTaxYear());
+    if (rrsp > p.rrspDollarLimit) {
+      r.push({ fieldId: 'rrsp_deduction', message: `${p.taxYear} RRSP dollar limit is $${p.rrspDollarLimit.toLocaleString('en-CA')}`, severity: 'warning' });
+    }
     return r;
   },
   getFieldHelp: () => null,

@@ -29,7 +29,7 @@ export {
   toYmd,
 } from './rateLedger';
 
-// Personal Income Tax (take-home estimator — AU, NZ, GB, IN, US, FI)
+// Personal Income Tax (take-home estimator — AU, NZ, GB, IN, US, FI, CA federal)
 export type {
   IncomeTaxBand,
   IncomeLineItem,
@@ -80,6 +80,10 @@ export {
   FI_ALAND_MUNICIPALITIES,
 } from './finland';
 export { FI_MUNICIPAL_RATES_SOURCE } from './finlandMunicipalRates';
+
+// Canada — federal personal income-tax parameters (shared by the CA scheme and the CA-IT plugin)
+export type { CanadaFederalYear, CanadaFederalSource } from './canadaFederal';
+export { CA_FEDERAL_YEARS, CA_FEDERAL_URLS, canadaFederalYear, canadaBasicPersonalAmount } from './canadaFederal';
 
 // Company / Corporate Income Tax (headline rates for the CompanyFlatRate forecast strategy)
 export type { CompanyTaxRateSet, CompanyTaxInfo, ResolvedCompanyRate } from './companyTax';

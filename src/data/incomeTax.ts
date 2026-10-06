@@ -38,6 +38,7 @@
  */
 import { resolveEffectiveDated } from './effectiveDating';
 import { FI_EARNED_INCOME_YEARS, finnishMunicipalities, finnishWageTax, type FinnishEarnedIncomeYear } from './finland';
+import { CA_FEDERAL_URLS, CA_FEDERAL_YEARS, canadaBasicPersonalAmount, type CanadaFederalYear } from './canadaFederal';
 
 export interface IncomeTaxBand {
   upTo: number | null;
@@ -117,7 +118,7 @@ export interface IncomeYearContext {
 /**
  * PERSONAL CIRCUMSTANCES THAT CHANGE THE ANSWER.
  *
- * AU/NZ/GB/IN/US are modelled on gross income alone. Finland cannot be: roughly
+ * AU/NZ/GB/IN/US/CA are modelled on gross income alone. Finland cannot be: roughly
  * a third of a Finnish wage earner's tax is MUNICIPAL, at a rate each
  * municipality sets (Helsinki and the national average differ by more than two
  * points); church members pay church tax on the same base; and the employee
@@ -628,6 +629,31 @@ export const INCOME_TAX_SCHEMES: Record<string, IncomeTaxScheme> = {
     citationDate: '2026-08-20',
     verified: true,
   },
+  CA: {
+    code: 'CA', country: 'Canada', currency: 'CAD', locale: 'en-CA', timeZone: 'America/Toronto',
+    // Calendar tax year. FEDERAL ONLY: the figures live in canadaFederal.ts,
+    // shared with the CA-IT filing plugin so the two cannot quote different
+    // brackets. There is no pre-band deduction — Canada's tax-free step is the
+    // basic personal amount, a non-refundable CREDIT at the lowest rate, so it
+    // is an offset here, not a deduction.
+    sets: CA_FEDERAL_YEARS.map((y) => ({ effectiveFrom: y.effectiveFrom, taxYearLabel: y.taxYear, bands: y.bands.map((b) => ({ ...b })) })),
+    offsets: ({ taxable, incomeTax, taxYearLabel, q }) => {
+      // Non-refundable: it can bring federal tax to nil, never below. Reduced
+      // on a straight line above the 29% bracket (CRA line 30000 worksheet).
+      const y = canadaYearFor(taxYearLabel);
+      const credit = Math.min(incomeTax, q.round(canadaBasicPersonalAmount(taxable, y) * y.lowestRate));
+      return credit > 0 ? [{ name: 'Basic personal amount credit', amount: credit }] : [];
+    },
+    levies: () => [],
+    note: 'FEDERAL income tax only — provincial or territorial income tax is additional and is NOT included, so this is not your full tax or take-home. Includes the federal brackets and the basic personal amount credit (reduced above the 29% bracket). Excludes CPP/QPP contributions, EI premiums, the Canada employment amount and every other credit, and the Quebec abatement.',
+    region: 'Federal only — provincial/territorial tax is additional',
+    source: CA_FEDERAL_URLS.rates2026,
+    authorityName: 'Canada Revenue Agency (CRA)',
+    // Derived, not restated: the scheme is only as fresh as its stalest year,
+    // and verified only if every year is.
+    citationDate: CA_FEDERAL_YEARS.map((y) => y.citationDate).sort()[0]!,
+    verified: CA_FEDERAL_YEARS.every((y) => y.verified),
+  },
   FI: {
     code: 'FI', country: 'Finland', currency: 'EUR', locale: 'fi-FI', timeZone: 'Europe/Helsinki',
     // Calendar tax year. The arithmetic lives in finland.ts (see its header for
@@ -676,6 +702,14 @@ export const INCOME_TAX_SCHEMES: Record<string, IncomeTaxScheme> = {
     verified: true,
   },
 };
+
+/** The Canadian federal year for a set label — built from the same array as
+ *  `sets`, so a miss is a programming error. */
+function canadaYearFor(label: string): CanadaFederalYear {
+  const y = CA_FEDERAL_YEARS.find((x) => x.taxYear === label);
+  if (!y) throw new Error(`No Canadian federal parameters for ${label}`);
+  return y;
+}
 
 /** The Finnish year for a set label — the label always comes from `sets`,
  *  which is built from the same array, so a miss is a programming error. */
