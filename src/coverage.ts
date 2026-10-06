@@ -38,6 +38,7 @@ import {
   toYmd,
   INCOME_TAX_SCHEMES,
   COMPANY_TAX_RATES,
+  COMPANY_TAX_NOT_COVERED,
   FI_CAPITAL_INCOME_YEARS,
   STUDENT_LOAN_SCHEMES,
   RETIREMENT_SCHEMES,
@@ -75,9 +76,19 @@ export interface CoverageCount {
   countries: number;
   /** Of those, how many are `verified`. */
   verified: number;
+  /**
+   * Company tax only: jurisdictions researched and found to have no figure on
+   * a national or OECD source, so deliberately left uncovered.
+   */
+  notCovered?: number;
 }
 
-export type CoverageManifest = { asOf: string; counts: Record<CoverageCapability, CoverageCount> } & Record<CoverageCapability, CoverageEntry[]>;
+export type CoverageManifest = {
+  asOf: string;
+  counts: Record<CoverageCapability, CoverageCount>;
+  /** Company tax: researched jurisdictions with no figure (COMPANY_TAX_NOT_COVERED), sorted. */
+  companyTaxNotCovered: string[];
+} & Record<CoverageCapability, CoverageEntry[]>;
 
 type Dated = { effectiveFrom: string; taxYearLabel: string };
 
@@ -143,7 +154,9 @@ function companyTax(ymd: string): CoverageEntry[] {
         verified: Boolean(set?.verified),
         citationDate: set?.citationDate ?? null,
         sourceUrl: set?.source ?? null,
-        scope: 'Headline rate only (indicative).',
+        scope: set?.sourceAuthority?.startsWith('OECD')
+          ? 'Headline rate only (indicative), from OECD Corporate Tax Statistics: confirm with the national authority.'
+          : 'Headline rate only (indicative).',
       };
     })
     .sort(byCode);
@@ -223,7 +236,7 @@ function undatedAnnual<T extends Dated & { source: string }>(info: Record<string
  * @example
  *   const m = coverage();
  *   m.incomeTax.filter((e) => e.verified).map((e) => e.code); // what may be presented as fact
- *   m.counts.companyTax; // { countries: 6, verified: 6 }
+ *   m.counts.companyTax; // { countries: 139, verified: 28, notCovered: 58 }
  */
 export function coverage(asOf?: string | Date): CoverageManifest {
   // One instant for the whole manifest, so no two capabilities straddle midnight.
@@ -240,5 +253,7 @@ export function coverage(asOf?: string | Date): CoverageManifest {
   const counts = Object.fromEntries(
     COVERAGE_CAPABILITIES.map((c) => [c, { countries: lists[c].length, verified: lists[c].filter((e) => e.verified).length }]),
   ) as Record<CoverageCapability, CoverageCount>;
-  return { asOf: ymd, ...lists, counts };
+  const companyTaxNotCovered = Object.keys(COMPANY_TAX_NOT_COVERED).sort();
+  counts.companyTax.notCovered = companyTaxNotCovered.length;
+  return { asOf: ymd, ...lists, counts, companyTaxNotCovered };
 }

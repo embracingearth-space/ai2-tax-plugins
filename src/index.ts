@@ -611,6 +611,7 @@ export {
   canadaBasicPersonalAmount,
   // Company / corporate income tax (headline rates for the forecast engine)
   COMPANY_TAX_RATES,
+  COMPANY_TAX_NOT_COVERED,
   listCompanyTaxCountries,
   getCompanyTaxInfo,
   getCompanyTaxRate,

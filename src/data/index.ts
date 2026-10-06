@@ -89,6 +89,7 @@ export { CA_FEDERAL_YEARS, CA_FEDERAL_URLS, canadaFederalYear, canadaBasicPerson
 export type { CompanyTaxRateSet, CompanyTaxInfo, ResolvedCompanyRate } from './companyTax';
 export {
   COMPANY_TAX_RATES,
+  COMPANY_TAX_NOT_COVERED,
   listCompanyTaxCountries,
   getCompanyTaxInfo,
   getCompanyTaxRate,

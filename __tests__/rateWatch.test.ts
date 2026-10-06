@@ -86,6 +86,14 @@ describe('hasActionableFindings', () => {
 // do not rot when a real set is appended; the shipped data gets its own checks.
 // ─────────────────────────────────────────────────────────────────────────────
 import { analyzeSchedules, hasActionableScheduleFindings, shippedSchedules } from '../src/rateWatch';
+import { COMPANY_TAX_RATES } from '../src/data/companyTax';
+
+/** Countries whose company set in force on `ymd` is verified, sorted. */
+const verifiedCompanyCodes = (ymd: string) =>
+  Object.values(COMPANY_TAX_RATES)
+    .filter((c) => [...c.rates].sort((a, b) => b.effectiveFrom.localeCompare(a.effectiveFrom)).find((r) => r.effectiveFrom <= ymd)?.verified)
+    .map((c) => c.countryCode)
+    .sort();
 import type { ScheduleSeries } from '../src/rateWatch';
 
 const us = (sets: ScheduleSeries['sets'], citation = { citationDate: '2026-08-20', verified: true }): ScheduleSeries[] => [
@@ -162,7 +170,7 @@ describe('analyzeSchedules — the shipped data', () => {
   it('covers every income, retirement, student-loan, company-tax and capital-gains schedule the engine exports', () => {
     const byDataset = (d: string) => shippedSchedules().filter((s) => s.dataset === d).map((s) => s.countryCode).sort();
     expect(byDataset('incomeTax')).toEqual(['AU', 'CA', 'FI', 'GB', 'IN', 'NZ', 'US']);
-    expect(byDataset('companyTax')).toEqual(['AU', 'CA', 'FI', 'GB', 'IN', 'US']);
+    expect(byDataset('companyTax')).toEqual(Object.keys(COMPANY_TAX_RATES).sort());
     expect(byDataset('capitalGains')).toEqual(['FI']);
     expect(byDataset('retirement')).toEqual(['AU']);
     expect(byDataset('studentLoan')).toEqual(['AU']);
@@ -171,7 +179,8 @@ describe('analyzeSchedules — the shipped data', () => {
   it('has no rollover gap and no unverified income schedule as of the 2026-09 audit', () => {
     const f = analyzeSchedules('2026-09-20');
     expect(f.rollovers).toEqual([]);
-    expect(f.unverified).toEqual([]);
+    // Only the OECD-sourced (and other unconfirmed) company-tax sets are unverified, by design.
+    expect(f.unverified.filter((u) => u.dataset !== 'companyTax')).toEqual([]);
     expect(f.staleCitations).toEqual([]);
   });
 
@@ -240,7 +249,8 @@ describe('analyzeSchedules — company tax', () => {
 
   it('watches every company-tax country the engine ships', () => {
     const cc = shippedSchedules().filter((s) => s.dataset === 'companyTax').map((s) => s.countryCode).sort();
-    expect(cc).toEqual(['AU', 'CA', 'FI', 'GB', 'IN', 'US']);
+    expect(cc).toEqual(Object.keys(COMPANY_TAX_RATES).sort());
+    expect(cc.length).toBe(139);
   });
 
   it('never rolls over — a rate holds until it is changed', () => {
@@ -258,7 +268,21 @@ describe('analyzeSchedules — company tax', () => {
   it('the shipped company sets go stale a year after the 2026-10-06 audit, and not before', () => {
     const stale = (d: string) => analyzeSchedules(d).staleCitations.filter((s) => s.dataset === 'companyTax').map((s) => s.countryCode).sort();
     expect(stale('2027-10-06')).toEqual([]);
-    expect(stale('2027-10-07')).toEqual(['AU', 'CA', 'FI', 'GB', 'IN', 'US']);
+    // Every VERIFIED set in force goes stale; unverified ones are reported as unverified instead.
+    expect(stale('2027-10-07')).toEqual(verifiedCompanyCodes('2027-10-07'));
+    expect(stale('2027-10-07')).toHaveLength(28);
+  });
+
+  it('reports every unverified company set in force as unverified: the OECD-only countries, NG, ZW and BT', () => {
+    const u = analyzeSchedules('2026-10-06').unverified.filter((x) => x.dataset === 'companyTax').map((x) => x.countryCode);
+    expect(u).toHaveLength(111);
+    expect(u).toEqual(expect.arrayContaining(['FR', 'NG', 'ZW', 'BT']));
+    expect(u).not.toContain('DE');
+  });
+
+  it('lists the German enacted cuts as upcoming company sets', () => {
+    const de = analyzeSchedules('2026-10-06').upcoming.filter((x) => x.dataset === 'companyTax' && x.countryCode === 'DE');
+    expect(de.map((x) => x.effectiveFrom)).toEqual(['2028-01-01', '2029-01-01', '2030-01-01', '2031-01-01', '2032-01-01']);
   });
 
   it('flags an unverified company set, and judges the set IN FORCE, not the newest', () => {
@@ -289,7 +313,8 @@ describe('analyzeSchedules — the shipped data, 2026-10-06 audit', () => {
   it('is clean: nothing missing, unverified, stale or rolled over', () => {
     const f = analyzeSchedules('2026-10-06');
     expect(f.missing).toEqual([]);
-    expect(f.unverified).toEqual([]);
+    // Unverified company-tax sets (OECD-only etc.) are deliberate and listed; nothing else.
+    expect(f.unverified.filter((u) => u.dataset !== 'companyTax')).toEqual([]);
     expect(f.staleCitations).toEqual([]);
     expect(f.rollovers).toEqual([]);
   });
