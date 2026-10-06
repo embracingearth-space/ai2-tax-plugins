@@ -8,6 +8,24 @@ member has a value on every rules object that ships, `declineInValue` still
 accepts `daysHeld` / `daysInYear` exactly as before, and a host on 2.1.0 keeps
 working untouched.
 
+### Changed — India GSTR-3B is the full return (`t31a_txval` … `net_tax`)
+
+The India plugin filled a single "outward taxable" figure from the GROSS of every sale (tax included, zero-rated and exempt sales too), mapped credit to three aggregate keys no host emits, and had one ITC reversal figure with no tax head. It is now the official GSTR-3B, table by table.
+
+- **Tables 3.1, 3.1.1, 3.2, 4(A)–(D), 5, 5.1 and 6.1**, each row with the official columns: taxable value, Integrated, Central, State/UT tax and Cess. Field ids are `t<table>_<column>` with GSTN's column names (`t31a_txval`, `t4a5_camt`, …).
+- **Auto-population from the per-treatment totals** the core app already emits (`treat_<CODE>_tax|gross|net`, `income_standard_excl_tax`). 3.1(a) is the taxable value EXCLUDING tax. The host records no place of supply yet, so tax is filled intra-state (half Central, half State/UT); `validateForm` says so, so an inter-state supply's tax can be moved to Integrated tax. Import of goods is Integrated tax in 4(A)(1).
+- **4(A)(5) matches GSTR-2B**: blocked (section 17(5)) and exempt-attributable (rules 42/43) credit is reported there and reversed in 4(B)(1), so 4(C) is the credit actually available.
+- **6.1 is calculated** with `setOffIndiaGst()`: the section 49(5) / rule 88A order (IGST credit first and in full; CGST and SGST/UTGST never against each other; Cess only against Cess), an optional opening ledger balance, cash per head, reverse-charge tax, interest and late fee in cash, and credit carried forward. `net_tax` is the total cash to pay.
+- **Rates** quote the slabs in force since 22 September 2025: 5%, 18% and 40% (with 0.25% and 3%).
+- **Catalogue** adds `SALE_EXEMPT` (3.1(c)) and `PURCHASE_CAPITAL_NO_TAX` (table 5).
+- **Saved v1 statements**: `migrateIndiaGstr3bValues()` moves the old ids onto the official tables without overwriting a value already under a new id. Hosts should run it when reopening an IN statement saved before this version.
+- Exports: CSV, and JSON grouped by table under GSTN's field names (labelled "JSON (by table)"; it is not the portal upload schema).
+
+### Added — a mapping row can sum several aggregates (`aggregateKeys`, `resolveAggregateMapping`)
+
+- `AggregationMapping.aggregateKeys` sums several aggregates into one field (4(A)(5) is three purchase codes' tax). `aggregateKey` stays and is the first key, for provenance and for hosts that read one key.
+- `resolveAggregateMapping(m, aggregates)` and `valuesFromAggregates(plugin, aggregates)` are the one way to read a mapping. **Hosts must switch to them** — indexing `aggregateKey` reads only the first key of a multi-key row. A field is left empty only when the host produced none of its keys.
+
 ### Added — the home-space verdict, like with like (`homeSpaceComparison`, `recommendHomeSpace`)
 
 The app and the website each weighed a place of business against a desk themselves, and the app weighed four years of occupancy deductions against CGT on growth to 30 June 2027 only. For a sale after that date, a place of business looked better when a desk was. One function now does it for both.

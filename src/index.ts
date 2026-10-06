@@ -45,6 +45,9 @@ export type {
   AnnualReportQualifyingService,
 } from './types';
 
+// ─── Auto-populate mapping (aggregates → form fields) ────────────────────────
+export { mappingKeys, resolveAggregateMapping, valuesFromAggregates } from './aggregateMapping';
+
 // ─── Tax treatments (transaction → box mapping catalogue) ────────────────────
 export {
   CANONICAL_TREATMENT_CODES,
