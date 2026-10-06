@@ -549,6 +549,8 @@ const inPlugin: TaxFilingPlugin = {
 
   getAutoPopulateMapping: (): AggregationMapping[] => MAPPING.map((m) => ({ ...m })),
 
+  migrateSavedValues: (values: FieldValues): FieldValues => migrateIndiaGstr3bValues(values),
+
   getRoundingRules: (): RoundingConfig => ({ method: 'nearest', decimals: 2 }),
 
   validateForm(v: FieldValues): ValidationResult[] {

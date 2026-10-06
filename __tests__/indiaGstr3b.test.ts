@@ -365,3 +365,11 @@ describe('package exports', () => {
     expect(typeof pkg.resolveAggregateMapping).toBe('function');
   });
 });
+
+describe('migrateSavedValues (the contract hook)', () => {
+  it('is the India migration, and running it twice changes nothing more', () => {
+    const once = inPlugin.migrateSavedValues!({ igst: 10, late_fee: 40 });
+    expect(once).toEqual({ t31a_iamt: 10, t51_fee_camt: 20, t51_fee_samt: 20 });
+    expect(inPlugin.migrateSavedValues!(once)).toEqual(once);
+  });
+});

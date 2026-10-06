@@ -325,6 +325,14 @@ export interface TaxFilingPlugin {
 
   calculateFields(inputs: FieldValues): CalculatedFields;
   getAutoPopulateMapping(): AggregationMapping[];
+
+  /**
+   * Values saved under an earlier version of this form, moved onto the current
+   * field ids. Optional; a host calls it on every saved statement it reopens
+   * (`plugin.migrateSavedValues?.(values) ?? values`) and then recalculates.
+   * Must be idempotent and never overwrite a value already under a new id.
+   */
+  migrateSavedValues?(values: FieldValues): FieldValues;
   getRoundingRules(): RoundingConfig;
 
   validateForm(values: FieldValues): ValidationResult[];

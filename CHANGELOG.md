@@ -18,7 +18,7 @@ The India plugin filled a single "outward taxable" figure from the GROSS of ever
 - **6.1 is calculated** with `setOffIndiaGst()`: the section 49(5) / rule 88A order (IGST credit first and in full; CGST and SGST/UTGST never against each other; Cess only against Cess), an optional opening ledger balance, cash per head, reverse-charge tax, interest and late fee in cash, and credit carried forward. `net_tax` is the total cash to pay.
 - **Rates** quote the slabs in force since 22 September 2025: 5%, 18% and 40% (with 0.25% and 3%).
 - **Catalogue** adds `SALE_EXEMPT` (3.1(c)) and `PURCHASE_CAPITAL_NO_TAX` (table 5).
-- **Saved v1 statements**: `migrateIndiaGstr3bValues()` moves the old ids onto the official tables without overwriting a value already under a new id. Hosts should run it when reopening an IN statement saved before this version.
+- **Saved v1 statements**: `migrateIndiaGstr3bValues()` moves the old ids onto the official tables without overwriting a value already under a new id. It is also the plugin's `migrateSavedValues()`, a new optional `TaxFilingPlugin` method: hosts call `plugin.migrateSavedValues?.(values) ?? values` on every saved statement they reopen, then recalculate.
 - Exports: CSV, and JSON grouped by table under GSTN's field names (labelled "JSON (by table)"; it is not the portal upload schema).
 
 ### Added — a mapping row can sum several aggregates (`aggregateKeys`, `resolveAggregateMapping`)
