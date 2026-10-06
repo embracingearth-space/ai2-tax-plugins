@@ -57,15 +57,33 @@ const result = plugin.calculate({
 import { coverage } from '@ai2/tax-plugins';
 
 const m = coverage();            // or coverage('2027-01-01')
-m.counts.incomeTax;              // { countries: 7, verified: 7 }
+m.counts.incomeTax;              // { countries, verified } — see "Personal income tax" below
 m.incomeTax.filter((e) => e.verified).map((e) => e.code);
-// each entry: { code, verified, citationDate, sourceUrl, taxYear?, scope? }
+// each entry: { code, verified, citationDate, sourceUrl, taxYear?, scope?, regions? }
 ```
 
 - Capabilities: `gstVat`, `incomeTax`, `companyTax`, `cgt`, `studentLoan`, `retirement`.
 - Every entry is **derived** from the registry holding the figures (the rate ledger, `INCOME_TAX_SCHEMES`, `COMPANY_TAX_RATES`, `CAPITAL_GAINS_RULES`, the student-loan and retirement schemes). There is no second list to keep in step, and the tests pin each count to its registry.
 - `verified` means the figures were confirmed on the official page on `citationDate` **and**, for a yearly schedule, a set covers the tax year `asOf` falls in. A country whose newest income-tax year has ended is still listed, but as unverified. Present only `verified` entries as fact.
-- `scope` says when coverage is partial: Canadian and US income tax are federal only, company tax is the headline rate, and each CGT entry says whether the estimator computes shares, property, both or neither.
+- `scope` says when coverage is partial: Canadian and US income tax are federal only unless a province or state is selected, company tax is the headline rate, and each CGT entry says whether the estimator computes shares, property, both or neither.
+- Income-tax entries for CA, US and GB carry `regions`: every province/territory, state (plus DC) and Scotland, each with its own `verified`, `citationDate`, `sourceUrl` and `taxYear`.
+
+## Personal income tax
+
+`calcIncomeTax(country, gross, taxYear?, options?)` estimates income tax and take-home pay for a single resident employee on gross annual wages. It covers 57 countries: Argentina, Australia, Austria, Bangladesh, Belgium, Brazil, Canada (federal, plus all 13 provinces and territories), Chile, China, Colombia, Costa Rica, Czechia, Denmark, Egypt, Estonia, Finland, France, Germany, Greece, Guatemala, Hungary, Iceland, India, Indonesia, Ireland, Israel, Italy, Jamaica, Japan, Kenya, Latvia, Luxembourg, Malaysia, Mexico, the Netherlands, New Zealand, Nigeria, Norway, Pakistan, the Philippines, Poland, Portugal, Saudi Arabia and the UAE (cited nil), Singapore, Slovakia, Slovenia, South Africa, South Korea, Spain (state half, plus Madrid, Cataluña and Andalucía), Sweden, Switzerland (federal), Thailand, Türkiye, the United Kingdom (plus Scotland), the United States (federal, plus 50 states and DC) and Vietnam.
+
+```ts
+calcIncomeTax('DE', 60000, '2026');
+calcIncomeTax('CA', 80000, '2026', { region: 'ON' });   // federal + Ontario
+calcIncomeTax('US', 90000, '2026', { region: 'NY' });   // federal + FICA + New York State
+calcIncomeTax('GB', 50000, '2026-27', { region: 'SCT' }); // Scottish bands instead of rUK
+```
+
+- **Every result says whether to trust it.** `verified`, `source`, `authorityName` and `citationDate` are on the result. `verified` is false when a figure was not confirmed on the authority's page, when no year was asked for and the newest year on file does not cover today (France's 2026-income scale is not enacted yet), or when a region's year is borrowed from an earlier one. `assumptions` says which, in words a user can act on. Show unverified results as "confirm with the authority", not as fact.
+- **Regions.** `options.region` adds Canadian provincial/territorial tax (all 13) or US state tax (50 states + DC; the nine states with no wage tax are cited nils), or swaps in Scotland's bands. `listIncomeTaxRegions(country)` lists them; an unknown code throws. US city, county and school-district taxes are never included and each state's assumptions name them.
+- **Scope.** Income tax and surtaxes that are part of it (e.g. the German solidarity surcharge, Irish USC, Korean local income tax). Employee social-security contributions are not charged; where the law makes them deductible and the rates were verified they reduce taxable income, and each country's `assumptions` says what was done.
+- **Data-built countries.** Most countries are records in `src/data/incomeTaxWorld/<cc>.ts`, turned into schemes by `buildIncomeTaxScheme` (`src/data/incomeTaxFactory.ts`). Each year carries its own source, citation date and `verified` flag; an unverified year must say why. To add the next year, append it at the top of `years` — never edit a shipped year.
+
 
 ## Capital gains: rules for 71 countries, cited, and an estimator
 
@@ -84,7 +102,7 @@ estimateCapitalGainsTax({
 ```
 
 - **What it computes.** A flat or banded separate rate (DE, FR shares, ES, IE, GB, JP, US long-term …), a schedule by years held (MY, SI, TW, HU, PT …), a tax on the sale price (PH, ID, MT), exempt regimes (AE, SG, HK, NL …), and a gain added to income — through the income-tax engine, so only where it holds the country and the year (AU, CA federal, NZ, US short-term). Finland goes through `finnishCapitalGainTax`.
-- **What it only summarises.** Everything else: the rule in words with its sources and the `reason` there is no figure — a cantonal or municipal tax (CH, DK property), an abatement not modelled (FR property, BR property), a gain taxed as income where the engine has no income tax for the country yet (ZA, NG, CZ, MX …; picked up automatically when it does), AU from 1 July 2027 (indexation needs CPI not yet published).
+- **What it only summarises.** Everything else: the rule in words with its sources and the `reason` there is no figure — a cantonal or municipal tax (CH, DK property), an abatement not modelled (FR property, BR property), a gain taxed as income for a year the income-tax engine holds no verified year for (ZA, NG, CZ, MX and the other income-tax countries are computed through it for the years on file), AU from 1 July 2027 (indexation needs CPI not yet published).
 - **Never a figure from unverified data.** `status: 'computed'` only for a `verified` rule. An unverified one comes back `status: 'rule-only'`, `verified: false`, with the source, so the consumer says "confirm with the authority". Thirteen countries are wholly or partly unverified: BG, CN, CY, GR, GT, IL, LT, RS (no official source could be fetched), JM (the absence of CGT is stated only by PwC), IN (rates read from a gazette copy on a non-government host), BE property, HU shares, RO shares.
 - **One copy of each figure.** AU, GB and FI are derived from what the engine already held: the AU discount and its 1 July 2027 end from the AU-IT plugin and `AU_HOME_SPACE_FIGURES`, the GB rates and annual exempt amount from the watched GB CGT rows, Finland from `FI_CAPITAL_INCOME_YEARS`.
 - **Effective dating.** Sets run newest first; a new rule is a new set at the top, never an edit. A set whose start the research did not record starts on its citation date (2026-10-06), so an earlier disposal gets no rule rather than a guess. US and DK thresholds are yearly: from 2027 they count as unverified until the next year is added.

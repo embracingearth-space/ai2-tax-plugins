@@ -93,7 +93,8 @@ describe('coverage() — counts equal the registries (it cannot claim more than 
 
   it('incomeTax = INCOME_TAX_SCHEMES', () => {
     expect(sorted(codes(m.incomeTax))).toEqual(sorted(listIncomeTaxCountries()));
-    expect(m.counts.incomeTax.verified).toBeLessThanOrEqual(Object.values(INCOME_TAX_SCHEMES).filter((s) => s.verified).length);
+    // Judged on the set in force: never more verified entries than schemes with a verified set.
+    expect(m.counts.incomeTax.verified).toBeLessThanOrEqual(Object.values(INCOME_TAX_SCHEMES).filter((s) => s.sets.some((x) => x.verified ?? s.verified)).length);
   });
 
   it('companyTax = COMPANY_TAX_RATES, provenance from the set in force', () => {
@@ -136,13 +137,15 @@ describe('coverage() — counts equal the registries (it cannot claim more than 
     // together with the data, never on its own.
     expect(m.counts).toEqual({
       gstVat: { countries: 193, verified: 171 },
-      incomeTax: { countries: 7, verified: 7 },
+      incomeTax: { countries: 57, verified: 53 },
       companyTax: { countries: 6, verified: 6 },
       cgt: { countries: 71, verified: 58 },
       studentLoan: { countries: 1, verified: 0 },
       retirement: { countries: 1, verified: 0 },
     });
-    expect(codes(m.incomeTax)).toEqual(['AU', 'CA', 'FI', 'GB', 'IN', 'NZ', 'US']);
+    // Unverified on this date: CL 2026, GT, IL (both years) (research could not confirm them on the
+    // authority page) and FR (no scale enacted for 2026 income yet — a coverage gap, not a figure).
+    expect(m.incomeTax.filter((e) => !e.verified).map((e) => e.code)).toEqual(['CL', 'FR', 'GT', 'IL']);
     expect(codes(m.companyTax)).toEqual(['AU', 'CA', 'FI', 'GB', 'IN', 'US']);
     expect(m.cgt.filter((e) => !e.verified).map((e) => e.code)).toEqual(['BE', 'BG', 'CN', 'CY', 'GR', 'GT', 'HU', 'IL', 'IN', 'JM', 'LT', 'RO', 'RS']);
   });
@@ -193,5 +196,30 @@ describe('coverage() — verified is a claim about the date asked', () => {
 
   it('a company rate is not annual — an old set in force is still verified coverage', () => {
     expect(coverage('2030-06-30').companyTax.find((e) => e.code === 'AU')!.verified).toBe(true);
+  });
+});
+
+describe('coverage() — sub-national income tax is listed automatically from the regions', () => {
+  const m = coverage(AUDIT);
+  const regions = (code: string) => m.incomeTax.find((e) => e.code === code)!.regions!;
+
+  it('lists every region the schemes hold, each judged on its own year', () => {
+    for (const code of ['CA', 'US', 'GB']) {
+      expect(regions(code).map((r) => r.code)).toEqual(Object.keys(INCOME_TAX_SCHEMES[code]!.regions!).sort());
+    }
+    expect(regions('CA')).toHaveLength(13);
+    expect(regions('US')).toHaveLength(51);
+    expect(regions('GB')).toEqual([expect.objectContaining({ code: 'SCT', verified: true, taxYear: '2026-27' })]);
+  });
+
+  it('a region with no year for the national year in force is unverified (California has no 2026 figures)', () => {
+    expect(regions('US').find((r) => r.code === 'CA')).toMatchObject({ verified: false, taxYear: null });
+    expect(regions('US').find((r) => r.code === 'TX')).toMatchObject({ verified: true, taxYear: '2026' });
+    expect(regions('CA').find((r) => r.code === 'MB')).toMatchObject({ verified: false, taxYear: '2026' });
+    expect(regions('CA').find((r) => r.code === 'ON')).toMatchObject({ verified: true, taxYear: '2026' });
+  });
+
+  it('countries without regions carry no regions field', () => {
+    expect(m.incomeTax.find((e) => e.code === 'AU')!.regions).toBeUndefined();
   });
 });

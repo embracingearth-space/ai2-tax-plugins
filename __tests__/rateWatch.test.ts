@@ -86,7 +86,7 @@ describe('hasActionableFindings', () => {
 // do not rot when a real set is appended; the shipped data gets its own checks.
 // ─────────────────────────────────────────────────────────────────────────────
 import { analyzeSchedules, hasActionableScheduleFindings, shippedSchedules } from '../src/rateWatch';
-import { listCapitalGainsCountries } from '../src';
+import { INCOME_TAX_SCHEMES, listCapitalGainsCountries } from '../src';
 import type { ScheduleSeries } from '../src/rateWatch';
 
 const us = (sets: ScheduleSeries['sets'], citation = { citationDate: '2026-08-20', verified: true }): ScheduleSeries[] => [
@@ -162,7 +162,10 @@ describe('analyzeSchedules — citations and activations', () => {
 describe('analyzeSchedules — the shipped data', () => {
   it('covers every income, retirement, student-loan, company-tax and capital-gains schedule the engine exports', () => {
     const byDataset = (d: string) => shippedSchedules().filter((s) => s.dataset === d).map((s) => s.countryCode).sort();
-    expect(byDataset('incomeTax')).toEqual(['AU', 'CA', 'FI', 'GB', 'IN', 'NZ', 'US']);
+    // Every scheme in INCOME_TAX_SCHEMES, plus every sub-national series as '<country>-<region>'.
+    const expected = Object.values(INCOME_TAX_SCHEMES).flatMap((x) => [x.code, ...Object.keys(x.regions ?? {}).map((r) => `${x.code}-${r}`)]).sort();
+    expect(byDataset('incomeTax')).toEqual(expected);
+    expect(byDataset('incomeTax')).toEqual(expect.arrayContaining(['AU', 'DE', 'FR', 'CA-ON', 'CA-QC', 'US-CA', 'US-TX', 'GB-SCT']));
     expect(byDataset('companyTax')).toEqual(['AU', 'CA', 'FI', 'GB', 'IN', 'US']);
     // FI from its capital-income years; every other CGT country from src/data/capitalGains,
     // except GB, whose CGT rows are watched as deduction series (GB.cgt*).
@@ -172,12 +175,15 @@ describe('analyzeSchedules — the shipped data', () => {
     expect(byDataset('studentLoan')).toEqual(['AU']);
   });
 
-  it('has no rollover gap and no unverified income schedule as of the 2026-09 audit', () => {
+  it('as of the 2026-09 audit, flags exactly the known gaps: unpublished years and research-unverified series', () => {
     // The researched CGT sets (2026-10-06) postdate this audit; they have their own test below.
     const audited = (x: { dataset: string; countryCode: string }) => x.dataset !== 'capitalGains' || x.countryCode === 'FI';
     const f = analyzeSchedules('2026-09-20');
-    expect(f.rollovers.filter(audited)).toEqual([]);
-    expect(f.unverified.filter(audited)).toEqual([]);
+    // Years not published on the authority's page yet — France's 2026-income scale (not enacted) and four
+    // states whose 2026 figures are not out — are rollover gaps, never served silently as current.
+    expect(f.rollovers.filter(audited).map((r) => r.countryCode).sort()).toEqual(['FR', 'US-CA', 'US-ID', 'US-RI', 'US-VT']);
+    expect(f.unverified.filter(audited).map((u) => u.countryCode)).toEqual(expect.arrayContaining(['CA-MB', 'GT', 'US-TN']));
+    expect(f.unverified.filter(audited).every((u) => u.dataset === 'incomeTax')).toBe(true);
     expect(f.staleCitations.filter(audited)).toEqual([]);
   });
 
@@ -213,8 +219,9 @@ describe('analyzeSchedules — rollover is by coverage, with a per-series grace'
 
   it('flags Finnish capital income and Canada income tax the same day, and nothing on the eve', () => {
     const on = analyzeSchedules('2027-01-01').rollovers.map((r) => `${r.dataset}:${r.countryCode}`);
-    expect(on).toEqual(expect.arrayContaining(['capitalGains:FI', 'incomeTax:CA']));
-    expect(analyzeSchedules('2026-12-31').rollovers).toEqual([]);
+    expect(on).toEqual(expect.arrayContaining(['capitalGains:FI', 'incomeTax:CA', 'incomeTax:CA-ON']));
+    // On the eve, only the gaps already open (unpublished years) — nothing new.
+    expect(analyzeSchedules('2026-12-31').rollovers.map((r) => r.countryCode).sort()).toEqual(['FR', 'US-CA', 'US-ID', 'US-RI', 'US-VT']);
   });
 
   it('keeps the 30-day grace for everyone else (the US is not flagged on 1 January)', () => {
@@ -292,16 +299,19 @@ describe('analyzeSchedules — company tax', () => {
 });
 
 describe('analyzeSchedules — the shipped data, 2026-10-06 audit', () => {
-  it('is clean apart from the CGT rules the research could not verify: nothing missing, stale or rolled over', () => {
+  it('nothing missing or stale; unverified findings are the CGT rules and income-tax series the research could not confirm', () => {
     const f = analyzeSchedules('2026-10-06');
     expect(f.missing).toEqual([]);
-    // Each is a country whose CGT rule (or one asset class of it) rests on a page
+    // Each CGT entry is a country whose rule (or one asset class of it) rests on a page
     // that is not official or could not be fetched — a person should confirm it.
-    expect(f.unverified).toEqual(
+    expect(f.unverified.filter((u) => u.dataset === 'capitalGains')).toEqual(
       ['BE', 'BG', 'CN', 'CY', 'GR', 'GT', 'HU', 'IL', 'IN', 'JM', 'LT', 'RO', 'RS'].map((countryCode) => ({ dataset: 'capitalGains', countryCode })),
     );
     expect(f.staleCitations).toEqual([]);
-    expect(f.rollovers).toEqual([]);
+    expect(f.rollovers.map((r) => r.countryCode).sort()).toEqual(['FR', 'US-CA', 'US-ID', 'US-RI', 'US-VT']);
+    expect(f.rollovers.find((r) => r.countryCode === 'US-CA')).toMatchObject({ latestLabel: '2025', file: 'src/data/incomeTaxRegions/usStates.ts' });
+    expect(f.rollovers.find((r) => r.countryCode === 'FR')).toMatchObject({ latestLabel: '2025', file: 'src/data/incomeTaxWorld/fr.ts' });
+    for (const u of f.unverified.filter((x) => x.dataset !== 'capitalGains')) expect(u.dataset).toBe('incomeTax');
   });
 
   it('flags the CGT sets that start later: AU on 1 July 2027, the Greek property set on 1 January 2027', () => {

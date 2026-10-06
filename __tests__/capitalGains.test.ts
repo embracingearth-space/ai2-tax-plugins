@@ -318,8 +318,11 @@ describe('estimateCapitalGainsTax — no figure from unverified or unencoded dat
     expect(estimate({ country: 'HR', asset: 'shares', ...base })).toMatchObject({ status: 'rule-only', reason: expect.stringMatching(/unofficial/) });
   });
 
-  it('a gain taxed as income where the engine has no income tax for the country: the rule only', () => {
-    const r = estimate({ country: 'ZA', asset: 'shares', ...base, otherIncome: 100000 });
+  it('a gain taxed as income: computed once the income-tax engine covers the year, the rule only when it does not', () => {
+    // ZA income tax is in the engine now, so the audit-day disposal is computed through it.
+    expect(estimate({ country: 'ZA', asset: 'shares', ...base, otherIncome: 100000 })).toMatchObject({ status: 'computed', verified: true });
+    // A disposal in a year the engine holds no verified ZA income-tax year for: the rule only.
+    const r = estimate({ country: 'ZA', asset: 'shares', ...base, disposedOn: '2028-06-01', otherIncome: 100000 });
     expect(r).toMatchObject({ status: 'rule-only', verified: true, tax: null });
     expect(r.reason).toMatch(/no verified South Africa income-tax year/);
   });

@@ -41,6 +41,7 @@ import {
   COMPANY_TAX_RATES,
   STUDENT_LOAN_SCHEMES,
   RETIREMENT_SCHEMES,
+  incomeTaxSetProvenance,
 } from './data';
 import { addOneYear } from './data/effectiveDating';
 import { CAPITAL_GAINS_RULES, resolveCapitalGainsRules, type CgtAssetRule, type CgtRuleSet } from './data/capitalGains';
@@ -61,6 +62,25 @@ export interface CoverageEntry {
   taxYear?: string | null;
   /** What is and is not covered, where the capability is partial (federal only, a rule not a calculator). */
   scope?: string;
+  /**
+   * Income tax only: the sub-national jurisdictions a caller can add with
+   * calcIncomeTax's `options.region` (Canadian provinces and territories, US
+   * states and DC, Scotland), each judged like a country — verified only when
+   * confirmed on the official page AND its year matches the national year in
+   * force on `asOf`.
+   */
+  regions?: CoverageRegionEntry[];
+}
+
+export interface CoverageRegionEntry {
+  /** Region code as options.region takes it, e.g. 'ON', 'CA', 'SCT'. */
+  code: string;
+  name: string;
+  verified: boolean;
+  citationDate: string | null;
+  sourceUrl: string | null;
+  /** The regional year serving `asOf`; null when none covers it. */
+  taxYear: string | null;
 }
 
 export interface CoverageCount {
@@ -113,14 +133,33 @@ function gstVat(ymd: string): CoverageEntry[] {
 function incomeTax(asOf: AsOf): CoverageEntry[] {
   return Object.values(INCOME_TAX_SCHEMES)
     .map((s) => {
-      const set = annualSetFor(s.sets, dayIn(s.timeZone, asOf));
+      const day = dayIn(s.timeZone, asOf);
+      const set = annualSetFor(s.sets, day);
+      // Judge the set actually in force: its own provenance first, the scheme's otherwise.
+      const prov = set ? incomeTaxSetProvenance(s, set) : null;
+      const regions = s.regions
+        ? Object.values(s.regions)
+            .map((r) => {
+              const rs = annualSetFor(r.sets, day);
+              return {
+                code: r.code,
+                name: r.name,
+                verified: Boolean(rs && rs.verified && set && rs.taxYearLabel === set.taxYearLabel),
+                citationDate: rs?.citationDate ?? null,
+                sourceUrl: rs?.source ?? null,
+                taxYear: rs?.taxYearLabel ?? null,
+              };
+            })
+            .sort((a, b) => a.code.localeCompare(b.code))
+        : undefined;
       return {
         code: s.code,
-        verified: s.verified && Boolean(set),
-        citationDate: s.citationDate,
-        sourceUrl: s.source,
+        verified: Boolean(prov?.verified),
+        citationDate: prov?.citationDate ?? s.citationDate,
+        sourceUrl: prov?.source ?? s.source,
         taxYear: set?.taxYearLabel ?? null,
         ...(s.region ? { scope: s.region } : {}),
+        ...(regions ? { regions } : {}),
       };
     })
     .sort(byCode);
