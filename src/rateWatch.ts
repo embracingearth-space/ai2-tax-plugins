@@ -473,14 +473,32 @@ const INCOME_TAX_FILE: Readonly<Record<string, string>> = { FI: 'src/data/finlan
 export function shippedSchedules(): ScheduleSeries[] {
   const out: ScheduleSeries[] = [];
   for (const s of Object.values(INCOME_TAX_SCHEMES)) {
+    const grace = graceFor('incomeTax', s.code);
     out.push({
       dataset: 'incomeTax',
       countryCode: s.code,
-      sets: s.sets,
+      // A set with its own citation (every data-built country) is judged on it.
+      sets: s.sets.map((set) => ({
+        effectiveFrom: set.effectiveFrom,
+        taxYearLabel: set.taxYearLabel,
+        ...(set.citationDate && set.verified !== undefined ? { citation: { citationDate: set.citationDate, verified: set.verified } } : {}),
+      })),
       citation: { citationDate: s.citationDate, verified: s.verified },
-      rolloverGraceDays: graceFor('incomeTax', s.code),
-      file: INCOME_TAX_FILE[s.code] ?? 'src/data/incomeTax.ts',
+      rolloverGraceDays: grace,
+      file: s.file ?? INCOME_TAX_FILE[s.code] ?? 'src/data/incomeTax.ts',
     });
+    // Sub-national series (provinces, states, Scotland) are watched on their
+    // own, as '<country>-<region>', with the country's grace: a province's
+    // year is published when the federal one is.
+    for (const r of Object.values(s.regions ?? {})) {
+      out.push({
+        dataset: 'incomeTax',
+        countryCode: `${s.code}-${r.code}`,
+        sets: r.sets.map((set) => ({ effectiveFrom: set.effectiveFrom, taxYearLabel: set.taxYearLabel, citation: { citationDate: set.citationDate, verified: set.verified } })),
+        rolloverGraceDays: grace,
+        file: r.file,
+      });
+    }
   }
   for (const s of Object.values(RETIREMENT_SCHEMES)) out.push({ dataset: 'retirement', countryCode: s.countryCode, sets: s.schemes, file: 'src/data/superannuation.ts' });
   for (const s of Object.values(STUDENT_LOAN_SCHEMES)) out.push({ dataset: 'studentLoan', countryCode: s.countryCode, sets: s.schemes, file: 'src/data/studentLoan.ts' });
