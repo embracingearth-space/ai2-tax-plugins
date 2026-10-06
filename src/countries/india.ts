@@ -268,10 +268,30 @@ export function migrateIndiaGstr3bValues(values: FieldValues): FieldValues {
     if (out[newId] === undefined || out[newId] === null || out[newId] === '') out[newId] = values[oldId];
     delete out[oldId];
   }
-  // v1 kept one reversal figure with no head; it is credit, so it goes to IGST.
+  // v1 kept one reversal figure with no head. Spread it over the heads in
+  // proportion to the migrated 4(A)(5) credit (v1 credit was mostly intra-state,
+  // so an all-IGST reversal would go negative and be lost in set-off); IGST
+  // only when no credit by head exists. Never overwrite a 4(B)(1) already set.
   if ('itc_reversed' in values) {
-    if (out.t4b1_iamt === undefined || out.t4b1_iamt === null || out.t4b1_iamt === '') {
-      out.t4b1_iamt = values.itc_reversed;
+    const empty = (k: string) => out[k] === undefined || out[k] === null || out[k] === '';
+    if (HEADS.every((h) => empty(`t4b1_${h}`))) {
+      const rev = num(values.itc_reversed);
+      const base = HEADS.map((h) => Math.max(0, num(out[`t4a5_${h}`])));
+      const total = base.reduce((a, b) => a + b, 0);
+      if (total <= 0) {
+        out.t4b1_iamt = values.itc_reversed;
+      } else {
+        // Round each share; the last head with credit takes the remainder so
+        // the heads add back to the v1 figure exactly.
+        const last = base.reduce((acc, b, i) => (b > 0 ? i : acc), -1);
+        let given = 0;
+        HEADS.forEach((h, i) => {
+          if (base[i]! <= 0) return;
+          const share = i === last ? r2(rev - given) : r2((rev * base[i]!) / total);
+          given = r2(given + share);
+          out[`t4b1_${h}`] = share;
+        });
+      }
     }
     delete out.itc_reversed;
   }
@@ -288,6 +308,9 @@ export function migrateIndiaGstr3bValues(values: FieldValues): FieldValues {
 // ─── Auto-populate ─────────────────────────────────────────────────────────
 
 const half = (v: number) => v / 2;
+/** CGST share rounded to cents; SGST takes the remainder so the two add back to the rounded aggregate. */
+const halfFirst = (v: number) => Math.round(half(v) * 100) / 100;
+const halfRest = (v: number) => Math.round(v * 100) / 100 - halfFirst(v);
 
 /**
  * Host aggregates → GSTR-3B fields. Tax is filled intra-state (half CGST,
@@ -299,8 +322,8 @@ const MAPPING: AggregationMapping[] = (() => {
   const add = (fieldId: string, keys: string[], transform?: (v: number) => number) =>
     m.push({ fieldId, aggregateKey: keys[0], ...(keys.length > 1 ? { aggregateKeys: keys } : {}), ...(transform ? { transform } : {}) });
   const intraTax = (prefix: string, keys: string[]) => {
-    add(`${prefix}_camt`, keys, half);
-    add(`${prefix}_samt`, keys, half);
+    add(`${prefix}_camt`, keys, halfFirst);
+    add(`${prefix}_samt`, keys, halfRest);
   };
 
   // 3.1(a) — taxable value excludes the tax; the tax is what the sales carried.
@@ -435,7 +458,7 @@ const inPlugin: TaxFilingPlugin = {
             helpText: 'Blocked credit (food, club memberships, personal vehicles), personal use, and credit attributable to exempt supplies.',
           }),
           ...rowFields('t4b2', '4(B)(2)', 'ITC reversed — others', {
-            helpText: 'Temporary reversals, such as rule 37 (supplier not paid in 180 days). Reclaim them later in 4(D)(1).',
+            helpText: 'Temporary reversals, such as rule 37 (supplier not paid in 180 days). Reclaim them later in 4(A)(5) and disclose the reclaim in 4(D)(1).',
           }),
           ...rowFields('t4c', '4(C)', 'Net ITC available (A) − (B)', { calculated: true }),
           ...rowFields('t4d1', '4(D)(1)', 'ITC reclaimed which was reversed under 4(B)(2) in an earlier tax period'),
@@ -552,7 +575,10 @@ const inPlugin: TaxFilingPlugin = {
       out[`t61_cf_${h}`] = s.carriedForward[h];
       const rc = r2(Math.max(0, g(`t31d_${h}`)));
       out[`t61_rc_cash_${h}`] = rc;
-      cash += s.paidInCash[h] + rc + g(`t51_int_${h}`);
+      // 3.1.1(i): tax the e-commerce operator pays under s 9(5) is cash only —
+      // never set off against ITC, so it stays out of `liability` above.
+      const eco = r2(Math.max(0, g(`t311i_${h}`)));
+      cash += s.paidInCash[h] + rc + eco + g(`t51_int_${h}`);
     }
     cash += g('t51_fee_camt') + g('t51_fee_samt');
     out.net_tax = r2(cash);

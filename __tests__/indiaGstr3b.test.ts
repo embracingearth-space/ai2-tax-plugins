@@ -125,6 +125,12 @@ describe('setOffIndiaGst — section 49(5) and rule 88A', () => {
 });
 
 describe('calculateFields', () => {
+  it('adds 3.1.1(i) operator tax to cash, never setting it off against ITC', () => {
+    const c = inPlugin.calculateFields({ t311i_iamt: 100, t4a5_iamt: 500 });
+    expect(c.t61_itc_iamt).toBe(0);
+    expect(c.net_tax).toBe(100);
+  });
+
   it('4(C) is 4(A) less 4(B), per head', () => {
     const c = inPlugin.calculateFields({
       t4a1_iamt: 300,
@@ -241,6 +247,10 @@ describe('auto-population from the host aggregates', () => {
   it('a field is left empty only when the host produced none of its keys', () => {
     const m = inPlugin.getAutoPopulateMapping().find((x) => x.fieldId === 't4a5_camt')!;
     expect(resolveAggregateMapping(m, {})).toBeUndefined();
+    // A 0.01 aggregate must not populate 0.01 + 0.01: SGST takes the remainder.
+    const pair = inPlugin.getAutoPopulateMapping().filter((x) => x.fieldId === 't31a_camt' || x.fieldId === 't31a_samt');
+    const cent = { treat_SALE_STANDARD_tax: 0.01 };
+    expect(pair.map((x) => resolveAggregateMapping(x, cent)!).reduce((a, b) => a + b, 0)).toBeCloseTo(0.01, 10);
     expect(resolveAggregateMapping(m, { treat_PURCHASE_STANDARD_tax: 100 })).toBe(50);
   });
 
@@ -307,11 +317,24 @@ describe('migrateIndiaGstr3bValues (v1 saved statements)', () => {
       t4a5_iamt: 5,
       t4a5_camt: 6,
       t4a5_samt: 6,
-      t4b1_iamt: 3,
+      // 3 spread over 4(A)(5) credit 5 / 6 / 6; the last head takes the remainder.
+      t4b1_iamt: 0.88,
+      t4b1_camt: 1.06,
+      t4b1_samt: 1.06,
       t51_fee_camt: 50,
       t51_fee_samt: 50,
     });
     for (const old of ['outward_taxable', 'igst', 'itc_reversed', 'late_fee', 'net_itc']) expect(out).not.toHaveProperty(old);
+  });
+
+  it('puts a v1 reversal on IGST only when no credit by head exists', () => {
+    expect(migrateIndiaGstr3bValues({ itc_reversed: 3 } as FieldValues).t4b1_iamt).toBe(3);
+  });
+
+  it('leaves a 4(B)(1) already entered alone', () => {
+    const out = migrateIndiaGstr3bValues({ itc_cgst: 6, itc_reversed: 3, t4b1_camt: 1 } as FieldValues);
+    expect(out.t4b1_camt).toBe(1);
+    expect(out.t4b1_iamt).toBeUndefined();
   });
 
   it('never overwrites a value already under the new id', () => {
