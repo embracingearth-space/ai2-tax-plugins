@@ -14,6 +14,7 @@ import {
   mappingKeys,
 } from '../src';
 import inPlugin, { setOffIndiaGst, migrateIndiaGstr3bValues, gstr3bJson } from '../src/countries/india';
+import * as pkg from '../src';
 import type { FieldValues } from '../src/types';
 
 const fieldIds = () => inPlugin.getFormSchema().flatMap((s) => s.fields).map((f) => f.id);
@@ -354,5 +355,13 @@ describe('treatment catalogue', () => {
 
   it('import of goods is 4(A)(1) IGST only', () => {
     expect(byCode.PURCHASE_IMPORT.boxes).toEqual(['4(A)(1) IGST']);
+  });
+});
+
+describe('package exports', () => {
+  it('hosts can import the set-off, the migration and the mapping resolver from the package root', () => {
+    expect(pkg.setOffIndiaGst).toBe(setOffIndiaGst);
+    expect(pkg.migrateIndiaGstr3bValues).toBe(migrateIndiaGstr3bValues);
+    expect(typeof pkg.resolveAggregateMapping).toBe('function');
   });
 });
