@@ -47,6 +47,13 @@ export type {
   AnnualReportQualifyingService,
 } from './types';
 
+// ─── Auto-populate mapping (aggregates → form fields) ────────────────────────
+export { mappingKeys, resolveAggregateMapping, valuesFromAggregates } from './aggregateMapping';
+
+// ─── India GSTR-3B (set-off and saved-statement migration) ───────────────────
+export { setOffIndiaGst, migrateIndiaGstr3bValues, gstr3bJson } from './countries/india';
+export type { IndiaGstHeads, IndiaSetOffResult } from './countries/india';
+
 // ─── Tax treatments (transaction → box mapping catalogue) ────────────────────
 export {
   CANONICAL_TREATMENT_CODES,

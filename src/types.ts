@@ -93,7 +93,19 @@ export interface CalculatedFields {
 
 export interface AggregationMapping {
   fieldId: string;
+  /**
+   * The aggregate this field reads. When `aggregateKeys` is also set, this is
+   * the first of them, kept for hosts that read one key (and for provenance).
+   */
   aggregateKey: string;
+  /**
+   * Several aggregates summed into one field — a box that adds treatments
+   * together (India's table 4(A)(5) is three purchase codes' tax). Read it with
+   * resolveAggregateMapping() rather than indexing `aggregateKey`. A key the
+   * host does not produce counts as missing; the field is left empty only when
+   * every key is missing.
+   */
+  aggregateKeys?: readonly string[];
   transform?: (value: number) => number;
 }
 
@@ -313,6 +325,14 @@ export interface TaxFilingPlugin {
 
   calculateFields(inputs: FieldValues): CalculatedFields;
   getAutoPopulateMapping(): AggregationMapping[];
+
+  /**
+   * Values saved under an earlier version of this form, moved onto the current
+   * field ids. Optional; a host calls it on every saved statement it reopens
+   * (`plugin.migrateSavedValues?.(values) ?? values`) and then recalculates.
+   * Must be idempotent and never overwrite a value already under a new id.
+   */
+  migrateSavedValues?(values: FieldValues): FieldValues;
   getRoundingRules(): RoundingConfig;
 
   validateForm(values: FieldValues): ValidationResult[];
