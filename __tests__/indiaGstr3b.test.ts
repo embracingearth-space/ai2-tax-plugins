@@ -131,6 +131,24 @@ describe('calculateFields', () => {
     expect(c.net_tax).toBe(100);
   });
 
+  it('shows 3.1.1(i) operator tax in the 6.1 per-head payable and cash, alongside set-off tax', () => {
+    const c = inPlugin.calculateFields({
+      t31a_camt: 900,
+      t31a_samt: 900,
+      t4a5_camt: 400,
+      t4a5_samt: 400,
+      t311i_camt: 50,
+      t311i_samt: 50,
+    });
+    expect(c.t61_payable_camt).toBe(950);
+    expect(c.t61_itc_camt).toBe(400);
+    expect(c.t61_cash_camt).toBe(550);
+    expect(c.t61_cash_samt).toBe(550);
+    // The per-head cash adds up to the total, so the JSON paid_cash matches total_cash.
+    const heads = ['iamt', 'camt', 'samt', 'csamt'].map((h) => Number(c[`t61_cash_${h}`]));
+    expect(c.net_tax).toBe(heads.reduce((a, b) => a + b, 0));
+  });
+
   it('4(C) is 4(A) less 4(B), per head', () => {
     const c = inPlugin.calculateFields({
       t4a1_iamt: 300,

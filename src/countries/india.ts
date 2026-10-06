@@ -575,16 +575,19 @@ const inPlugin: TaxFilingPlugin = {
 
     let cash = 0;
     for (const h of HEADS) {
-      out[`t61_payable_${h}`] = s.payable[h];
+      // 3.1.1(i): tax the e-commerce operator pays under s 9(5) is liability
+      // other than reverse charge, but cash only — never set off against ITC.
+      // It stays out of `liability` above and is added to the head's payable
+      // and paid-in-cash figures here, so 6.1 per head matches the total.
+      const eco = r2(Math.max(0, g(`t311i_${h}`)));
+      out[`t61_payable_${h}`] = r2(s.payable[h] + eco);
       out[`t61_itc_${h}`] = s.paidByCredit[h];
-      out[`t61_cash_${h}`] = s.paidInCash[h];
+      const cashHead = r2(s.paidInCash[h] + eco);
+      out[`t61_cash_${h}`] = cashHead;
       out[`t61_cf_${h}`] = s.carriedForward[h];
       const rc = r2(Math.max(0, g(`t31d_${h}`)));
       out[`t61_rc_cash_${h}`] = rc;
-      // 3.1.1(i): tax the e-commerce operator pays under s 9(5) is cash only —
-      // never set off against ITC, so it stays out of `liability` above.
-      const eco = r2(Math.max(0, g(`t311i_${h}`)));
-      cash += s.paidInCash[h] + rc + eco + g(`t51_int_${h}`);
+      cash += cashHead + rc + g(`t51_int_${h}`);
     }
     cash += g('t51_fee_camt') + g('t51_fee_samt');
     out.net_tax = r2(cash);
