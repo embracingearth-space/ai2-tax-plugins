@@ -31,6 +31,9 @@
  */
 
 import { resolveEffectiveDated } from './effectiveDating';
+import { COMPANY_TAX_WORLD } from './companyTaxWorld';
+
+export { COMPANY_TAX_NOT_COVERED } from './companyTaxWorld';
 
 export interface CompanyTaxRateSet {
   /** ISO date this rate set takes effect (inclusive). */
@@ -46,6 +49,11 @@ export interface CompanyTaxRateSet {
   note: string;
   /** Authoritative source URL for the rate. */
   source: string;
+  /**
+   * Who published `source`, where that is not the tax authority itself (e.g.
+   * "OECD Corporate Tax Statistics" for a figure not yet read nationally).
+   */
+  sourceAuthority?: string;
   /** YYYY-MM-DD the rate was last read against `source`. */
   citationDate: string;
   /** TRUE only when the rate was confirmed on the official authority page on `citationDate`. */
@@ -64,9 +72,10 @@ export interface CompanyTaxInfo {
 
 /**
  * Headline company tax rates for the countries the forecast engine supports
- * end-to-end (AU/US/GB/IN/CA). Ordered most-recent-first per country.
+ * end-to-end (AU/US/GB/IN/CA/FI). Ordered most-recent-first per country.
+ * Every other country lives in companyTaxWorld.ts and is merged below.
  */
-export const COMPANY_TAX_RATES: Record<string, CompanyTaxInfo> = {
+const HOME_COMPANY_TAX_RATES: Record<string, CompanyTaxInfo> = {
   AU: {
     countryCode: 'AU',
     authorityName: 'ATO',
@@ -208,6 +217,12 @@ export const COMPANY_TAX_RATES: Record<string, CompanyTaxInfo> = {
   },
 };
 
+/**
+ * Every country with company-tax data: the home countries above plus the
+ * rest of the world (companyTaxWorld.ts). A home country always wins.
+ */
+export const COMPANY_TAX_RATES: Record<string, CompanyTaxInfo> = { ...COMPANY_TAX_WORLD, ...HOME_COMPANY_TAX_RATES };
+
 /** Country codes with a company-tax rate set defined here. */
 export function listCompanyTaxCountries(): string[] {
   return Object.keys(COMPANY_TAX_RATES);
@@ -236,7 +251,15 @@ export interface ResolvedCompanyRate {
   source: string;
   effectiveFrom: string;
   citationDate: string;
+  /**
+   * FALSE when the figure was not confirmed on the national authority's page
+   * (e.g. it comes from OECD statistics). Present it as indicative and point
+   * the user at the authority; `verificationNote` says why.
+   */
   verified: boolean;
+  verificationNote?: string;
+  /** Who published `source`, when it is not the tax authority itself. */
+  sourceAuthority?: string;
 }
 
 /**
@@ -279,5 +302,7 @@ export function getCompanyTaxRate(
     effectiveFrom: set.effectiveFrom,
     citationDate: set.citationDate,
     verified: set.verified,
+    ...(set.verificationNote ? { verificationNote: set.verificationNote } : {}),
+    ...(set.sourceAuthority ? { sourceAuthority: set.sourceAuthority } : {}),
   };
 }

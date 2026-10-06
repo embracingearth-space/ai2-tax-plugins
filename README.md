@@ -109,6 +109,16 @@ estimateCapitalGainsTax({
 - **Not covered:** CR, PE, TH, UY, VN (`CGT_NOT_RESEARCHED`). `coverage().cgt` lists the rest, and Rate Watch (`analyzeSchedules`, dataset `capitalGains`) reports unverified and stale CGT citations, upcoming sets (GR on 1 January 2027, AU on 1 July 2027) and the yearly rollovers.
 - Each figure states its assumptions beside it (`assumptions`): single filer and federal only for the US, provincial tax additional in Canada, the annual exemption otherwise unused, and so on. General information, not tax advice.
 
+### Company tax, worldwide
+
+`getCompanyTaxRate(cc, asOf)` answers for 139 countries (as of 2026-10-06), each figure with its `source`, `citationDate` and `verified` flag:
+
+- **28 verified** on the national authority's own page or law (the six home countries AU, US, GB, IN, CA, FI, plus AE, AT, BR, CY, CZ, DE, EC, EE, GH, HR, JP, KE, MY, NL, NZ, PH, PL, RU, SG, TW, UG, ZA).
+- **111 unverified**: 109 from OECD Corporate Tax Statistics (Table II.1, 2026) with `sourceAuthority` "OECD Corporate Tax Statistics", plus BT and ZW (official pages, but undated). Each carries a `verificationNote`, and its `note` tells the reader to confirm with the national tax authority. Show these as indicative, never as fact.
+- **58 not covered** (`COMPANY_TAX_NOT_COVERED`, `coverage().companyTaxNotCovered`): no figure could be read, so there is no rate set and `getCompanyTaxRate` returns `null`. No figure is guessed.
+
+`standardRate` is the central-government rate, without surtaxes or state and municipal taxes (the note gives the combined figure where known). A `smallCompanyRate` is set only where it was confirmed with a clear threshold (AU, GB, IN, CA, HR, PH, PL). Profit bands, such as the first JPY 8m in Japan, are described in the note. Germany's enacted cuts (14% in 2028 down to 10% from 2032) are future-dated sets. Finland's proposed 18% is not encoded, because it is still a bill.
+
 ## Tax treatments
 
 

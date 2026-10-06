@@ -35,7 +35,7 @@ describe('coverage() — shape', () => {
   const m: CoverageManifest = coverage(AUDIT);
 
   it('has one list per capability, plus asOf and counts', () => {
-    expect(Object.keys(m).sort()).toEqual(sorted(['asOf', 'counts', ...COVERAGE_CAPABILITIES]));
+    expect(Object.keys(m).sort()).toEqual(sorted(['asOf', 'counts', 'companyTaxNotCovered', ...COVERAGE_CAPABILITIES]));
     expect(COVERAGE_CAPABILITIES).toEqual(['gstVat', 'incomeTax', 'companyTax', 'cgt', 'studentLoan', 'retirement']);
     expect(m.asOf).toBe(AUDIT);
   });
@@ -70,7 +70,11 @@ describe('coverage() — shape', () => {
 
   it('counts are the lengths of the lists they describe', () => {
     for (const cap of COVERAGE_CAPABILITIES) {
-      expect(m.counts[cap]).toEqual({ countries: m[cap].length, verified: m[cap].filter((e) => e.verified).length });
+      expect(m.counts[cap]).toEqual({
+        countries: m[cap].length,
+        verified: m[cap].filter((e) => e.verified).length,
+        ...(cap === 'companyTax' ? { notCovered: m.companyTaxNotCovered.length } : {}),
+      });
     }
   });
 
@@ -138,7 +142,7 @@ describe('coverage() — counts equal the registries (it cannot claim more than 
     expect(m.counts).toEqual({
       gstVat: { countries: 193, verified: 171 },
       incomeTax: { countries: 57, verified: 53 },
-      companyTax: { countries: 6, verified: 6 },
+      companyTax: { countries: 139, verified: 28, notCovered: 58 },
       cgt: { countries: 71, verified: 58 },
       studentLoan: { countries: 1, verified: 0 },
       retirement: { countries: 1, verified: 0 },
@@ -146,7 +150,7 @@ describe('coverage() — counts equal the registries (it cannot claim more than 
     // Unverified on this date: CL 2026, GT, IL (both years) (research could not confirm them on the
     // authority page) and FR (no scale enacted for 2026 income yet — a coverage gap, not a figure).
     expect(m.incomeTax.filter((e) => !e.verified).map((e) => e.code)).toEqual(['CL', 'FR', 'GT', 'IL']);
-    expect(codes(m.companyTax)).toEqual(['AU', 'CA', 'FI', 'GB', 'IN', 'US']);
+    expect(codes(m.companyTax)).toEqual(sorted(listCompanyTaxCountries()));
     expect(m.cgt.filter((e) => !e.verified).map((e) => e.code)).toEqual(['BE', 'BG', 'CN', 'CY', 'GR', 'GT', 'HU', 'IL', 'IN', 'JM', 'LT', 'RO', 'RS']);
   });
 });
