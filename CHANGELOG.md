@@ -2,6 +2,14 @@
 
 ## 2.2.0 — Unreleased
 
+### Added — GST/VAT for every country, US states and Canadian provinces (rate ledger)
+
+The rate ledger grows from 88 countries to 199 (every UN member and observer, plus Kosovo, Taiwan, Hong Kong and Macao), and from one sub-national row (Ontario HST) to 64 jurisdictions: every US state plus DC (state-level rate; local taxes are named in each note, not modelled) and every Canadian province and territory. 107 rows become 299. Rows were researched on 2026-10-06 against official sources; 35 are `verified: false` with the reason in the note.
+
+- `RateLedgerRow.rateIsIndicative` (optional) and `isRateIndicative(row)`: a figure that must not be presented as fact. `getStandardRateAsOf` answers 0 for it, `activeNationalRows(asOf, { includeIndicative })` leaves it out by default, and so do `COUNTRY_TAX_RATES`, `getStandardTaxRate` and `getTaxRateInfo`. Rate Watch still lists it as unverified. Applied to Syria, Cuba, Somalia, South Sudan, Chad, Afghanistan, Liberia's 2027 VAT and Louisiana's 2030 rate.
+- History behind three existing countries, read on the authorities' own pages: Singapore 3% / 4% / 5% / 7% / 8% before today's 9% (IRAS), Switzerland 7.5% / 7.6% / 8.0% / 7.7% before today's 8.1% (ESTV) and Sri Lanka 12% / 15% before today's 18% (IRD).
+- Rate Watch marks an indicative rate with `indicative: true` in `recentlyActivated`, `upcomingChanges` and `reviewChecklist`, so no finding carries such a figure unqualified.
+
 Depreciation regimes — New Zealand, the United Kingdom, Canada, the United States, India,
 Singapore, Ireland and South Africa. Additive: every new `DepreciationRules`
 member has a value on every rules object that ships, `declineInValue` still
@@ -25,6 +33,40 @@ The India plugin filled a single "outward taxable" figure from the GROSS of ever
 
 - `AggregationMapping.aggregateKeys` sums several aggregates into one field (4(A)(5) is three purchase codes' tax). `aggregateKey` stays and is the first key, for provenance and for hosts that read one key.
 - `resolveAggregateMapping(m, aggregates)` and `valuesFromAggregates(plugin, aggregates)` are the one way to read a mapping. **Hosts must switch to them** — indexing `aggregateKey` reads only the first key of a multi-key row. A field is left empty only when the host produced none of its keys.
+
+### Added — company tax for 139 countries, effective-dated and cited
+
+- `COMPANY_TAX_RATES` now covers 139 countries (was 6). The new countries live in `src/data/companyTaxWorld.ts`. Each set has an https `source`, a `citationDate` (2026-10-06) and `verified`. 22 new countries were verified on the national authority's page or law. 109 come from OECD Corporate Tax Statistics (Table II.1, 2026) and are `verified: false`, with a note to confirm with the national authority. NG (OECD rate; small-company detail from the reform committee), ZW and BT (official pages, but undated) are also `verified: false`, with a reason.
+- Germany: the enacted KStG § 23 cuts are future-dated sets (15% to 2027, then 14%, 13%, 12%, 11%, and 10% from 2032). Cyprus: 15% from 2026-01-01. Finland's proposed 18% from 2027 is not encoded, because it is a bill. The six existing countries' figures are unchanged, because the research confirmed them.
+- `CompanyTaxRateSet.sourceAuthority` (optional) names who published the source when it is not the tax authority. `getCompanyTaxRate` now also returns `verificationNote` and `sourceAuthority`, so a consumer can fall back to "confirm with the authority" for unverified data.
+- `COMPANY_TAX_NOT_COVERED` lists the 58 researched jurisdictions with no figure. `coverage()` adds `companyTaxNotCovered` and `counts.companyTax.notCovered`. The OECD-sourced entries say so in `scope`.
+- Rate Watch picks up every new set: the OECD-only sets are listed as `unverified`, the verified ones go stale a year after 2026-10-06, and Germany's cuts are listed as `upcoming`.
+
+### Added — income tax for 50 more countries, US states, Canadian provinces and Scotland
+
+- `calcIncomeTax` now covers 57 countries. 50 are new: AE, AR, AT, BD, BE, BR, CH (federal), CL, CN, CO, CR, CZ, DE, DK, EE, EG, ES, FR, GR, GT, HU, ID, IE, IL, IS, IT, JM, JP, KE, KR, LU, LV, MX, MY, NG, NL, NO, PH, PK, PL, PT, SA, SE, SG, SI, SK, TH, TR, VN and ZA. They are data records (`src/data/incomeTaxWorld/<cc>.ts`) built by `buildIncomeTaxScheme` (`src/data/incomeTaxFactory.ts`): deductions, bands or a statutory tariff formula (DE §32a), non-refundable credits, and surtaxes that are part of income tax. Employee social contributions are never charged; each country's `assumptions` says whether they were deducted from taxable income.
+- Every year carries its own `source`, `authorityName`, `citationDate` and `verified`; an unverified year must give a `verificationNote`, and the factory refuses a record without one. Unverified: CL 2026, GT, IL (official pages blocked or not yet final), FR 2024, MX 2025, PL 2025, VN 2025. Lithuania is not encoded (the euro value of its band unit was not confirmed). France has no 2026 year: the scale for 2026 income is not enacted, so the newest year is 2025 income and Rate Watch reports the gap.
+- `IncomeTaxResult` gains `verified`, `source`, `authorityName`, `citationDate` and, with a region, `region` (additive). `verified` is false when a figure is unverified, when the newest year on file does not cover today, or when a region's year is borrowed; `assumptions` says which.
+- Sub-national tax with `options.region`: all 13 Canadian provinces and territories (2025, 2026; Ontario surtax, tax reduction, LIFT and Health Premium; BC reduction; Quebec deduction for workers and the 16.5% federal abatement), all 50 US states and DC (2026 and 2025 where published; nine cited no-wage-tax states; CA, ID, RI and VT hold 2025 only because 2026 is unpublished), and Scotland (Scottish bands replace the rUK bands; never added to them). Spain's autonomous communities Madrid, Cataluña and Andalucía use the same mechanism. New: `listIncomeTaxRegions`, `getIncomeTaxRegionBands`, `getIncomeTaxBands(country, year, region?)`, `incomeTaxSetProvenance`.
+- `coverage()` judges income tax on the set in force and lists `regions` per country. `analyzeSchedules()` / `shippedSchedules()` watch every new country and every region (`CA-ON`, `US-CA`, `GB-SCT`, …) with per-set citations. As of 2026-10-06 they flag rollovers for FR, US-CA, US-ID, US-RI and US-VT and the unverified series above.
+- Not modelled: US city/county/school-district income taxes (named in each state's assumptions), NY tax-benefit recapture, Swiss cantonal tax, Belgian communal surcharges, Italian addizionali, Japanese inhabitant tax, German deductible social contributions (so DE overstates tax for statutorily insured employees).
+
+### Added — capital gains for 71 countries, effective-dated and cited
+
+- `CAPITAL_GAINS_RULES` (`src/data/capitalGains.ts` and `.data.ts`): per country, effective-dated rule sets for a resident individual's gains on listed shares and on investment property — regime, rate or rule, holding-period rules, annual exemption, main-residence exemption, sources with `citationDate` and `verified`, and `uncertainties`. 68 countries come from a research pass over official pages (2026-10-06); AU, GB and FI are derived from the figures the engine already held, so there is no second copy of them.
+- `resolveCapitalGainsRules(country, asOf?)`: the set in force, or null before the first one (never the oldest set as a fallback). AU switches to indexation and the 30% minimum tax on 1 July 2027; LK goes from 10% to 15% on 3 June 2026; BE taxes financial-asset gains at 10% from 2026; NG taxes gains as income from 2026; FR's flat tax is 31.4%.
+- `estimateCapitalGainsTax(input)`: a figure only where the rule is verified and fully encoded (separate rates, schedules by years held, taxes on the sale price, exempt regimes, and gains added to income where the income-tax engine covers the country and year). Otherwise the rule in words, its sources and the reason, with `verified: false` for unverified data. Payroll levies (US FICA) are left out of a gain taxed as income; AU's Medicare levy is kept.
+- `coverage().cgt` now lists all 71 countries (58 verified on 2026-10-06), each with a `scope` saying what the estimator computes. The thirteen not verified, and why, are in the README. CR, PE, TH, UY and VN were not researched (`CGT_NOT_RESEARCHED`).
+- Rate Watch: `shippedSchedules()` adds a `capitalGains` series per country (GB stays in the deduction series), so unverified and stale CGT citations, upcoming sets and the yearly US/DK thresholds are reported.
+- Canada keeps the 1/2 inclusion rate. The official notice cancelling the proposed 2/3 rate was not found; current CRA pages still apply 1/2, and the set says so.
+
+### Added — `coverage()`, one cited answer to "what does the engine cover?"
+
+- `coverage(asOf?)` returns, per capability (`gstVat`, `incomeTax`, `companyTax`, `cgt`, `studentLoan`, `retirement`), the countries covered, each with `{ code, verified, citationDate, sourceUrl }`, plus `counts`. It is derived from the registries and pinned to them by tests, so it cannot claim more than the data holds. An income-tax year that has ended is reported unverified.
+- Company tax: every `CompanyTaxRateSet` now carries `citationDate` and `verified` (and an optional `verificationNote`), and `getCompanyTaxRate` returns them. All six countries were re-read on their official pages on 2026-10-06. The AU source now points to the page the old URL redirects to. The IN source (which returned 404) now points to the AY 2026-27 domestic-company page, and the IN note now gives the 30% rate for companies over the turnover limit.
+- Canada federal income tax is now in `INCOME_TAX_SCHEMES` (2025 and 2026). It covers federal tax only, and the scheme says provincial tax is additional. The figures are in `src/data/canadaFederal.ts`, which the CA-IT plugin also reads.
+- CA-IT fixes after checking it against the CRA: the basic personal amount is now reduced above the 29% bracket; the RRSP limit is $32,490 for 2025 and $33,810 for 2026 (the old $31,560 was the 2024 limit); the first $200 of donations gets the lowest rate (14.5% / 14%) instead of 15%; and the capital-gains help text no longer says the inclusion rate goes to 2/3 (that increase was cancelled on 21 March 2025).
+- Rate Watch: `analyzeSchedules()` now also watches company tax (provenance only, since a company rate stays in force until it changes) and Finnish capital income. Rollover is checked by **coverage** ("no set covers the tax year `asOf` is in"), with a grace period per series. Finland and Canada get no grace, because their year is fixed before it starts. Everyone else keeps 30 days. A new `missing` finding reports a series with no set in force. The report links to the file that holds the next year.
 
 ### Added — the home-space verdict, like with like (`homeSpaceComparison`, `recommendHomeSpace`)
 

@@ -36,8 +36,14 @@
  * offset the Medicare levy too, not just the income tax component, which is
  * exactly the bug this file's history records.
  */
-import { resolveEffectiveDated } from './effectiveDating';
+import { resolveEffectiveDated, addOneYear } from './effectiveDating';
 import { FI_EARNED_INCOME_YEARS, finnishMunicipalities, finnishWageTax, type FinnishEarnedIncomeYear } from './finland';
+import { CA_FEDERAL_URLS, CA_FEDERAL_YEARS, canadaBasicPersonalAmount, type CanadaFederalYear } from './canadaFederal';
+import { progressive } from './incomeTaxMath';
+import { WORLD_INCOME_TAX_SCHEMES } from './incomeTaxWorld';
+import { CA_PROVINCES } from './incomeTaxRegions/caProvinces';
+import { US_STATES } from './incomeTaxRegions/usStates';
+import { GB_SCOTLAND } from './incomeTaxRegions/scotland';
 
 export interface IncomeTaxBand {
   upTo: number | null;
@@ -49,12 +55,40 @@ export interface IncomeLineItem {
   amount: number;
 }
 
-export interface IncomeBracketSet {
+/**
+ * Where a set's figures were read, and whether they were confirmed there.
+ *
+ * Optional on a set because the six hand-written countries hold one citation
+ * for the whole scheme; every country built from data (incomeTaxFactory.ts)
+ * carries it per year, because the research regularly confirms one year on the
+ * authority's page and not the other. Whatever judges a set — calcIncomeTax's
+ * `verified`, coverage(), the rate watch — reads the set's own provenance first
+ * and the scheme's only when the set has none.
+ */
+export interface IncomeTaxProvenance {
+  source?: string;
+  authorityName?: string;
+  /** YYYY-MM-DD the figures were read on `source`. */
+  citationDate?: string;
+  /** TRUE only when confirmed on an official https authority page. */
+  verified?: boolean;
+  /** Why a set is unverified, in words a user can act on. */
+  verificationNote?: string;
+}
+
+export interface IncomeBracketSet extends IncomeTaxProvenance {
   /** ISO date the set takes effect (inclusive). */
   effectiveFrom: string;
   /** Display label, e.g. "2025-26". */
   taxYearLabel: string;
   bands: IncomeTaxBand[];
+  /**
+   * A statutory tariff FORMULA, used instead of `bands` where the law itself is
+   * a formula rather than a table (Germany's §32a EStG). `bands` then only
+   * describes its zones for display. Must round through `q`, so the
+   * marginal-rate pass can lift the rounding like everywhere else.
+   */
+  tariff?: (taxable: number, q: MoneyRounding) => number;
 }
 
 export interface IncomeTaxResult {
@@ -72,8 +106,109 @@ export interface IncomeTaxResult {
   takeHome: number;
   marginalRate: number;
   averageRate: number;
-  /** What the estimate assumed — present only for schemes that state it. */
+  /** What the estimate assumed — present when the scheme states assumptions,
+   *  and whenever a figure used is unverified, out of date, or borrowed from
+   *  another year (each says so here, in words a user can act on). */
   assumptions?: string[];
+  /**
+   * TRUE only when every figure used was confirmed on the official page AND —
+   * when no tax year was asked for — the year used actually covers today. A
+   * consumer that is about to present the figure as fact checks this first;
+   * when it is false, the assumptions say why and `source` is where to confirm.
+   */
+  verified: boolean;
+  /** The official page the national figures were read on. */
+  source: string;
+  authorityName: string;
+  /** YYYY-MM-DD the national figures were read on `source`. */
+  citationDate: string;
+  /** Present when a sub-national region was selected (options.region). */
+  region?: IncomeTaxRegionResult;
+}
+
+/** The sub-national part of a result: which region, which year, and its provenance. */
+export interface IncomeTaxRegionResult {
+  /** The region code, e.g. 'ON', 'CA' (California), 'SCT'. */
+  code: string;
+  name: string;
+  /** The regional year actually applied — differs from `taxYear` only when that year is not on file. */
+  taxYear: string;
+  verified: boolean;
+  source: string;
+  authorityName: string;
+  citationDate: string;
+}
+
+/**
+ * SUB-NATIONAL INCOME TAX — provinces, states, Scotland.
+ *
+ * Two different things share this shape, and `mode` says which:
+ *
+ *  - 'additional': a separate tax charged ON TOP of the national one, on its
+ *    own base (Canadian provinces and territories, US states). Its `compute`
+ *    returns the regional charges, which the engine adds to the levies, and
+ *    any change the region makes to the NATIONAL tax (the refundable Quebec
+ *    abatement of federal tax) as offsets.
+ *  - 'replacesBands': the region sets the national tax's own rates (Scotland
+ *    sets the bands on non-savings, non-dividend income; the UK personal
+ *    allowance and National Insurance stay UK-wide). The engine swaps the
+ *    national bands for the region's — it never adds a second tax, and it never
+ *    falls back to the national bands for a taxpayer who chose the region.
+ *
+ * A region's year is the national year's label. When that year is not on file
+ * for the region, the newest earlier regional year is used and the result says
+ * so (unverified), rather than silently mixing years.
+ */
+export interface IncomeTaxRegionSet {
+  effectiveFrom: string;
+  taxYearLabel: string;
+  /** 'replacesBands': the bands used instead of the national set's.
+   *  'additional': the regional schedule, for display (empty where there is no tax). */
+  bands: IncomeTaxBand[];
+  /** 'additional' regions only. */
+  compute?: (ctx: RegionalTaxContext) => RegionalTaxLines;
+  /** What this regional year assumes or leaves out. */
+  assumptions?: string[];
+  source: string;
+  authorityName: string;
+  citationDate: string;
+  verified: boolean;
+  verificationNote?: string;
+}
+
+export interface RegionalTaxLines {
+  /** Regional charges, added to the result's levies. */
+  levies: IncomeLineItem[];
+  /** Reductions of the NATIONAL tax the region causes (Quebec abatement). */
+  nationalOffsets?: IncomeLineItem[];
+}
+
+export interface RegionalTaxContext extends IncomeYearContext {
+  gross: number;
+  /** National taxable income (gross less the national pre-band deduction). */
+  nationalTaxable: number;
+  /** The national pre-band deduction applied (US: the federal standard deduction). */
+  nationalDeduction: number;
+  /** National income tax from the bands, before credits. */
+  nationalIncomeTax: number;
+  /** National income tax after the national credits, never below 0 —
+   *  Canada's "basic federal tax", the US federal income-tax liability. */
+  nationalTaxAfterCredits: number;
+}
+
+export interface IncomeTaxRegion {
+  /** Code as callers pass it, without the country prefix: 'ON', 'CA', 'SCT'. */
+  code: string;
+  name: string;
+  mode: 'additional' | 'replacesBands';
+  /** Newest first. */
+  sets: IncomeTaxRegionSet[];
+  /** What the regional figure covers and excludes. */
+  note: string;
+  /** Standing assumptions for the region (e.g. local income taxes not modelled). */
+  assumptions?: string[];
+  /** The file a person edits to append the next year (rate watch names it). */
+  file: string;
 }
 
 /**
@@ -117,7 +252,7 @@ export interface IncomeYearContext {
 /**
  * PERSONAL CIRCUMSTANCES THAT CHANGE THE ANSWER.
  *
- * AU/NZ/GB/IN/US are modelled on gross income alone. Finland cannot be: roughly
+ * AU/NZ/GB/IN/US/CA are modelled on gross income alone. Finland cannot be: roughly
  * a third of a Finnish wage earner's tax is MUNICIPAL, at a rate each
  * municipality sets (Helsinki and the national average differ by more than two
  * points); church members pay church tax on the same base; and the employee
@@ -140,6 +275,15 @@ export interface IncomeTaxOptions {
   /** Age in whole years at the end of the tax year, where a contribution rate
    *  depends on it. Omit to assume the rate for most working ages. */
   age?: number;
+  /**
+   * Sub-national jurisdiction of residence, for countries that list regions:
+   * a Canadian province or territory ('ON', 'QC', …), a US state or DC ('CA',
+   * 'NY', 'TX', …), or Scotland ('SCT') for the UK. The ISO 3166-2 form with
+   * the country prefix ('CA-ON', 'US-CA', 'GB-SCT') is accepted too. Omit for
+   * the national figure only (federal only in CA/US; England, Wales & NI bands
+   * in GB). An unknown code is a RangeError, never a silent national answer.
+   */
+  region?: string;
 }
 
 /** Context passed to a country's offsets() — credits applied to the computed tax. */
@@ -197,6 +341,10 @@ export interface IncomeTaxScheme {
   note: string;
   /** Optional regional caveat (UK = England/Wales/NI only; Scotland differs). */
   region?: string;
+  /** Sub-national jurisdictions a caller can select with options.region. */
+  regions?: Readonly<Record<string, IncomeTaxRegion>>;
+  /** The file a person edits to append the next year (rate watch names it). */
+  file?: string;
   /** Authoritative source for this schedule. */
   source: string;
   authorityName: string;
@@ -218,18 +366,6 @@ export interface MoneyRounding {
 const wholeUnits: MoneyRounding = { round: Math.round, floor: Math.floor };
 /** Pass-through — the policy used when differencing for a marginal rate. */
 const exact: MoneyRounding = { round: (n) => n, floor: (n) => n };
-
-function progressive(income: number, bands: IncomeTaxBand[]): number {
-  let tax = 0;
-  let lower = 0;
-  for (const b of bands) {
-    const upper = b.upTo ?? Infinity;
-    if (income > lower) tax += (Math.min(income, upper) - lower) * b.rate;
-    lower = upper;
-    if (income <= upper) break;
-  }
-  return tax;
-}
 
 const grossOf = (gross: number) => (Number.isFinite(gross) && gross > 0 ? gross : 0);
 
@@ -258,12 +394,17 @@ function liabilityAt(
   // bands, and every hook rounds the same way this call was asked to.
   const year = { taxYearLabel: set.taxYearLabel, effectiveFrom: set.effectiveFrom, q, options };
 
+  // The selected sub-national region, if any, resolved against this year.
+  const regional = resolveRegion(c, set, options);
+
   // 1. Pre-band deduction (capped at gross so taxable can't go negative).
   const deduction = c.deduction ? Math.min(g, c.deduction({ gross: g, ...year })) : 0;
   const taxable = Math.max(0, g - deduction);
 
-  // 2. Progressive tax on the taxable amount.
-  const incomeTax = q.round(progressive(taxable, set.bands));
+  // 2. Progressive tax on the taxable amount — on the REGION's bands where the
+  //    region sets the national tax's own rates (Scotland), never a mix.
+  const bands = regional?.region.mode === 'replacesBands' ? regional.set.bands : set.bands;
+  const incomeTax = q.round(set.tariff && !(regional?.region.mode === 'replacesBands') ? set.tariff(taxable, q) : progressive(taxable, bands));
 
   // 3. Offsets (rebates) reduce the tax first → baseTax. NOT floored at zero
   //    here: AU's LITO can exceed incomeTax at low incomes, and the leftover
@@ -271,15 +412,55 @@ function liabilityAt(
   //    max(0, incomeTax + levy - offset) rather than two separately-floored
   //    steps. India's 87A rebate is self-bounded to incomeTax by its own
   //    offsets() above, so this changes nothing for IN.
-  const offsets = c.offsets({ gross: g, taxable, incomeTax, ...year });
+  let offsets = c.offsets({ gross: g, taxable, incomeTax, ...year });
+
+  // 3a. A region charged on top of the national tax (a province, a state)
+  //     sees the national figures it may depend on (Alabama deducts federal
+  //     tax; Quebec abates it) and returns its own charges.
+  let regionalLevies: IncomeLineItem[] = [];
+  if (regional?.region.mode === 'additional' && regional.set.compute) {
+    const nationalTaxAfterCredits = Math.max(0, incomeTax - offsets.reduce((s, o) => s + o.amount, 0));
+    const r = regional.set.compute({
+      gross: g, nationalTaxable: taxable, nationalDeduction: deduction, nationalIncomeTax: incomeTax, nationalTaxAfterCredits, ...year,
+    });
+    regionalLevies = r.levies;
+    if (r.nationalOffsets?.length) offsets = [...offsets, ...r.nationalOffsets];
+  }
+
   const offsetsTotal = offsets.reduce((s, o) => s + o.amount, 0);
   const baseTax = incomeTax - offsetsTotal;
 
   // 4. Levies compound on top of the post-offset base (IN surcharge/cess need this).
-  const levies = c.levies({ gross: g, taxable, incomeTax, baseTax, ...year });
+  const levies = [...c.levies({ gross: g, taxable, incomeTax, baseTax, ...year }), ...regionalLevies];
   const leviesTotal = levies.reduce((s, l) => s + l.amount, 0);
 
   return { taxable, incomeTax, offsets, levies, totalTax: Math.max(0, baseTax + leviesTotal) };
+}
+
+/** A selected region and the regional year applied for a national set. */
+interface ResolvedRegion {
+  region: IncomeTaxRegion;
+  set: IncomeTaxRegionSet;
+  /** False when the national year is not on file for the region and an earlier regional year stands in. */
+  exact: boolean;
+}
+
+/**
+ * The region the options selected, with its year for `set`. The regional year
+ * is matched by LABEL; when the region has no such year, the newest regional
+ * year that started on or before it stands in (`exact: false`, reported as
+ * unverified). Null when no region was selected, or the region has no year
+ * that early — calcIncomeTax then returns null rather than a national-only
+ * figure the caller did not ask for.
+ */
+function resolveRegion(c: IncomeTaxScheme, set: IncomeBracketSet, options: Readonly<IncomeTaxOptions>): ResolvedRegion | null {
+  if (!options.region || !c.regions) return null;
+  const region = c.regions[options.region];
+  if (!region) return null;
+  const exactSet = region.sets.find((s) => s.taxYearLabel === set.taxYearLabel);
+  if (exactSet) return { region, set: exactSet, exact: true };
+  const earlier = [...region.sets].sort((a, b) => b.effectiveFrom.localeCompare(a.effectiveFrom)).find((s) => s.effectiveFrom <= set.effectiveFrom);
+  return earlier ? { region, set: earlier, exact: false } : null;
 }
 
 /**
@@ -360,7 +541,26 @@ function resolveOptions(c: IncomeTaxScheme, options?: IncomeTaxOptions | null): 
     }
     out.age = a;
   }
+  if (c.optionsSupported.includes('region') && options.region !== undefined && options.region !== null && options.region !== '') {
+    out.region = normaliseRegion(c, options.region);
+  }
   return Object.freeze(out);
+}
+
+/**
+ * 'on', 'ON' and 'CA-ON' all mean Ontario. Anything that is not one of the
+ * country's regions is a RangeError: answering with the national figure for a
+ * taxpayer who named a state would silently drop the state's tax.
+ */
+function normaliseRegion(c: IncomeTaxScheme, raw: unknown): string {
+  const known = Object.keys(c.regions ?? {});
+  if (typeof raw !== 'string') throw new RangeError(`region must be a string, got ${String(raw)}`);
+  let code = raw.trim().toUpperCase();
+  if (code.startsWith(`${c.code}-`)) code = code.slice(c.code.length + 1);
+  if (!c.regions?.[code]) {
+    throw new RangeError(`Unknown region '${raw}' for ${c.code}; expected one of ${known.join(', ')}`);
+  }
+  return code;
 }
 
 // Australia thresholds are stable across these years; only the first taxed
@@ -556,8 +756,10 @@ export const INCOME_TAX_SCHEMES: Record<string, IncomeTaxScheme> = {
       return ni > 0 ? [{ name: 'National Insurance', amount: q.round(ni) }] : [];
     },
     offsets: () => [],
-    note: 'England, Wales & Northern Ireland rates — Scotland sets its own bands. Personal allowance tapers above £100,000. Excludes student-loan repayments and the separate dividend/savings rates.',
-    region: 'England, Wales & Northern Ireland',
+    optionsSupported: ['region'],
+    regions: { SCT: GB_SCOTLAND },
+    note: 'England, Wales & Northern Ireland rates by default — pass region "SCT" for a Scottish taxpayer, whose non-savings, non-dividend income is taxed at the Scottish rates and bands instead (the personal allowance and National Insurance stay UK-wide). Personal allowance tapers above £100,000. Excludes student-loan repayments and the separate dividend/savings rates.',
+    region: 'England, Wales & Northern Ireland unless Scotland is selected (options.region "SCT")',
     source: 'https://www.gov.uk/income-tax-rates',
     authorityName: 'HM Revenue & Customs (HMRC)',
     citationDate: '2026-08-20',
@@ -621,12 +823,45 @@ export const INCOME_TAX_SCHEMES: Record<string, IncomeTaxScheme> = {
       return items;
     },
     offsets: () => [],
-    note: 'FEDERAL income tax + FICA (Social Security & Medicare), single filer, 2026, taking the standard deduction. EXCLUDES state and local income tax — nil in Texas, Florida, Washington and others, up to ~13% in California — and assumes no other deductions or credits. Married-filing-jointly brackets and deduction differ.',
-    region: 'Federal only — excludes state tax',
+    optionsSupported: ['region'],
+    regions: US_STATES,
+    note: 'FEDERAL income tax + FICA (Social Security & Medicare), single filer, 2026, taking the standard deduction. State income tax is added only when a state is selected (options.region, e.g. "CA", "NY", "TX"); without one this EXCLUDES state tax — nil in Texas, Florida, Washington and others, up to ~13% in California. Local (city, county, school-district) income taxes are never included. Assumes no other deductions or credits. Married-filing-jointly brackets and deduction differ.',
+    region: 'Federal only unless a state is selected (options.region) — state income tax is then added; local/city income taxes are never included',
     source: 'https://www.irs.gov/newsroom/irs-releases-tax-inflation-adjustments-for-tax-year-2026-including-amendments-from-the-one-big-beautiful-bill',
     authorityName: 'Internal Revenue Service (IRS)',
     citationDate: '2026-08-20',
     verified: true,
+  },
+  CA: {
+    code: 'CA', country: 'Canada', currency: 'CAD', locale: 'en-CA', timeZone: 'America/Toronto',
+    // Calendar tax year. FEDERAL ONLY: the figures live in canadaFederal.ts,
+    // shared with the CA-IT filing plugin so the two cannot quote different
+    // brackets. There is no pre-band deduction — Canada's tax-free step is the
+    // basic personal amount, a non-refundable CREDIT at the lowest rate, so it
+    // is an offset here, not a deduction.
+    sets: CA_FEDERAL_YEARS.map((y) => ({ effectiveFrom: y.effectiveFrom, taxYearLabel: y.taxYear, bands: y.bands.map((b) => ({ ...b })) })),
+    offsets: ({ taxable, incomeTax, taxYearLabel, q }) => {
+      // Non-refundable: it can bring federal tax to nil, never below. Reduced
+      // on a straight line above the 29% bracket (CRA line 30000 worksheet).
+      // The CRA reduces it by NET income (line 23600), not taxable income.
+      // They are the same number here only because this scheme has no
+      // deduction (taxable = gross = net). If a deduction is ever added (RRSP,
+      // union dues), pass net income here, not `taxable`.
+      const y = canadaYearFor(taxYearLabel);
+      const credit = Math.min(incomeTax, q.round(canadaBasicPersonalAmount(taxable, y) * y.lowestRate));
+      return credit > 0 ? [{ name: 'Basic personal amount credit', amount: credit }] : [];
+    },
+    levies: () => [],
+    optionsSupported: ['region'],
+    regions: CA_PROVINCES,
+    note: 'FEDERAL income tax by default — provincial or territorial income tax is added only when a province or territory is selected (options.region, e.g. "ON", "QC"); without one this is not your full tax or take-home. Includes the federal brackets and the basic personal amount credit (reduced above the 29% bracket), and for a Quebec resident the refundable Quebec abatement. Excludes CPP/QPP contributions, EI premiums, the Canada employment amount and every other credit.',
+    region: 'Federal only unless a province or territory is selected (options.region) — provincial/territorial tax is then added',
+    source: CA_FEDERAL_URLS.rates2026,
+    authorityName: 'Canada Revenue Agency (CRA)',
+    // Derived, not restated: the scheme is only as fresh as its stalest year,
+    // and verified only if every year is.
+    citationDate: CA_FEDERAL_YEARS.map((y) => y.citationDate).sort()[0]!,
+    verified: CA_FEDERAL_YEARS.every((y) => y.verified),
   },
   FI: {
     code: 'FI', country: 'Finland', currency: 'EUR', locale: 'fi-FI', timeZone: 'Europe/Helsinki',
@@ -675,7 +910,22 @@ export const INCOME_TAX_SCHEMES: Record<string, IncomeTaxScheme> = {
     citationDate: '2026-09-29',
     verified: true,
   },
+  // Every country built from data by the factory (incomeTaxFactory.ts). A code
+  // already hand-written above can never be shadowed: the guard below throws.
+  ...WORLD_INCOME_TAX_SCHEMES,
 };
+
+for (const code of Object.keys(WORLD_INCOME_TAX_SCHEMES)) {
+  if (['AU', 'NZ', 'GB', 'IN', 'US', 'CA', 'FI'].includes(code)) throw new Error(`World income-tax data must not redefine ${code}`);
+}
+
+/** The Canadian federal year for a set label — built from the same array as
+ *  `sets`, so a miss is a programming error. */
+function canadaYearFor(label: string): CanadaFederalYear {
+  const y = CA_FEDERAL_YEARS.find((x) => x.taxYear === label);
+  if (!y) throw new Error(`No Canadian federal parameters for ${label}`);
+  return y;
+}
 
 /** The Finnish year for a set label — the label always comes from `sets`,
  *  which is built from the same array, so a miss is a programming error. */
@@ -704,6 +954,18 @@ for (const scheme of Object.values(INCOME_TAX_SCHEMES)) {
   }
   if (scheme.localTaxRates) Object.freeze(scheme.localTaxRates);
   if (scheme.optionsSupported) Object.freeze(scheme.optionsSupported);
+  for (const region of Object.values(scheme.regions ?? {})) {
+    for (const set of region.sets) {
+      set.bands.forEach(Object.freeze);
+      Object.freeze(set.bands);
+      if (set.assumptions) Object.freeze(set.assumptions);
+      Object.freeze(set);
+    }
+    Object.freeze(region.sets);
+    if (region.assumptions) Object.freeze(region.assumptions);
+    Object.freeze(region);
+  }
+  if (scheme.regions) Object.freeze(scheme.regions);
   Object.freeze(scheme);
 }
 Object.freeze(INCOME_TAX_SCHEMES);
@@ -764,11 +1026,33 @@ export function getIncomeTaxYears(countryCode: string): IncomeTaxYearOption[] {
   }));
 }
 
+/** The provenance that applies to a set: its own, else the scheme's. */
+export function incomeTaxSetProvenance(c: IncomeTaxScheme, set: IncomeBracketSet): Required<Omit<IncomeTaxProvenance, 'verificationNote'>> & { verificationNote?: string } {
+  return {
+    source: set.source ?? c.source,
+    authorityName: set.authorityName ?? c.authorityName,
+    citationDate: set.citationDate ?? c.citationDate,
+    verified: set.verified ?? c.verified,
+    ...(set.verificationNote ? { verificationNote: set.verificationNote } : {}),
+  };
+}
+
+/** Does the annual set starting `effectiveFrom` cover the local day `today`? */
+const coversDay = (effectiveFrom: string, today: string) => effectiveFrom <= today && today < addOneYear(effectiveFrom);
+
 /**
  * Compute income tax + take-home for a country.
  * Returns `null` when the country has no scheme here, or when an explicit
  * `taxYear` was given but that year is not defined (fails loudly rather than
- * silently substituting the current year's figures).
+ * silently substituting the current year's figures), or when a region was
+ * selected that has no figures that early.
+ *
+ * `verified` on the result is the whole answer's status: the national year's
+ * provenance, the region's (if one was selected), and — when no year was asked
+ * for — whether the year served actually covers today. Each reason it is false
+ * is spelled out in `assumptions`, so a consumer can degrade to "confirm with
+ * the authority" instead of presenting an unverified or out-of-date figure as
+ * fact.
  */
 export function calcIncomeTax(
   countryCode: string,
@@ -781,9 +1065,39 @@ export function calcIncomeTax(
   const set = resolveIncomeSet(c, taxYear);
   if (!set) return null;
   const opts = resolveOptions(c, options);
+  const regional = resolveRegion(c, set, opts);
+  if (opts.region && !regional) return null;
   const { taxable, incomeTax, offsets, levies, totalTax } = liabilityAt(c, set, gross, wholeUnits, opts);
   const g = grossOf(gross);
-  const assumptions = c.assumptions?.({ gross: g, taxYearLabel: set.taxYearLabel, effectiveFrom: set.effectiveFrom, q: wholeUnits, options: opts });
+
+  const prov = incomeTaxSetProvenance(c, set);
+  const caveats: string[] = [];
+  if (!prov.verified) {
+    caveats.push(`${c.country} ${set.taxYearLabel} figures are not verified${prov.verificationNote ? `: ${prov.verificationNote.replace(/\.\s*$/, '')}` : ''}. Confirm with ${prov.authorityName} (${prov.source}).`);
+  }
+  const current = taxYear ? true : coversDay(set.effectiveFrom, localToday(c.timeZone));
+  if (!current) {
+    caveats.push(`No ${c.country} schedule for the current tax year is on file yet; this uses ${set.taxYearLabel}, the latest on file. Confirm the current figures with ${prov.authorityName} (${prov.source}).`);
+  }
+  let region: IncomeTaxRegionResult | undefined;
+  if (regional) {
+    const rs = regional.set;
+    region = {
+      code: regional.region.code, name: regional.region.name, taxYear: rs.taxYearLabel,
+      verified: rs.verified && regional.exact,
+      source: rs.source, authorityName: rs.authorityName, citationDate: rs.citationDate,
+    };
+    if (!regional.exact) {
+      caveats.push(`${regional.region.name} figures for ${set.taxYearLabel} are not on file yet; the ${rs.taxYearLabel} figures are used instead. Confirm with ${rs.authorityName} (${rs.source}).`);
+    }
+    if (!rs.verified) {
+      caveats.push(`${regional.region.name} ${rs.taxYearLabel} figures are not verified${rs.verificationNote ? `: ${rs.verificationNote.replace(/\.\s*$/, '')}` : ''}. Confirm with ${rs.authorityName} (${rs.source}).`);
+    }
+  }
+
+  const stated = c.assumptions?.({ gross: g, taxYearLabel: set.taxYearLabel, effectiveFrom: set.effectiveFrom, q: wholeUnits, options: opts }) ?? [];
+  const regionStated = regional ? [regional.region.note, ...(regional.region.assumptions ?? []), ...(regional.set.assumptions ?? [])] : [];
+  const assumptions = [...stated, ...regionStated, ...caveats];
 
   return {
     code: c.code, country: c.country, currency: c.currency, locale: c.locale,
@@ -791,16 +1105,54 @@ export function calcIncomeTax(
     gross: g, taxable, incomeTax, levies, offsets, totalTax, takeHome: g - totalTax,
     marginalRate: g > 0 ? marginalRateFor(c, set, g, opts) : 0,
     averageRate: g > 0 ? totalTax / g : 0,
-    ...(assumptions ? { assumptions } : {}),
+    ...(c.assumptions || assumptions.length ? { assumptions } : {}),
+    verified: prov.verified && current && (region ? region.verified : true),
+    source: prov.source,
+    authorityName: prov.authorityName,
+    citationDate: prov.citationDate,
+    ...(region ? { region } : {}),
   };
 }
 
-export function getIncomeTaxBands(countryCode: string, taxYear?: string): IncomeTaxBand[] {
+/**
+ * The bands for a country and year. With a `region` whose rates REPLACE the
+ * national bands (Scotland), the region's bands; for a region taxed on top
+ * (a province, a state), the national bands still — ask
+ * getIncomeTaxRegionBands for the regional schedule.
+ */
+export function getIncomeTaxBands(countryCode: string, taxYear?: string, region?: string): IncomeTaxBand[] {
   const c = getIncomeTaxScheme(countryCode);
   if (!c) return [];
+  const set = resolveIncomeSet(c, taxYear);
+  if (!set) return [];
+  let bands = set.bands;
+  // Same gate as calcIncomeTax: a region is ignored for a scheme that has none.
+  if (region && c.optionsSupported?.includes('region')) {
+    const r = resolveRegion(c, set, { region: normaliseRegion(c, region) });
+    if (r?.region.mode === 'replacesBands') bands = r.set.bands;
+  }
   // A COPY, not the live array. nzBands and gbBands are module-level constants
   // shared by two sets each, so a consumer of the published package sorting or
   // pushing into what it got back would corrupt every later calculation in the
   // same process.
-  return (resolveIncomeSet(c, taxYear)?.bands ?? []).map((b) => ({ ...b }));
+  return bands.map((b) => ({ ...b }));
+}
+
+/** A region's own schedule for a national tax year (empty where it levies no income tax). */
+export function getIncomeTaxRegionBands(countryCode: string, region: string, taxYear?: string): IncomeTaxBand[] {
+  const c = getIncomeTaxScheme(countryCode);
+  if (!c) return [];
+  const set = resolveIncomeSet(c, taxYear);
+  if (!set) return [];
+  const r = resolveRegion(c, set, { region: normaliseRegion(c, region) });
+  return (r?.set.bands ?? []).map((b) => ({ ...b }));
+}
+
+/** The sub-national regions a country offers through options.region, sorted by code. */
+export function listIncomeTaxRegions(countryCode: string): { code: string; name: string; mode: IncomeTaxRegion['mode'] }[] {
+  const c = getIncomeTaxScheme(countryCode);
+  if (!c?.regions) return [];
+  return Object.values(c.regions)
+    .map((r) => ({ code: r.code, name: r.name, mode: r.mode }))
+    .sort((a, b) => a.code.localeCompare(b.code));
 }

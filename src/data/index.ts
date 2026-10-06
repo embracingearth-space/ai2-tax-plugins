@@ -19,22 +19,29 @@ export type { TaxFamily, CountryTaxRateInfo } from './taxRates';
 export { COUNTRY_TAX_RATES, getTaxRateInfo, getStandardTaxRate, detectTaxFamily } from './taxRates';
 
 // Tax Rate Ledger — effective-dated single source of truth + date-aware resolver
-export type { RateLedgerRow, RateSource } from './rateLedger';
+export type { RateLedgerRow, RateSource, ActiveRowsOptions } from './rateLedger';
 export {
   RATE_LEDGER,
   RATE_FLOOR,
   resolveRateRow,
   getStandardRateAsOf,
   activeNationalRows,
+  isRateIndicative,
   toYmd,
 } from './rateLedger';
 
-// Personal Income Tax (take-home estimator — AU, NZ, GB, IN, US, FI)
+// Personal Income Tax (take-home estimator — AU, NZ, GB, IN, US, FI, CA federal)
 export type {
   IncomeTaxBand,
   IncomeLineItem,
   IncomeBracketSet,
   IncomeTaxResult,
+  IncomeTaxRegion,
+  IncomeTaxRegionSet,
+  IncomeTaxRegionResult,
+  RegionalTaxContext,
+  RegionalTaxLines,
+  IncomeTaxProvenance,
   IncomeOffsetContext,
   IncomeLevyContext,
   IncomeDeductionContext,
@@ -51,6 +58,9 @@ export {
   getIncomeTaxYears,
   calcIncomeTax,
   getIncomeTaxBands,
+  getIncomeTaxRegionBands,
+  listIncomeTaxRegions,
+  incomeTaxSetProvenance,
   localToday,
 } from './incomeTax';
 
@@ -81,10 +91,15 @@ export {
 } from './finland';
 export { FI_MUNICIPAL_RATES_SOURCE } from './finlandMunicipalRates';
 
+// Canada — federal personal income-tax parameters (shared by the CA scheme and the CA-IT plugin)
+export type { CanadaFederalYear, CanadaFederalSource } from './canadaFederal';
+export { CA_FEDERAL_YEARS, CA_FEDERAL_URLS, canadaFederalYear, canadaBasicPersonalAmount } from './canadaFederal';
+
 // Company / Corporate Income Tax (headline rates for the CompanyFlatRate forecast strategy)
 export type { CompanyTaxRateSet, CompanyTaxInfo, ResolvedCompanyRate } from './companyTax';
 export {
   COMPANY_TAX_RATES,
+  COMPANY_TAX_NOT_COVERED,
   listCompanyTaxCountries,
   getCompanyTaxInfo,
   getCompanyTaxRate,

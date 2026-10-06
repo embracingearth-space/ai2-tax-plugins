@@ -15,10 +15,14 @@
  * period (before/after a change) and keep historical filings correct — FOR THE
  * PART OF HISTORY A ROW ACTUALLY DATES.
  *
- * THE CAVEAT THAT MATTERS: 71 of the 107 rows carry RATE_FLOOR (2000-01-01) as
+ * THE CAVEAT THAT MATTERS: 123 of the 299 rows carry RATE_FLOOR (2000-01-01) as
  * their effectiveFrom, meaning "known true since at least this anchor," not
  * "became true on this date." Most are annotated in their own `note` as
- * long-standing or stable for decades, but the ledger records no actual change
+ * long-standing or stable for decades; rows added 2026-10-06 whose start could
+ * not be established (a null date, the 1970-01-01 sentinel, a citation date or
+ * a year used as a placeholder) say so in a "START DATE UNKNOWN" prefix, and
+ * rows whose real start predates 2000 say "IN FORCE BEFORE THE LEDGER FLOOR".
+ * Either way the ledger records no actual change
  * history before that floor for those rows. This is a risk only from the floor
  * ONWARD, not before it: resolveRateRow rejects any date earlier than a row's
  * effectiveFrom, so a query dated before 2000-01-01 resolves to nothing, not
@@ -27,15 +31,31 @@
  * rate, which may not be what was actually charged at that later time.
  *
  * Rows and countries are different counts and are easy to conflate, so each is
- * stated plainly. Of 88 countries, 26 carry at least one genuinely dated row and
- * 62 are floor-only. Separately, 9 countries record an actual TRANSITION - a
+ * stated plainly. Of 199 countries, 111 carry at least one genuinely dated row
+ * and 88 are floor-only. 69 of the rows are sub-national (64 jurisdictions:
+ * every US state plus DC, and every Canadian province and territory); the US
+ * and Canada keep their national row, and a sub-national row never answers a
+ * national query. Separately, 14 countries record an actual TRANSITION - a
  * SERIES (one country + stateProvince + taxType) holding more than one row, so a
- * change is resolvable across it: CA, EC, EE, FI, GH, IL, KZ, RO, RU. Canada is
- * in that list for its federal GST series (7% -> 6% -> 5%), NOT for having two
- * rows: its GST and Ontario HST rows are parallel series and counting them as a
- * transition was the bug this distinction was drawn to fix. The open gap is the
- * 62 floor-only countries; backfilling real pre-2000 or pre-verification change
+ * change is resolvable across it: CA, CH, EC, EE, FI, GH, IL, KZ, LK, RO, RU,
+ * SG, TJ, US. Canada is in that list for its federal GST series (7% -> 6% ->
+ * 5%) and Nova Scotia's HST cut (15% -> 14%), NOT for having parallel series:
+ * its GST and provincial rows are separate series and counting them as a
+ * transition was the bug this distinction was drawn to fix. The US is in it
+ * only through four STATE series (AZ, LA, MN, SD) whose scheduled changes are
+ * already law; its national row is still a single one. The open gap is the 88
+ * floor-only countries; backfilling real pre-2000 or pre-verification change
  * dates for them is a per-country research task, not something to synthesise.
+ *
+ * SOME RATES ARE ONLY INDICATIVE, and those never reach a caller as fact. A row
+ * with rateIsIndicative (Syria's placeholder 0, Cuba's farm-produce-only 10%,
+ * Somalia and South Sudan at low confidence, Chad and Afghanistan where sources
+ * conflict, Liberia's 2027 VAT launch rate and Louisiana's 2030 rate, both
+ * unconfirmed) stays in the ledger with its authority, but getStandardRateAsOf
+ * answers 0 (unknown) for it and activeNationalRows leaves its country out
+ * unless asked - so the flat view and every calculator built on it degrade to
+ * "not available" instead of printing a number nobody could check. This is
+ * stricter than `verified: false`, which only means the citation is pending.
  *
  * NO SERIES HAS A HOLE. Within a series each effectiveTo is the next
  * effectiveFrom, so every date inside a series resolves to exactly one row. This
@@ -127,7 +147,28 @@ export interface RateLedgerRow {
   effectiveFrom: string;
   /** YYYY-MM-DD, exclusive; null = still in force. */
   effectiveTo: string | null;
+  /**
+   * TRUE when `standardRate` is NOT a figure that may be presented as fact: a
+   * placeholder (Syria's 0), a rate that covers only a slice of the economy
+   * (Cuba's farm-produce 10%), a low-confidence figure (Somalia, South Sudan),
+   * or one that conflicts between sources (Chad 18% vs 17.5%). Absent means
+   * false. Stricter than `source.verified: false`, which means "the citation is
+   * pending" while the rate itself is still shown.
+   *
+   * An indicative row stays in the ledger so the jurisdiction and its
+   * authority remain on record, and resolveRateRow returns it with the flag.
+   * Every as-fact surface degrades instead: getStandardRateAsOf answers 0
+   * (unknown), and activeNationalRows omits it unless asked - so
+   * COUNTRY_TAX_RATES, getStandardTaxRate and getTaxRateInfo do too. Always
+   * paired with `source.verified: false` (asserted).
+   */
+  rateIsIndicative?: boolean;
   source: RateSource;
+}
+
+/** True when a row's rate must not be presented as fact (see RateLedgerRow.rateIsIndicative). */
+export function isRateIndicative(row: RateLedgerRow): boolean {
+  return row.rateIsIndicative === true;
 }
 
 export { RATE_LEDGER };
@@ -166,6 +207,9 @@ export interface ResolveOptions {
  * Date; defaults to today). Resolution is purely by the date window
  * [effectiveFrom, effectiveTo) — never "the latest row". Returns the national row
  * unless `opts.stateProvince` is given. Undefined if no row covers the date.
+ *
+ * This is the raw row, so it may be an INDICATIVE one: check
+ * isRateIndicative(row) before showing `standardRate` as a fact.
  */
 export function resolveRateRow(
   countryCode: string,
@@ -187,16 +231,31 @@ export function resolveRateRow(
   return best;
 }
 
-/** Standard rate for a country on a date (0 if unknown). Date-aware. */
+/**
+ * Standard rate for a country on a date (0 if unknown). Date-aware.
+ * An indicative row counts as unknown: its figure is not a fact to compute with.
+ */
 export function getStandardRateAsOf(countryCode: string, asOf?: string | Date): number {
-  return resolveRateRow(countryCode, asOf)?.standardRate ?? 0;
+  const row = resolveRateRow(countryCode, asOf);
+  return row && !isRateIndicative(row) ? row.standardRate : 0;
+}
+
+export interface ActiveRowsOptions {
+  /**
+   * Also return countries whose row in force is indicative. Off by default so
+   * the flat view never publishes a placeholder; Rate Watch turns it on so
+   * those countries still reach a human.
+   */
+  includeIndicative?: boolean;
 }
 
 /**
  * All national (stateProvince null) rows active on `asOf`, one per country.
  * Used to derive the flat, as-of-today reference table. Sub-national rows excluded.
+ * A country whose row in force is indicative is omitted (not replaced by an
+ * older row) unless `opts.includeIndicative` is set.
  */
-export function activeNationalRows(asOf?: string | Date): RateLedgerRow[] {
+export function activeNationalRows(asOf?: string | Date, opts: ActiveRowsOptions = {}): RateLedgerRow[] {
   const ymd = toYmd(asOf ?? new Date());
   const byCountry = new Map<string, RateLedgerRow>();
   for (const r of RATE_LEDGER) {
@@ -206,5 +265,6 @@ export function activeNationalRows(asOf?: string | Date): RateLedgerRow[] {
     const existing = byCountry.get(r.countryCode);
     if (!existing || r.effectiveFrom > existing.effectiveFrom) byCountry.set(r.countryCode, r);
   }
-  return [...byCountry.values()];
+  const rows = [...byCountry.values()];
+  return opts.includeIndicative ? rows : rows.filter((r) => !isRateIndicative(r));
 }

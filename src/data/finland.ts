@@ -495,6 +495,10 @@ export interface FinnishCapitalIncomeYear {
   lossCarryForwardYears: number;
   sources: readonly FinnishSource[];
   citationDate: string;
+  /** TRUE only when the figures were confirmed against `sources` on `citationDate`.
+   *  Read by coverage() and the rate watch, so a year that cannot be confirmed
+   *  is reported rather than presented as fact. */
+  verified: boolean;
 }
 
 const CAPITAL_SOURCES: readonly FinnishSource[] = [
@@ -505,8 +509,8 @@ const CAPITAL_SOURCES: readonly FinnishSource[] = [
 ];
 
 export const FI_CAPITAL_INCOME_YEARS: readonly FinnishCapitalIncomeYear[] = [
-  { taxYear: '2026', effectiveFrom: '2026-01-01', rate: 0.3, higherRate: 0.34, threshold: 30000, deemedCost: { rate: 0.2, longRate: 0.4, longYears: 10 }, smallDisposalsThreshold: 1000, lossCarryForwardYears: 5, sources: CAPITAL_SOURCES, citationDate: '2026-09-29' },
-  { taxYear: '2025', effectiveFrom: '2025-01-01', rate: 0.3, higherRate: 0.34, threshold: 30000, deemedCost: { rate: 0.2, longRate: 0.4, longYears: 10 }, smallDisposalsThreshold: 1000, lossCarryForwardYears: 5, sources: CAPITAL_SOURCES, citationDate: '2026-09-29' },
+  { taxYear: '2026', effectiveFrom: '2026-01-01', rate: 0.3, higherRate: 0.34, threshold: 30000, deemedCost: { rate: 0.2, longRate: 0.4, longYears: 10 }, smallDisposalsThreshold: 1000, lossCarryForwardYears: 5, sources: CAPITAL_SOURCES, citationDate: '2026-09-29', verified: true },
+  { taxYear: '2025', effectiveFrom: '2025-01-01', rate: 0.3, higherRate: 0.34, threshold: 30000, deemedCost: { rate: 0.2, longRate: 0.4, longYears: 10 }, smallDisposalsThreshold: 1000, lossCarryForwardYears: 5, sources: CAPITAL_SOURCES, citationDate: '2026-09-29', verified: true },
 ];
 
 export interface FinnishCapitalGainInput {

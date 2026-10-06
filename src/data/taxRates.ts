@@ -12,7 +12,7 @@
  * without a restart. The back-compat API (getTaxRateInfo / getStandardTaxRate /
  * detectTaxFamily) and the CountryTaxRateInfo / TaxFamily types are unchanged.
  */
-import { activeNationalRows, resolveRateRow, getStandardRateAsOf, toYmd } from './rateLedger';
+import { activeNationalRows, resolveRateRow, getStandardRateAsOf, isRateIndicative, toYmd } from './rateLedger';
 import type { TaxFamily, RateLedgerRow } from './rateLedger';
 
 export type { TaxFamily } from './rateLedger';
@@ -75,11 +75,13 @@ export const COUNTRY_TAX_RATES: Record<string, CountryTaxRateInfo> = new Proxy(
 
 /**
  * Get tax rate info for a country, as in force on `asOf` (default: today).
- * Returns undefined if unknown. Resolved live from the ledger.
+ * Returns undefined if unknown. Resolved live from the ledger. A row whose
+ * rate is indicative (RateLedgerRow.rateIsIndicative) also answers undefined,
+ * the same as the flat view, so its placeholder never reaches a caller as fact.
  */
 export function getTaxRateInfo(countryCode: string, asOf?: string | Date): CountryTaxRateInfo | undefined {
   const row = resolveRateRow(countryCode, asOf ?? new Date());
-  return row ? toInfo(row) : undefined;
+  return row && !isRateIndicative(row) ? toInfo(row) : undefined;
 }
 
 /**

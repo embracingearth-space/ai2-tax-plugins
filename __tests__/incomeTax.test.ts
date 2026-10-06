@@ -16,6 +16,9 @@ import {
   listIncomeTaxCountries,
   getIncomeTaxBands,
   INCOME_TAX_SCHEMES,
+  CA_FEDERAL_YEARS,
+  canadaBasicPersonalAmount,
+  canadaIncomeTaxPlugin,
 } from '../src';
 
 const sum = (items: { amount: number }[]) => items.reduce((s, i) => s + i.amount, 0);
@@ -161,7 +164,7 @@ describe('tax-year resolution', () => {
 
   it('an unsupported country returns null, never a guessed figure', () => {
     expect(calcIncomeTax('ZZ', 90000)).toBeNull();
-    expect(calcIncomeTax('FR', 90000)).toBeNull();
+    expect(calcIncomeTax('AQ', 90000)).toBeNull();
   });
 
   it('every scheme resolves to a year that has actually started', () => {
@@ -184,18 +187,26 @@ describe('tax-year resolution', () => {
 });
 
 describe('every scheme carries real provenance', () => {
-  it('names an authority, a source URL, and a citation date for every country', () => {
+  it('names an authority, a source URL, and a citation date for every country — and an unverified set says why', () => {
     for (const code of listIncomeTaxCountries()) {
       const scheme = INCOME_TAX_SCHEMES[code]!;
       expect(scheme.authorityName.length).toBeGreaterThan(0);
       expect(scheme.source).toMatch(/^https:\/\//);
       expect(scheme.citationDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
-      expect(scheme.verified).toBe(true);
+      for (const set of scheme.sets) {
+        if (set.verified === false) expect((set.verificationNote ?? '').length).toBeGreaterThan(0);
+        if (set.source) expect(set.source).toMatch(/^https:\/\//);
+      }
     }
   });
 
-  it('covers the six countries the website and the MCP both need', () => {
-    expect(listIncomeTaxCountries().sort()).toEqual(['AU', 'FI', 'GB', 'IN', 'NZ', 'US']);
+  it('the six hand-written countries plus Finland stay verified', () => {
+    for (const code of ['AU', 'CA', 'FI', 'GB', 'IN', 'NZ', 'US']) expect(INCOME_TAX_SCHEMES[code]!.verified).toBe(true);
+  });
+
+  it('covers the original seven plus every data-built country', () => {
+    expect(listIncomeTaxCountries()).toEqual(expect.arrayContaining(['AU', 'CA', 'FI', 'GB', 'IN', 'NZ', 'US', 'DE', 'FR', 'IE', 'JP', 'SG', 'ZA']));
+    expect(listIncomeTaxCountries().length).toBeGreaterThanOrEqual(54);
   });
 });
 
@@ -403,5 +414,162 @@ describe('marginal rate is differenced from liability, not read off the bands', 
       expect(calcIncomeTax('IN', threshold + 75000, inYear)!.taxable).toBe(threshold);
       expect(mr('IN', threshold + 75000, inYear)).toBeCloseTo(1.04, 9);
     }
+  });
+});
+
+/**
+ * CANADA — federal income tax only. Every figure is the CRA's, read 2026-10-06
+ * (see src/data/canadaFederal.ts); every anchor below is re-derived by hand in
+ * its comment from those figures, so a wrong threshold, rate or credit shows up
+ * as a mismatch against arithmetic anyone can redo.
+ */
+describe('Canada (federal) — scheme and provenance', () => {
+  const ca = INCOME_TAX_SCHEMES.CA!;
+
+  it('is cited, verified and says federal only (unless a province is selected) beside every figure', () => {
+    expect(ca.authorityName).toBe('Canada Revenue Agency (CRA)');
+    expect(ca.source).toMatch(/^https:\/\/www\.canada\.ca\//);
+    expect(ca.verified).toBe(true);
+    expect(ca.citationDate).toBe('2026-10-06');
+    expect(ca.region).toBe('Federal only unless a province or territory is selected (options.region) — provincial/territorial tax is then added');
+    expect(ca.note).toMatch(/FEDERAL income tax by default/);
+    expect(ca.note).toMatch(/without one this is not your full tax or take-home/);
+  });
+
+  it('carries 2026 and 2025, newest first, calendar years', () => {
+    expect(getIncomeTaxYears('CA').map((y) => [y.value, y.effectiveFrom])).toEqual([['2026', '2026-01-01'], ['2025', '2025-01-01']]);
+  });
+
+  it('every year names a CRA source for each figure and is verified', () => {
+    for (const y of CA_FEDERAL_YEARS) {
+      expect(y.verified).toBe(true);
+      expect(y.citationDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      expect(y.sources.length).toBeGreaterThanOrEqual(4);
+      for (const src of y.sources) expect(src.url).toMatch(/^https:\/\/www\.canada\.ca\/en\/revenue-agency\//);
+    }
+  });
+
+  it('2026 brackets are the CRA schedule: 14 / 20.5 / 26 / 29 / 33%', () => {
+    expect(getIncomeTaxBands('CA', '2026')).toEqual([
+      { upTo: 58523, rate: 0.14 },
+      { upTo: 117045, rate: 0.205 },
+      { upTo: 181440, rate: 0.26 },
+      { upTo: 258482, rate: 0.29 },
+      { upTo: null, rate: 0.33 },
+    ]);
+  });
+
+  it('2025 brackets carry the blended 14.5% lowest rate (15% to June, 14% from 1 July)', () => {
+    expect(getIncomeTaxBands('CA', '2025')).toEqual([
+      { upTo: 57375, rate: 0.145 },
+      { upTo: 114750, rate: 0.205 },
+      { upTo: 177882, rate: 0.26 },
+      { upTo: 253414, rate: 0.29 },
+      { upTo: null, rate: 0.33 },
+    ]);
+  });
+
+  it('the BPA reduction runs exactly between the 29% and 33% bracket thresholds', () => {
+    for (const y of CA_FEDERAL_YEARS) {
+      expect(y.basicPersonalAmount.reduceFrom).toBe(y.bands[2]!.upTo);
+      expect(y.basicPersonalAmount.reduceTo).toBe(y.bands[3]!.upTo);
+      expect(y.lowestRate).toBe(y.bands[0]!.rate);
+    }
+  });
+});
+
+describe('Canada (federal) — anchors', () => {
+  const sumOffsets = (gross: number, year: string) => calcIncomeTax('CA', gross, year)!.offsets.reduce((s, o) => s + o.amount, 0);
+
+  it('$100,000 in 2026 → $14,393 federal tax', () => {
+    // 58,523 × 14% = 8,193.22; (100,000 − 58,523) × 20.5% = 8,502.785 → 16,696.
+    // BPA credit 16,452 × 14% = 2,303.28 → 2,303. 16,696 − 2,303 = 14,393.
+    const r = calcIncomeTax('CA', 100000, '2026')!;
+    expect(r.taxable).toBe(100000);
+    expect(r.incomeTax).toBe(16696);
+    expect(r.offsets).toEqual([{ name: 'Basic personal amount credit', amount: 2303 }]);
+    expect(r.levies).toEqual([]);
+    expect(r.totalTax).toBe(14393);
+    expect(r.takeHome).toBe(85607);
+  });
+
+  it('$100,000 in 2025 → $14,719 federal tax', () => {
+    // 57,375 × 14.5% = 8,319.375; 42,625 × 20.5% = 8,738.125 → 17,057.5 → 17,058.
+    // BPA credit 16,129 × 14.5% = 2,338.705 → 2,339. 17,058 − 2,339 = 14,719.
+    const r = calcIncomeTax('CA', 100000, '2025')!;
+    expect(r.incomeTax).toBe(17058);
+    expect(sumOffsets(100000, '2025')).toBe(2339);
+    expect(r.totalTax).toBe(14719);
+  });
+
+  it('nothing is payable up to the basic personal amount, and the credit never goes refundable', () => {
+    expect(calcIncomeTax('CA', 16452, '2026')!.totalTax).toBe(0);
+    const low = calcIncomeTax('CA', 10000, '2026')!;
+    expect(low.totalTax).toBe(0);
+    expect(sumOffsets(10000, '2026')).toBe(low.incomeTax); // capped at the tax, not 2,303
+    expect(calcIncomeTax('CA', 0, '2026')!.offsets).toEqual([]);
+  });
+
+  it('reduces the BPA on a straight line across the 29% bracket (CRA line 30000 worksheet)', () => {
+    const y2026 = CA_FEDERAL_YEARS.find((y) => y.taxYear === '2026')!;
+    expect(canadaBasicPersonalAmount(181440, y2026)).toBe(16452);
+    expect(canadaBasicPersonalAmount(258482, y2026)).toBe(14829);
+    expect(canadaBasicPersonalAmount(400000, y2026)).toBe(14829);
+    // $220,000: 16,452 − (220,000 − 181,440) × 1,623 / 77,042 = 15,639.67 → × 14% = 2,189.55 → 2,190.
+    expect(sumOffsets(220000, '2026')).toBe(2190);
+    // 2025, CRA's own worksheet formula: 16,129 − (NI − 177,882) × (1,591 / 75,532).
+    const y2025 = CA_FEDERAL_YEARS.find((y) => y.taxYear === '2025')!;
+    expect(canadaBasicPersonalAmount(200000, y2025)).toBeCloseTo(16129 - (200000 - 177882) * (1591 / 75532), 9);
+  });
+
+  it('marginal rate is the band rate, plus the credit being withdrawn inside the reduction range', () => {
+    const mr = (g: number) => calcIncomeTax('CA', g, '2026')!.marginalRate;
+    expect(mr(50000)).toBeCloseTo(0.14, 6);
+    expect(mr(100000)).toBeCloseTo(0.205, 6);
+    expect(mr(150000)).toBeCloseTo(0.26, 6);
+    // 29% + 14% × 1,623 / 77,042 of credit withdrawn per dollar.
+    expect(mr(220000)).toBeCloseTo(0.29 + 0.14 * (1623 / 77042), 6);
+    expect(mr(300000)).toBeCloseTo(0.33, 6);
+  });
+});
+
+describe('Canada — the take-home scheme and the CA-IT plugin quote the same federal tax', () => {
+  beforeAll(() => {
+    jest.useFakeTimers({ doNotFake: ['nextTick', 'setImmediate'] }).setSystemTime(new Date('2026-10-06T12:00:00Z'));
+  });
+  afterAll(() => {
+    jest.useRealTimers();
+  });
+
+  it.each([30000, 100000, 200000, 300000])('$%i of employment income (2026)', (income) => {
+    const plugin = Number(canadaIncomeTaxPlugin.calculateFields({ employment_income: income }).federal_tax);
+    const scheme = calcIncomeTax('CA', income, '2026')!.totalTax;
+    // The plugin works in cents, the scheme in whole dollars.
+    expect(Math.abs(plugin - scheme)).toBeLessThanOrEqual(1);
+  });
+
+  it('the plugin applies the BPA reduction too (it used to credit the full amount at every income)', () => {
+    // $300,000: 8,193.22 + 11,997.01 + 16,742.70 + 22,342.18 + 13,700.94 = 72,976.05,
+    // less 14,829 × 14% = 2,076.06 → 70,899.99.
+    expect(Number(canadaIncomeTaxPlugin.calculateFields({ employment_income: 300000 }).federal_tax)).toBeCloseTo(70899.99, 2);
+  });
+
+  it('warns above the 2026 RRSP dollar limit ($33,810), not the 2024 figure it used to quote', () => {
+    expect(canadaIncomeTaxPlugin.validateForm({ rrsp_deduction: 33810 })).toEqual([]);
+    const w = canadaIncomeTaxPlugin.validateForm({ rrsp_deduction: 33811 });
+    expect(w).toHaveLength(1);
+    expect(w[0]!.message).toBe('2026 RRSP dollar limit is $33,810');
+  });
+
+  it('credits the first $200 of donations at the 14% lowest rate, not the old 15%', () => {
+    const base = Number(canadaIncomeTaxPlugin.calculateFields({ employment_income: 100000 }).total_federal_payable);
+    const withGift = Number(canadaIncomeTaxPlugin.calculateFields({ employment_income: 100000, charitable_donations: 200 }).total_federal_payable);
+    expect(base - withGift).toBeCloseTo(28, 2); // 200 × 14%
+  });
+
+  it('no longer tells filers the capital-gains inclusion rate is changing to 2/3', () => {
+    const field = canadaIncomeTaxPlugin.getFormSchema().flatMap((s) => s.fields).find((f) => f.id === 'capital_gains')!;
+    expect(field.helpText).toMatch(/^50% inclusion rate/);
+    expect(field.helpText).toMatch(/cancelled/);
   });
 });
