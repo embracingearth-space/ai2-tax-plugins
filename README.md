@@ -67,6 +67,16 @@ m.incomeTax.filter((e) => e.verified).map((e) => e.code);
 - `verified` means the figures were confirmed on the official page on `citationDate` **and**, for a yearly schedule, a set covers the tax year `asOf` falls in. A country whose newest income-tax year has ended is still listed, but as unverified. Present only `verified` entries as fact.
 - `scope` says when coverage is partial: Canadian and US income tax are federal only, AU CGT is the discount rule rather than a calculation, and company tax is the headline rate.
 
+### Company tax, worldwide
+
+`getCompanyTaxRate(cc, asOf)` answers for 139 countries (as of 2026-10-06), each figure with its `source`, `citationDate` and `verified` flag:
+
+- **28 verified** on the national authority's own page or law (the six home countries AU, US, GB, IN, CA, FI, plus AE, AT, BR, CY, CZ, DE, EC, EE, GH, HR, JP, KE, MY, NL, NZ, PH, PL, RU, SG, TW, UG, ZA).
+- **111 unverified**: 109 from OECD Corporate Tax Statistics (Table II.1, 2026) with `sourceAuthority` "OECD Corporate Tax Statistics", plus BT and ZW (official pages, but undated). Each carries a `verificationNote`, and its `note` tells the reader to confirm with the national tax authority. Show these as indicative, never as fact.
+- **58 not covered** (`COMPANY_TAX_NOT_COVERED`, `coverage().companyTaxNotCovered`): no figure could be read, so there is no rate set and `getCompanyTaxRate` returns `null`. No figure is guessed.
+
+`standardRate` is the central-government rate, without surtaxes or state and municipal taxes (the note gives the combined figure where known). A `smallCompanyRate` is set only where it was confirmed with a clear threshold (AU, GB, IN, CA, HR, PH, PL). Profit bands, such as the first JPY 8m in Japan, are described in the note. Germany's enacted cuts (14% in 2028 down to 10% from 2032) are future-dated sets. Finland's proposed 18% is not encoded, because it is still a bill.
+
 ## Tax treatments
 
 

@@ -8,6 +8,14 @@ member has a value on every rules object that ships, `declineInValue` still
 accepts `daysHeld` / `daysInYear` exactly as before, and a host on 2.1.0 keeps
 working untouched.
 
+### Added — company tax for 139 countries, effective-dated and cited
+
+- `COMPANY_TAX_RATES` now covers 139 countries (was 6). The new countries live in `src/data/companyTaxWorld.ts`. Each set has an https `source`, a `citationDate` (2026-10-06) and `verified`. 22 new countries were verified on the national authority's page or law. 109 come from OECD Corporate Tax Statistics (Table II.1, 2026) and are `verified: false`, with a note to confirm with the national authority. NG (OECD rate; small-company detail from the reform committee), ZW and BT (official pages, but undated) are also `verified: false`, with a reason.
+- Germany: the enacted KStG § 23 cuts are future-dated sets (15% to 2027, then 14%, 13%, 12%, 11%, and 10% from 2032). Cyprus: 15% from 2026-01-01. Finland's proposed 18% from 2027 is not encoded, because it is a bill. The six existing countries' figures are unchanged, because the research confirmed them.
+- `CompanyTaxRateSet.sourceAuthority` (optional) names who published the source when it is not the tax authority. `getCompanyTaxRate` now also returns `verificationNote` and `sourceAuthority`, so a consumer can fall back to "confirm with the authority" for unverified data.
+- `COMPANY_TAX_NOT_COVERED` lists the 58 researched jurisdictions with no figure. `coverage()` adds `companyTaxNotCovered` and `counts.companyTax.notCovered`. The OECD-sourced entries say so in `scope`.
+- Rate Watch picks up every new set: the OECD-only sets are listed as `unverified`, the verified ones go stale a year after 2026-10-06, and Germany's cuts are listed as `upcoming`.
+
 ### Added — `coverage()`, one cited answer to "what does the engine cover?"
 
 - `coverage(asOf?)` returns, per capability (`gstVat`, `incomeTax`, `companyTax`, `cgt`, `studentLoan`, `retirement`), the countries covered, each with `{ code, verified, citationDate, sourceUrl }`, plus `counts`. It is derived from the registries and pinned to them by tests, so it cannot claim more than the data holds. An income-tax year that has ended is reported unverified.
