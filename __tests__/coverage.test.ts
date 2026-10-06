@@ -135,7 +135,7 @@ describe('coverage() — counts equal the registries (it cannot claim more than 
     // A change here is a real change in what the engine covers — update it
     // together with the data, never on its own.
     expect(m.counts).toEqual({
-      gstVat: { countries: 88, verified: 86 },
+      gstVat: { countries: 193, verified: 171 },
       incomeTax: { countries: 7, verified: 7 },
       companyTax: { countries: 6, verified: 6 },
       cgt: { countries: 71, verified: 58 },

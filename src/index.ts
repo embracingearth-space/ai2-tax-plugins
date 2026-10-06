@@ -635,6 +635,7 @@ export {
   resolveRateRow,
   getStandardRateAsOf,
   activeNationalRows,
+  isRateIndicative,
   toYmd,
   // Canada — federal personal income-tax parameters (CA scheme + CA-IT plugin)
   CA_FEDERAL_YEARS,
@@ -686,6 +687,7 @@ export type {
   CountryTaxRateInfo,
   RateLedgerRow,
   RateSource,
+  ActiveRowsOptions,
   CanadaFederalYear,
   CanadaFederalSource,
   CompanyTaxRateSet,
