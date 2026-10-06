@@ -21,6 +21,9 @@ import {
   RETIREMENT_SCHEMES,
   RATE_LEDGER,
   calcIncomeTax,
+  listCapitalGainsCountries,
+  resolveCapitalGainsRules,
+  CGT_NOT_RESEARCHED,
 } from '../src';
 import type { CoverageEntry, CoverageManifest } from '../src';
 
@@ -104,13 +107,22 @@ describe('coverage() — counts equal the registries (it cannot claim more than 
     }
   });
 
-  it('cgt = AU (the discount rule), FI (the calculator) and GB (the home-space rates) — nothing else', () => {
-    expect(codes(m.cgt)).toEqual(['AU', 'FI', 'GB']);
+  it('cgt = CAPITAL_GAINS_RULES, provenance from the set in force — and never a country that was not researched', () => {
+    expect(codes(m.cgt)).toEqual(listCapitalGainsCountries());
+    for (const code of CGT_NOT_RESEARCHED) expect(codes(m.cgt)).not.toContain(code);
+    for (const e of m.cgt) {
+      const r = resolveCapitalGainsRules(e.code, AUDIT)!;
+      expect(e).toMatchObject({ verified: r.verified, citationDate: r.set.citationDate, sourceUrl: r.source!.url });
+      // Partial coverage says what it is, beside itself.
+      expect(e.scope && e.scope.length).toBeTruthy();
+    }
     const fi = m.cgt.find((e) => e.code === 'FI')!;
     expect(fi.citationDate).toBe(FI_CAPITAL_INCOME_YEARS.find((y) => y.taxYear === '2026')!.citationDate);
-    // Partial coverage says what it is, beside itself.
-    for (const e of m.cgt) expect(e.scope && e.scope.length).toBeTruthy();
-    expect(m.cgt.find((e) => e.code === 'AU')!.scope).toMatch(/not calculated/);
+    expect(fi.taxYear).toBe('2026');
+    // AU before 1 July 2027 is estimated; Switzerland's cantonal property tax is words only.
+    expect(m.cgt.find((e) => e.code === 'AU')!.scope).toMatch(/Estimates shares and property/);
+    expect(m.cgt.find((e) => e.code === 'CH')!.scope).toMatch(/Estimates shares;/);
+    expect(m.cgt.find((e) => e.code === 'BE')!.scope).toMatch(/Property not verified/);
   });
 
   it('studentLoan and retirement = their schemes, and are never verified (no dated citation in the data)', () => {
@@ -124,10 +136,10 @@ describe('coverage() — counts equal the registries (it cannot claim more than 
     // A change here is a real change in what the engine covers — update it
     // together with the data, never on its own.
     expect(m.counts).toEqual({
-      gstVat: { countries: 88, verified: 86 },
+      gstVat: { countries: 193, verified: 171 },
       incomeTax: { countries: 57, verified: 53 },
       companyTax: { countries: 6, verified: 6 },
-      cgt: { countries: 3, verified: 3 },
+      cgt: { countries: 71, verified: 58 },
       studentLoan: { countries: 1, verified: 0 },
       retirement: { countries: 1, verified: 0 },
     });
@@ -135,6 +147,7 @@ describe('coverage() — counts equal the registries (it cannot claim more than 
     // authority page) and FR (no scale enacted for 2026 income yet — a coverage gap, not a figure).
     expect(m.incomeTax.filter((e) => !e.verified).map((e) => e.code)).toEqual(['CL', 'FR', 'GT', 'IL']);
     expect(codes(m.companyTax)).toEqual(['AU', 'CA', 'FI', 'GB', 'IN', 'US']);
+    expect(m.cgt.filter((e) => !e.verified).map((e) => e.code)).toEqual(['BE', 'BG', 'CN', 'CY', 'GR', 'GT', 'HU', 'IL', 'IN', 'JM', 'LT', 'RO', 'RS']);
   });
 });
 

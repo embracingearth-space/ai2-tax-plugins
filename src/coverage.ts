@@ -9,7 +9,8 @@
  *
  * DERIVED, NEVER LISTED. Every entry is computed from the registry that holds
  * the figures: RATE_LEDGER (via activeNationalRows), INCOME_TAX_SCHEMES,
- * COMPANY_TAX_RATES, FI_CAPITAL_INCOME_YEARS and the AU/GB CGT provenance,
+ * COMPANY_TAX_RATES, CAPITAL_GAINS_RULES (CGT, with AU/GB/FI derived from the
+ * figures the engine already held),
  * STUDENT_LOAN_SCHEMES and RETIREMENT_SCHEMES. There is no second list here to
  * forget to update; __tests__/coverage pins the counts to the registries so
  * the manifest cannot claim more than the data holds.
@@ -38,20 +39,12 @@ import {
   toYmd,
   INCOME_TAX_SCHEMES,
   COMPANY_TAX_RATES,
-  FI_CAPITAL_INCOME_YEARS,
   STUDENT_LOAN_SCHEMES,
   RETIREMENT_SCHEMES,
   incomeTaxSetProvenance,
 } from './data';
 import { addOneYear } from './data/effectiveDating';
-import { AU_CGT_PROVENANCE } from './countries/australiaIncomeTax';
-import {
-  GB_CGT_ANNUAL_EXEMPT_ROWS,
-  GB_CGT_BASIC_RATE_ROWS,
-  GB_CGT_HIGHER_RATE_ROWS,
-  HOME_RATE_URLS,
-  type HomeRateRow,
-} from './decisions/homeRuleRates';
+import { CAPITAL_GAINS_RULES, resolveCapitalGainsRules, type CgtAssetRule, type CgtRuleSet } from './data/capitalGains';
 
 export const COVERAGE_CAPABILITIES = ['gstVat', 'incomeTax', 'companyTax', 'cgt', 'studentLoan', 'retirement'] as const;
 export type CoverageCapability = (typeof COVERAGE_CAPABILITIES)[number];
@@ -188,55 +181,59 @@ function companyTax(ymd: string): CoverageEntry[] {
     .sort(byCode);
 }
 
-/** The GB row in force on `ymd` — HomeRateRow series run newest-first with a floor row. */
-function gbRow(rows: readonly HomeRateRow[], ymd: string): HomeRateRow | undefined {
-  return [...rows].sort((a, b) => b.effectiveFrom.localeCompare(a.effectiveFrom)).find((r) => r.effectiveFrom <= ymd);
+/**
+ * Whether the estimator can give a figure for an asset rule: verified, encoded,
+ * and, for the income rate, a verified income-tax year covering `asOf`.
+ */
+function estimable(code: string, a: CgtAssetRule, asOf: AsOf): boolean {
+  if (!a.verified || a.notComputed) return false;
+  const kinds = a.holding ? a.holding.steps.map((s) => s.treatment) : [a.treatment];
+  const needsIncome = (k: CgtAssetRule['treatment']) => k.kind === 'income' || (k.kind === 'bands' && k.base === 'taxableIncome');
+  const scheme = INCOME_TAX_SCHEMES[code];
+  const incomeYear = Boolean(scheme && scheme.verified && annualSetFor(scheme.sets, dayIn(scheme.timeZone, asOf)));
+  return kinds.some((k) => k.kind !== 'summary' && (!needsIncome(k) || incomeYear));
+}
+
+const REGIME: Record<CgtRuleSet['regime'], string> = {
+  'separate-rate': 'Gains taxed at their own rate.',
+  'taxed-as-income': 'Gains taxed as income.',
+  exempt: "No tax on individuals' gains (trading aside).",
+  mixed: 'Shares and property taxed differently.',
+};
+
+function cgtScope(code: string, set: CgtRuleSet, asOf: AsOf): string {
+  const estimates = (['shares', 'property'] as const).filter((k) => estimable(code, set[k], asOf));
+  const unverified = (['shares', 'property'] as const).filter((k) => !set[k].verified);
+  return [
+    REGIME[set.regime],
+    estimates.length ? `Estimates ${estimates.join(' and ')}; otherwise the rule in words.` : 'The rule in words; no estimate.',
+    unverified.length && unverified.length < 2 ? `${unverified[0] === 'shares' ? 'Shares' : 'Property'} not verified.` : '',
+  ].filter(Boolean).join(' ');
 }
 
 /**
- * Capital gains lives in three places, each covering a different amount:
- *  - AU: the discount RULE (AU-IT help text); gains are an input, not computed.
- *  - FI: an actual calculator (finnishCapitalGainTax) over FI_CAPITAL_INCOME_YEARS.
- *  - GB: the individual rates and annual exempt amount (homeRuleRates), used by
- *    the home-space comparison; there is no general GB CGT calculation.
+ * Capital gains: every country in CAPITAL_GAINS_RULES (src/data/capitalGains) —
+ * the researched sets plus AU, GB and FI, which are derived from the figures the
+ * engine already held. A country with no set in force on the day is listed
+ * unverified; a yearly country (FI, US, DK) whose year has run out likewise.
  * US_UNRECAPTURED_1250_MAX_RATE_ROWS is deliberately NOT counted: one maximum
  * rate for depreciation recapture on a home office is not CGT coverage.
  */
 function cgt(asOf: AsOf): CoverageEntry[] {
-  const out: CoverageEntry[] = [];
-
-  out.push({
-    code: 'AU',
-    verified: AU_CGT_PROVENANCE.verified,
-    citationDate: AU_CGT_PROVENANCE.citationDate,
-    sourceUrl: AU_CGT_PROVENANCE.sourceUrl,
-    scope: AU_CGT_PROVENANCE.scope,
-  });
-
-  const fi = annualSetFor(FI_CAPITAL_INCOME_YEARS.map((y) => ({ ...y, taxYearLabel: y.taxYear })), dayIn(TZ.FI, asOf));
-  out.push({
-    code: 'FI',
-    verified: Boolean(fi?.verified),
-    citationDate: fi?.citationDate ?? null,
-    sourceUrl: fi?.sources[0]?.url ?? null,
-    taxYear: fi?.taxYear ?? null,
-    scope: 'Capital gains on disposals by a resident individual: 30%/34% capital income tax, deemed acquisition cost, small-disposals exemption.',
-  });
-
-  // GB counts only while every figure it relies on has a verified row in force.
-  const gbDay = dayIn(TZ.GB, asOf);
-  const gb = [GB_CGT_BASIC_RATE_ROWS, GB_CGT_HIGHER_RATE_ROWS, GB_CGT_ANNUAL_EXEMPT_ROWS].map((rows) => gbRow(rows, gbDay));
-  const gbVerified = gb.every((r) => Boolean(r?.verified && r.value !== null && r.readOn));
-  const gbReadOn = gb.map((r) => r?.readOn).filter((d): d is string => Boolean(d)).sort();
-  out.push({
-    code: 'GB',
-    verified: gbVerified,
-    citationDate: gbVerified ? gbReadOn[0]! : null,
-    sourceUrl: HOME_RATE_URLS.gbCgtRates,
-    scope: 'Individual CGT rates and annual exempt amount, as used by the home-space comparison. No general CGT calculation.',
-  });
-
-  return out.sort(byCode);
+  return Object.values(CAPITAL_GAINS_RULES)
+    .map((c) => {
+      const r = resolveCapitalGainsRules(c.code, asOf);
+      if (!r) return { code: c.code, verified: false, citationDate: null, sourceUrl: null, scope: 'No rule on file for this date.' };
+      return {
+        code: c.code,
+        verified: r.verified,
+        citationDate: r.set.citationDate,
+        sourceUrl: r.source?.url ?? null,
+        ...(c.annual ? { taxYear: r.yearCovered ? r.set.taxYearLabel ?? r.set.effectiveFrom.slice(0, 4) : null } : {}),
+        scope: cgtScope(c.code, r.set, asOf),
+      };
+    })
+    .sort(byCode);
 }
 
 /**

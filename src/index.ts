@@ -12,6 +12,7 @@
  * - Depreciation: GENERIC_DEPRECIATION_RULES, getDepreciationRules, computePoolPeriod, computeClassPeriod, computeMacrsYear, computeBlockPeriod (capital allowances)
  * - Annual reports: AnnualReportDefinition (AU TPAR)
  * - Coverage: coverage() — per-capability country coverage with provenance
+ * - Capital gains: resolveCapitalGainsRules, estimateCapitalGainsTax (71 countries, cited)
  */
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -566,6 +567,37 @@ export { createEUPlugin } from './countries/euTemplate';
 export { coverage, COVERAGE_CAPABILITIES } from './coverage';
 export type { CoverageManifest, CoverageEntry, CoverageCount, CoverageCapability } from './coverage';
 
+// Capital gains — effective-dated, cited rules for 71 countries and an estimator that only computes from verified data.
+export {
+  CAPITAL_GAINS_RULES,
+  CGT_NOT_RESEARCHED,
+  listCapitalGainsCountries,
+  getCapitalGainsCountry,
+  resolveCapitalGainsRules,
+  estimateCapitalGainsTax,
+  primaryCgtSource,
+  cgtCurrency,
+} from './data/capitalGains';
+export type {
+  CgtRegime,
+  CgtAssetClass,
+  CgtSource,
+  CgtBand,
+  CgtTreatment,
+  CgtHolding,
+  CgtHoldingStep,
+  CgtExemption,
+  CgtThreshold,
+  CgtAssetRule,
+  CgtRuleSet,
+  CgtCountry,
+  ResolvedCgtRules,
+  CapitalGainsInput,
+  CapitalGainsStatus,
+  CapitalGainsRuleText,
+  CapitalGainsEstimate,
+} from './data/capitalGains';
+
 // ─── Country Reference Data ──────────────────────────────────────────────────
 export {
   CURRENCY_INFO,
@@ -606,6 +638,7 @@ export {
   resolveRateRow,
   getStandardRateAsOf,
   activeNationalRows,
+  isRateIndicative,
   toYmd,
   // Canada — federal personal income-tax parameters (CA scheme + CA-IT plugin)
   CA_FEDERAL_YEARS,
@@ -663,6 +696,7 @@ export type {
   CountryTaxRateInfo,
   RateLedgerRow,
   RateSource,
+  ActiveRowsOptions,
   CanadaFederalYear,
   CanadaFederalSource,
   CompanyTaxRateSet,

@@ -166,16 +166,22 @@ describe('the documented row and country counts are exact', () => {
   // 105 -> 107 on 2026-09-22: Finland's reduced-rate cut (14% -> 13.5% from
   // 1 Jan 2026) and Kazakhstan's announced 5% -> 10% reduced-rate step (1 Jan
   // 2027) each add a dated row. Neither adds a floor-anchored row.
-  it('has 107 rows, 71 of them floor-anchored', () => {
-    expect(RATE_LEDGER.length).toBe(107);
-    expect(RATE_LEDGER.length - dated.length).toBe(71);
-    expect(dated.length).toBe(36);
+  //
+  // 107 -> 299 on 2026-10-06: 113 national rows for 111 new countries, 68
+  // sub-national rows (every US state + DC, every Canadian province and
+  // territory but Ontario, which was already here), and 11 history rows for
+  // SG, CH and LK. 52 of the 192 are floor-anchored: rows whose start could not
+  // be established, and rows whose real start predates 2000.
+  it('has 299 rows, 123 of them floor-anchored', () => {
+    expect(RATE_LEDGER.length).toBe(299);
+    expect(RATE_LEDGER.length - dated.length).toBe(123);
+    expect(dated.length).toBe(176);
   });
 
-  it('covers 88 countries: 26 with a real date, 62 floor-only', () => {
-    expect(countries.size).toBe(88);
-    expect(datedCountries.size).toBe(26);
-    expect([...countries].filter((c) => !datedCountries.has(c))).toHaveLength(62);
+  it('covers 199 countries: 111 with a real date, 88 floor-only', () => {
+    expect(countries.size).toBe(199);
+    expect(datedCountries.size).toBe(111);
+    expect([...countries].filter((c) => !datedCountries.has(c))).toHaveLength(88);
   });
 
   /** One rate SERIES: a country's rows for one stateProvince and one taxType. */
@@ -188,7 +194,7 @@ describe('the documented row and country counts are exact', () => {
     return m;
   })();
 
-  it('records an actual transition for exactly 9 countries', () => {
+  it('records an actual transition for exactly 14 countries', () => {
     // A transition needs two rows in the SAME series. Grouping by country alone
     // wrongly counted Canada for having two rows that are actually parallel
     // series — national GST and Ontario HST. Canada IS in this list now, but on
@@ -196,14 +202,18 @@ describe('the documented row and country counts are exact', () => {
     const withTransition = [...series.entries()]
       .filter(([, rows]) => rows.length > 1)
       .map(([k]) => k.split('|')[0]);
-    expect([...new Set(withTransition)].sort()).toEqual(['CA', 'EC', 'EE', 'FI', 'GH', 'IL', 'KZ', 'RO', 'RU']);
+    // US is here only through four STATE series with scheduled changes (AZ,
+    // LA, MN, SD); its national row is a single one. CA also gains Nova
+    // Scotia's 15% -> 14% HST cut.
+    expect([...new Set(withTransition)].sort()).toEqual(['CA', 'CH', 'EC', 'EE', 'FI', 'GH', 'IL', 'KZ', 'LK', 'RO', 'RU', 'SG', 'TJ', 'US']);
 
     // The distinction still holds where it matters: Ontario HST is its own
     // series with a single row, and does not make Canada a transition country
     // by itself.
     const ontario = RATE_LEDGER.filter((r) => r.countryCode === 'CA' && r.stateProvince === 'ON');
     expect(ontario).toHaveLength(1);
-    expect(new Set(RATE_LEDGER.filter((r) => r.countryCode === 'CA').map(seriesKey)).size).toBe(2);
+    // federal GST + 13 provincial/territorial series (one each)
+    expect(new Set(RATE_LEDGER.filter((r) => r.countryCode === 'CA').map(seriesKey)).size).toBe(14);
   });
 
   it('starts each series when its tax actually started, not at the floor', () => {
