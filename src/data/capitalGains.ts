@@ -397,8 +397,22 @@ function fiCountry(): CgtCountry {
 
 // ─── The registry ────────────────────────────────────────────────────────────
 
+/**
+ * Freeze the whole object graph, not just the top level: the resolver and the
+ * estimator hand out live sets, sources and uncertainties, and a consumer
+ * mutating one would change every later estimate, coverage() and Rate Watch
+ * result in the same process.
+ */
+function deepFreeze<T>(o: T): T {
+  if (o && typeof o === 'object' && !Object.isFrozen(o)) {
+    Object.freeze(o);
+    for (const v of Object.values(o as object)) deepFreeze(v);
+  }
+  return o;
+}
+
 /** Every country with capital-gains rules, by ISO code. */
-export const CAPITAL_GAINS_RULES: Readonly<Record<string, CgtCountry>> = Object.freeze(
+export const CAPITAL_GAINS_RULES: Readonly<Record<string, CgtCountry>> = deepFreeze(
   Object.fromEntries(
     [...Object.values(CAPITAL_GAINS_RESEARCHED), auCountry(), gbCountry(), fiCountry()]
       .sort((a, b) => a.code.localeCompare(b.code))

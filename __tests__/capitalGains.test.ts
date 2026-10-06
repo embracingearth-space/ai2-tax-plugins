@@ -348,3 +348,12 @@ describe('estimateCapitalGainsTax — no figure from unverified or unencoded dat
     expect(() => estimate({ country: 'DE', asset: 'cars' as never, ...base })).toThrow(RangeError);
   });
 });
+
+describe('registry is immutable to consumers', () => {
+  it('deep-freezes the sets the resolver hands out', () => {
+    const r = resolveCapitalGainsRules('AU', '2026-01-01')!;
+    expect(Object.isFrozen(r.set)).toBe(true);
+    expect(Object.isFrozen(r.set.shares)).toBe(true);
+    for (const c of Object.values(CAPITAL_GAINS_RULES)) expect(Object.isFrozen(c.sets)).toBe(true);
+  });
+});

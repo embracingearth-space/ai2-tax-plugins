@@ -142,12 +142,17 @@ function companyTax(ymd: string): CoverageEntry[] {
     .sort(byCode);
 }
 
-/** Whether the estimator can give a figure for an asset rule (verified, encoded, and — for the income rate — an income-tax scheme). */
-function estimable(code: string, a: CgtAssetRule): boolean {
+/**
+ * Whether the estimator can give a figure for an asset rule: verified, encoded,
+ * and, for the income rate, a verified income-tax year covering `asOf`.
+ */
+function estimable(code: string, a: CgtAssetRule, asOf: AsOf): boolean {
   if (!a.verified || a.notComputed) return false;
   const kinds = a.holding ? a.holding.steps.map((s) => s.treatment) : [a.treatment];
   const needsIncome = (k: CgtAssetRule['treatment']) => k.kind === 'income' || (k.kind === 'bands' && k.base === 'taxableIncome');
-  return kinds.some((k) => k.kind !== 'summary' && (!needsIncome(k) || Boolean(INCOME_TAX_SCHEMES[code])));
+  const scheme = INCOME_TAX_SCHEMES[code];
+  const incomeYear = Boolean(scheme && scheme.verified && annualSetFor(scheme.sets, dayIn(scheme.timeZone, asOf)));
+  return kinds.some((k) => k.kind !== 'summary' && (!needsIncome(k) || incomeYear));
 }
 
 const REGIME: Record<CgtRuleSet['regime'], string> = {
@@ -157,8 +162,8 @@ const REGIME: Record<CgtRuleSet['regime'], string> = {
   mixed: 'Shares and property taxed differently.',
 };
 
-function cgtScope(code: string, set: CgtRuleSet): string {
-  const estimates = (['shares', 'property'] as const).filter((k) => estimable(code, set[k]));
+function cgtScope(code: string, set: CgtRuleSet, asOf: AsOf): string {
+  const estimates = (['shares', 'property'] as const).filter((k) => estimable(code, set[k], asOf));
   const unverified = (['shares', 'property'] as const).filter((k) => !set[k].verified);
   return [
     REGIME[set.regime],
@@ -186,7 +191,7 @@ function cgt(asOf: AsOf): CoverageEntry[] {
         citationDate: r.set.citationDate,
         sourceUrl: r.source?.url ?? null,
         ...(c.annual ? { taxYear: r.yearCovered ? r.set.taxYearLabel ?? r.set.effectiveFrom.slice(0, 4) : null } : {}),
-        scope: cgtScope(c.code, r.set),
+        scope: cgtScope(c.code, r.set, asOf),
       };
     })
     .sort(byCode);
