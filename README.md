@@ -57,15 +57,32 @@ const result = plugin.calculate({
 import { coverage } from '@ai2/tax-plugins';
 
 const m = coverage();            // or coverage('2027-01-01')
-m.counts.incomeTax;              // { countries: 7, verified: 7 }
+m.counts.incomeTax;              // { countries, verified } — see "Personal income tax" below
 m.incomeTax.filter((e) => e.verified).map((e) => e.code);
-// each entry: { code, verified, citationDate, sourceUrl, taxYear?, scope? }
+// each entry: { code, verified, citationDate, sourceUrl, taxYear?, scope?, regions? }
 ```
 
 - Capabilities: `gstVat`, `incomeTax`, `companyTax`, `cgt`, `studentLoan`, `retirement`.
 - Every entry is **derived** from the registry holding the figures (the rate ledger, `INCOME_TAX_SCHEMES`, `COMPANY_TAX_RATES`, the Finnish capital-income years, the AU and GB CGT provenance, the student-loan and retirement schemes). There is no second list to keep in step, and the tests pin each count to its registry.
 - `verified` means the figures were confirmed on the official page on `citationDate` **and**, for a yearly schedule, a set covers the tax year `asOf` falls in. A country whose newest income-tax year has ended is still listed, but as unverified. Present only `verified` entries as fact.
-- `scope` says when coverage is partial: Canadian and US income tax are federal only, AU CGT is the discount rule rather than a calculation, and company tax is the headline rate.
+- `scope` says when coverage is partial: Canadian and US income tax are federal only unless a province or state is selected, AU CGT is the discount rule rather than a calculation, and company tax is the headline rate.
+- Income-tax entries for CA, US and GB carry `regions`: every province/territory, state (plus DC) and Scotland, each with its own `verified`, `citationDate`, `sourceUrl` and `taxYear`.
+
+## Personal income tax
+
+`calcIncomeTax(country, gross, taxYear?, options?)` estimates income tax and take-home pay for a single resident employee on gross annual wages. It covers 56 countries: Argentina, Australia, Austria, Bangladesh, Belgium, Brazil, Canada (federal, plus all 13 provinces and territories), Chile, Colombia, Costa Rica, Czechia, Denmark, Egypt, Estonia, Finland, France, Germany, Greece, Guatemala, Hungary, Iceland, India, Indonesia, Ireland, Israel, Italy, Jamaica, Japan, Kenya, Latvia, Luxembourg, Malaysia, Mexico, the Netherlands, New Zealand, Nigeria, Norway, Pakistan, the Philippines, Poland, Portugal, Saudi Arabia and the UAE (cited nil), Singapore, Slovakia, Slovenia, South Africa, South Korea, Spain (state half, plus Madrid, Cataluña and Andalucía), Sweden, Switzerland (federal), Thailand, Türkiye, the United Kingdom (plus Scotland), the United States (federal, plus 50 states and DC) and Vietnam.
+
+```ts
+calcIncomeTax('DE', 60000, '2026');
+calcIncomeTax('CA', 80000, '2026', { region: 'ON' });   // federal + Ontario
+calcIncomeTax('US', 90000, '2026', { region: 'NY' });   // federal + FICA + New York State
+calcIncomeTax('GB', 50000, '2026-27', { region: 'SCT' }); // Scottish bands instead of rUK
+```
+
+- **Every result says whether to trust it.** `verified`, `source`, `authorityName` and `citationDate` are on the result. `verified` is false when a figure was not confirmed on the authority's page, when no year was asked for and the newest year on file does not cover today (France's 2026-income scale is not enacted yet), or when a region's year is borrowed from an earlier one. `assumptions` says which, in words a user can act on. Show unverified results as "confirm with the authority", not as fact.
+- **Regions.** `options.region` adds Canadian provincial/territorial tax (all 13) or US state tax (50 states + DC; the nine states with no wage tax are cited nils), or swaps in Scotland's bands. `listIncomeTaxRegions(country)` lists them; an unknown code throws. US city, county and school-district taxes are never included and each state's assumptions name them.
+- **Scope.** Income tax and surtaxes that are part of it (e.g. the German solidarity surcharge, Irish USC, Korean local income tax). Employee social-security contributions are not charged; where the law makes them deductible and the rates were verified they reduce taxable income, and each country's `assumptions` says what was done.
+- **Data-built countries.** Most countries are records in `src/data/incomeTaxWorld/<cc>.ts`, turned into schemes by `buildIncomeTaxScheme` (`src/data/incomeTaxFactory.ts`). Each year carries its own source, citation date and `verified` flag; an unverified year must say why. To add the next year, append it at the top of `years` — never edit a shipped year.
 
 ## Tax treatments
 
