@@ -17,7 +17,7 @@
  *  - per-unit deduction rates (analyzeDeductionRates, below): a current
  *    income year with no verified row, stale citations, upcoming rows
  */
-import { RATE_LEDGER, activeNationalRows, toYmd, INCOME_TAX_SCHEMES, RETIREMENT_SCHEMES, STUDENT_LOAN_SCHEMES } from './data';
+import { RATE_LEDGER, activeNationalRows, isRateIndicative, toYmd, INCOME_TAX_SCHEMES, RETIREMENT_SCHEMES, STUDENT_LOAN_SCHEMES } from './data';
 import type { RateLedgerRow } from './data';
 
 import { AU_CENTS_PER_KM_ROWS, AU_WFH_FIXED_RATE_ROWS, auIncomeYear, formatAuCents } from './countries/australiaDeductions';
@@ -82,13 +82,17 @@ export function analyzeLedger(asOf?: string | Date, opts: RateWatchOptions = {})
     reviewChecklist: [],
   };
 
-  // current national rows: verification + staleness + review checklist
-  for (const r of activeNationalRows(today)) {
+  // current national rows: verification + staleness + review checklist.
+  // includeIndicative: a country whose rate is only indicative is hidden from
+  // the flat view, which is exactly why it must still reach a human here.
+  for (const r of activeNationalRows(today, { includeIndicative: true })) {
     if (!r.source.verified) {
       findings.unverified.push({
         countryCode: r.countryCode,
         countryName: r.countryName,
-        reason: r.source.url ? 'not verified against authority' : 'no authority url',
+        reason: isRateIndicative(r)
+          ? 'rate is indicative (placeholder, partial, low-confidence or conflicting) - not served as fact'
+          : r.source.url ? 'not verified against authority' : 'no authority url',
       });
     } else {
       const ageDays = daysBetween(r.source.citationDate, today);

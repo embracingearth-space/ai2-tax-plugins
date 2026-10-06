@@ -19,13 +19,14 @@ export type { TaxFamily, CountryTaxRateInfo } from './taxRates';
 export { COUNTRY_TAX_RATES, getTaxRateInfo, getStandardTaxRate, detectTaxFamily } from './taxRates';
 
 // Tax Rate Ledger — effective-dated single source of truth + date-aware resolver
-export type { RateLedgerRow, RateSource } from './rateLedger';
+export type { RateLedgerRow, RateSource, ActiveRowsOptions } from './rateLedger';
 export {
   RATE_LEDGER,
   RATE_FLOOR,
   resolveRateRow,
   getStandardRateAsOf,
   activeNationalRows,
+  isRateIndicative,
   toYmd,
 } from './rateLedger';
 

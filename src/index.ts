@@ -597,6 +597,7 @@ export {
   resolveRateRow,
   getStandardRateAsOf,
   activeNationalRows,
+  isRateIndicative,
   toYmd,
   // Company / corporate income tax (headline rates for the forecast engine)
   COMPANY_TAX_RATES,
@@ -643,6 +644,7 @@ export type {
   CountryTaxRateInfo,
   RateLedgerRow,
   RateSource,
+  ActiveRowsOptions,
   CompanyTaxRateSet,
   CompanyTaxInfo,
   ResolvedCompanyRate,
