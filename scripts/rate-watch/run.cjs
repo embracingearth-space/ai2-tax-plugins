@@ -74,8 +74,8 @@ function pct(n) {
   return `${+(n * 100).toFixed(2)}%`;
 }
 
-const DATASET = { incomeTax: 'income tax', retirement: 'retirement contributions', studentLoan: 'student loan' };
-const DATASET_FILE = { incomeTax: 'src/data/incomeTax.ts', retirement: 'src/data/superannuation.ts', studentLoan: 'src/data/studentLoan.ts' };
+const DATASET = { incomeTax: 'income tax', retirement: 'retirement contributions', studentLoan: 'student loan', companyTax: 'company tax', capitalGains: 'capital gains' };
+const DATASET_FILE = { incomeTax: 'src/data/incomeTax.ts', retirement: 'src/data/superannuation.ts', studentLoan: 'src/data/studentLoan.ts', companyTax: 'src/data/companyTax.ts', capitalGains: 'src/data/finland.ts' };
 
 // Annual schedules (income tax / super / student loan). Rollovers lead because
 // they are the silent failure: the resolver keeps answering with last year's
@@ -85,7 +85,12 @@ function renderSchedules(L, s) {
   const tag = (x) => `**${x.countryCode}** ${DATASET[x.dataset]}`;
   if (s.rollovers.length) {
     L.push("## ⛔ Tax year rolled over with NO new schedule (silently serving last year's figures)");
-    for (const r of s.rollovers) L.push(`- ${tag(r)} — newest set is ${r.latestLabel} (from ${r.latestEffectiveFrom}, ${r.ageDays} days ago). Append the current year's set in \`${DATASET_FILE[r.dataset]}\`.`);
+    for (const r of s.rollovers) L.push(`- ${tag(r)} — newest set is ${r.latestLabel} (from ${r.latestEffectiveFrom}, ${r.ageDays} days ago); nothing covers ${r.uncoveredFrom ? `the year from ${r.uncoveredFrom}` : 'the current year'}. Append the current year's set in \`${r.file || DATASET_FILE[r.dataset]}\`.`);
+    L.push('');
+  }
+  if (s.missing && s.missing.length) {
+    L.push('## ⛔ Schedules with NO set in force (the resolver falls back to the oldest set)');
+    for (const m of s.missing) L.push(`- ${tag(m)} — add a set covering today in \`${m.file || DATASET_FILE[m.dataset]}\`.`);
     L.push('');
   }
   if (s.recentlyActivated.length) {

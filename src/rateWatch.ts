@@ -17,8 +17,9 @@
  *  - per-unit deduction rates (analyzeDeductionRates, below): a current
  *    income year with no verified row, stale citations, upcoming rows
  */
-import { RATE_LEDGER, activeNationalRows, isRateIndicative, toYmd, INCOME_TAX_SCHEMES, RETIREMENT_SCHEMES, STUDENT_LOAN_SCHEMES } from './data';
+import { RATE_LEDGER, activeNationalRows, isRateIndicative, toYmd, INCOME_TAX_SCHEMES, RETIREMENT_SCHEMES, STUDENT_LOAN_SCHEMES, COMPANY_TAX_RATES, FI_CAPITAL_INCOME_YEARS } from './data';
 import type { RateLedgerRow } from './data';
+import { addOneYear } from './data/effectiveDating';
 
 import { AU_CENTS_PER_KM_ROWS, AU_WFH_FIXED_RATE_ROWS, auIncomeYear, formatAuCents } from './countries/australiaDeductions';
 import { AU_INSTANT_ASSET_WRITE_OFF_ROWS } from './countries/australiaDepreciation';
@@ -354,7 +355,8 @@ export function hasActionableFindings(f: RateWatchFindings): boolean {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ANNUAL SCHEDULES — income tax, retirement contributions, student loans
+// SCHEDULES — income tax, retirement contributions, student loans, company
+// tax, Finnish capital income
 //
 // analyzeLedger() above watches GST/VAT only. These datasets are the other half
 // of what the app and the free Tax MCP compute from, and they had no freshness
@@ -365,55 +367,160 @@ export function hasActionableFindings(f: RateWatchFindings): boolean {
 // SILENTLY: the resolver returns the newest set whose effectiveFrom has passed,
 // so on the first day of a new tax year it goes on serving last year's brackets
 // indefinitely, with no error and nothing to catch. The only observable symptom
-// is "the newest set on file is more than a year old", so that is what
+// is "today falls in a tax year no set on file covers", so that is what
 // `rollovers` detects. It keys off the NEWEST set, not the active one: a
 // future-dated set (AU legislates years ahead) means the coming year is already
 // covered and there is nothing to flag.
 //
+// It used to be an AGE rule — flag once the newest set is more than 365 + 30
+// days old. That is the coverage rule with a fixed 30-day grace, and it could
+// not express a country whose year is enacted before it starts: Finland's 2026
+// scale would have gone unflagged until 1 February 2027, a month of serving
+// 2026's scale for 2027. Coverage with a per-series grace says both.
+//
+// Company tax is watched for provenance (unverified, stale, missing, just
+// activated, upcoming) but never for rollover: a company rate holds until it is
+// changed, so a set from 2021 still in force today is correct, not stale.
+//
 // Same contract as above: pure, deterministic, and it never changes a figure.
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type ScheduleDataset = 'incomeTax' | 'retirement' | 'studentLoan';
+export type ScheduleDataset = 'incomeTax' | 'retirement' | 'studentLoan' | 'companyTax' | 'capitalGains';
 
 export interface ScheduleWatchOptions extends RateWatchOptions {
   /**
-   * Days past a full year before a missing successor set is flagged. Default 30:
-   * authorities publish late (the IRS in the autumn, the ATO near 1 July), and a
-   * flag on day 366 that nobody can act on yet trains people to ignore it.
+   * Default days after a tax year has started with no set covering it before
+   * that is flagged. Default 30. A series can override it with its own
+   * `rolloverGraceDays` (see YEAR_KNOWN_BEFORE_IT_STARTS); a series override
+   * wins, because it is a property of how that authority publishes.
    */
   rolloverGraceDays?: number;
+}
+
+/** A dated citation: when the figures were read against the source, and whether they agreed. */
+export interface ScheduleCitation {
+  citationDate: string;
+  verified: boolean;
 }
 
 /** The slice of a dataset this analysis needs — lets tests pass fixtures. */
 export interface ScheduleSeries {
   dataset: ScheduleDataset;
   countryCode: string;
-  sets: Array<{ effectiveFrom: string; taxYearLabel: string }>;
+  /**
+   * Each set may carry its OWN citation (company tax, Finnish capital income:
+   * provenance is per set). The set in force on `asOf` is the one judged; a set
+   * without one falls back to the series-level `citation`.
+   */
+  sets: Array<{ effectiveFrom: string; taxYearLabel: string; citation?: ScheduleCitation }>;
   /** Omitted for datasets that carry a source URL but no dated citation yet. */
-  citation?: { citationDate: string; verified: boolean };
+  citation?: ScheduleCitation;
+  /**
+   * FALSE for a rate that holds until it is changed (company tax), rather than
+   * one restated every tax year. Such a series never "rolls over": a 2021 set
+   * still in force in 2026 is normal, not stale data. Default true.
+   */
+  annual?: boolean;
+  /**
+   * Days after an uncovered tax year starts before it is flagged, overriding
+   * the analysis default. 0 for a schedule that is enacted or published before
+   * its year begins, where a missing set on day one is already a gap.
+   */
+  rolloverGraceDays?: number;
+  /** The file a human edits to append the next set (the report names it). */
+  file?: string;
 }
 
 export interface ScheduleWatchFindings {
   asOf: string;
   unverified: Array<{ dataset: ScheduleDataset; countryCode: string }>;
   staleCitations: Array<{ dataset: ScheduleDataset; countryCode: string; citationDate: string; ageDays: number }>;
-  rollovers: Array<{ dataset: ScheduleDataset; countryCode: string; latestLabel: string; latestEffectiveFrom: string; ageDays: number }>;
+  /**
+   * `asOf` falls in a tax year no set covers: the newest set's year ended on
+   * `uncoveredFrom` and nothing follows it. `ageDays` is the newest set's age.
+   */
+  rollovers: Array<{ dataset: ScheduleDataset; countryCode: string; latestLabel: string; latestEffectiveFrom: string; ageDays: number; uncoveredFrom: string; file?: string }>;
   recentlyActivated: Array<{ dataset: ScheduleDataset; countryCode: string; taxYearLabel: string; effectiveFrom: string }>;
   upcoming: Array<{ dataset: ScheduleDataset; countryCode: string; taxYearLabel: string; effectiveFrom: string }>;
   /** Datasets with no dated citation — reported so the gap is visible, not silent. */
   undated: Array<{ dataset: ScheduleDataset; countryCode: string }>;
+  /**
+   * No set is in force on `asOf` at all (every set starts later, or there are
+   * none). The resolvers fall back to the OLDEST set in that case, so the
+   * answer is a figure from a window that does not include the date. Actionable.
+   */
+  missing: Array<{ dataset: ScheduleDataset; countryCode: string; file?: string }>;
 }
 
-/** Every annual schedule the engine ships, in the shape analyzeSchedules() reads. */
+/**
+ * Countries whose annual schedule is fixed BEFORE its tax year starts, so a
+ * year with no set is a gap from its first day — no grace.
+ *
+ *  - FI: the state income-tax scale is an Act passed for the coming calendar
+ *    year (e.g. Laki vuoden 2026 tuloveroasteikosta 1140/2025), normally in
+ *    December; capital income rates sit in the Income Tax Act itself.
+ *  - CA: federal brackets and credits are indexed by formula (ITA s.117.1) and
+ *    the CRA publishes the indexed amounts in November for the next year.
+ *
+ * Everyone else keeps the default grace. That is a choice about alert timing,
+ * not about coverage: with a 30-day grace the coverage rule below fires within
+ * a day of where the old age rule (newest set older than 365 + 30 days) did,
+ * so nothing a team relies on moves. Moving a country here is one line.
+ */
+const YEAR_KNOWN_BEFORE_IT_STARTS: Readonly<Partial<Record<ScheduleDataset, readonly string[]>>> = {
+  incomeTax: ['FI', 'CA'],
+  capitalGains: ['FI'],
+};
+
+const graceFor = (dataset: ScheduleDataset, countryCode: string): number | undefined =>
+  YEAR_KNOWN_BEFORE_IT_STARTS[dataset]?.includes(countryCode) ? 0 : undefined;
+
+/** The file holding a country's income-tax years — FI and CA build their sets from their own data files. */
+const INCOME_TAX_FILE: Readonly<Record<string, string>> = { FI: 'src/data/finland.ts', CA: 'src/data/canadaFederal.ts' };
+
+/** Every schedule the engine ships, in the shape analyzeSchedules() reads. */
 export function shippedSchedules(): ScheduleSeries[] {
   const out: ScheduleSeries[] = [];
   for (const s of Object.values(INCOME_TAX_SCHEMES)) {
-    out.push({ dataset: 'incomeTax', countryCode: s.code, sets: s.sets, citation: { citationDate: s.citationDate, verified: s.verified } });
+    out.push({
+      dataset: 'incomeTax',
+      countryCode: s.code,
+      sets: s.sets,
+      citation: { citationDate: s.citationDate, verified: s.verified },
+      rolloverGraceDays: graceFor('incomeTax', s.code),
+      file: INCOME_TAX_FILE[s.code] ?? 'src/data/incomeTax.ts',
+    });
   }
-  for (const s of Object.values(RETIREMENT_SCHEMES)) out.push({ dataset: 'retirement', countryCode: s.countryCode, sets: s.schemes });
-  for (const s of Object.values(STUDENT_LOAN_SCHEMES)) out.push({ dataset: 'studentLoan', countryCode: s.countryCode, sets: s.schemes });
+  for (const s of Object.values(RETIREMENT_SCHEMES)) out.push({ dataset: 'retirement', countryCode: s.countryCode, sets: s.schemes, file: 'src/data/superannuation.ts' });
+  for (const s of Object.values(STUDENT_LOAN_SCHEMES)) out.push({ dataset: 'studentLoan', countryCode: s.countryCode, sets: s.schemes, file: 'src/data/studentLoan.ts' });
+  // Company tax: per-set provenance, and NOT annual — a rate holds until changed.
+  for (const c of Object.values(COMPANY_TAX_RATES)) {
+    out.push({
+      dataset: 'companyTax',
+      countryCode: c.countryCode,
+      annual: false,
+      sets: c.rates.map((r) => ({ effectiveFrom: r.effectiveFrom, taxYearLabel: `from ${r.effectiveFrom}`, citation: { citationDate: r.citationDate, verified: r.verified } })),
+      file: 'src/data/companyTax.ts',
+    });
+  }
+  // Finnish capital income (capital gains). The Finnish EARNED-income years are
+  // already watched as incomeTax:FI — INCOME_TAX_SCHEMES.FI is built from
+  // FI_EARNED_INCOME_YEARS — so they are not listed twice.
+  out.push({
+    dataset: 'capitalGains',
+    countryCode: 'FI',
+    sets: FI_CAPITAL_INCOME_YEARS.map((y) => ({ effectiveFrom: y.effectiveFrom, taxYearLabel: y.taxYear, citation: { citationDate: y.citationDate, verified: y.verified } })),
+    rolloverGraceDays: graceFor('capitalGains', 'FI'),
+    file: 'src/data/finland.ts',
+  });
   return out;
 }
+
+// One definition of "a tax year's end", shared with coverage().
+export { addOneYear };
+
+const addDays = (ymd: string, days: number): string =>
+  new Date(Date.parse(`${ymd.slice(0, 10)}T00:00:00Z`) + days * DAY_MS).toISOString().slice(0, 10);
 
 export function analyzeSchedules(
   asOf?: string | Date,
@@ -423,25 +530,48 @@ export function analyzeSchedules(
   const today = toYmd(asOf ?? new Date());
   const staleAfterDays = opts.staleAfterDays ?? 365;
   const activatedWithinDays = opts.activatedWithinDays ?? 45;
-  const rolloverAfterDays = 365 + (opts.rolloverGraceDays ?? 30);
 
-  const f: ScheduleWatchFindings = { asOf: today, unverified: [], staleCitations: [], rollovers: [], recentlyActivated: [], upcoming: [], undated: [] };
+  const f: ScheduleWatchFindings = { asOf: today, unverified: [], staleCitations: [], rollovers: [], recentlyActivated: [], upcoming: [], undated: [], missing: [] };
 
   for (const s of series) {
     const id = { dataset: s.dataset, countryCode: s.countryCode };
+    const file = s.file ? { file: s.file } : {};
+    // Order is derived, never trusted — the same rule the resolvers follow.
+    const newestFirst = [...s.sets].sort((a, b) => b.effectiveFrom.localeCompare(a.effectiveFrom));
+    const inForce = newestFirst.find((set) => set.effectiveFrom <= today);
 
-    if (!s.citation) f.undated.push(id);
-    else if (!s.citation.verified) f.unverified.push(id);
+    if (!inForce) f.missing.push({ ...id, ...file });
+
+    // Judge the citation of what is actually being served today.
+    const citation = inForce?.citation ?? s.citation;
+    if (!citation) f.undated.push(id);
+    else if (!citation.verified) f.unverified.push(id);
     else {
-      const ageDays = daysBetween(s.citation.citationDate, today);
-      if (ageDays > staleAfterDays) f.staleCitations.push({ ...id, citationDate: s.citation.citationDate, ageDays });
+      const ageDays = daysBetween(citation.citationDate, today);
+      if (ageDays > staleAfterDays) f.staleCitations.push({ ...id, citationDate: citation.citationDate, ageDays });
     }
 
-    if (!s.sets.length) continue;
-    const newest = s.sets.reduce((a, b) => (a.effectiveFrom >= b.effectiveFrom ? a : b));
-    const newestAge = daysBetween(newest.effectiveFrom, today);
-    if (newestAge > rolloverAfterDays) {
-      f.rollovers.push({ ...id, latestLabel: newest.taxYearLabel, latestEffectiveFrom: newest.effectiveFrom, ageDays: newestAge });
+    const newest = newestFirst[0];
+    if (!newest) continue;
+
+    // ROLLOVER, by coverage: does any set cover the tax year `today` is in?
+    // The newest set covers one year from its effectiveFrom; past that, today
+    // sits in a year nothing covers and the resolver is silently serving the
+    // previous year. The grace (per series, else the option, else 30 days) is
+    // how long an authority is given to publish once that year has begun.
+    if (s.annual !== false) {
+      const uncoveredFrom = addOneYear(newest.effectiveFrom);
+      const grace = s.rolloverGraceDays ?? opts.rolloverGraceDays ?? 30;
+      if (today >= addDays(uncoveredFrom, grace)) {
+        f.rollovers.push({
+          ...id,
+          latestLabel: newest.taxYearLabel,
+          latestEffectiveFrom: newest.effectiveFrom,
+          ageDays: daysBetween(newest.effectiveFrom, today),
+          uncoveredFrom,
+          ...file,
+        });
+      }
     }
 
     for (const set of s.sets) {
@@ -458,5 +588,11 @@ export function analyzeSchedules(
 
 /** True when a schedule finding needs a human. `upcoming` and `undated` are FYI. */
 export function hasActionableScheduleFindings(f: ScheduleWatchFindings): boolean {
-  return f.unverified.length > 0 || f.staleCitations.length > 0 || f.rollovers.length > 0 || f.recentlyActivated.length > 0;
+  return (
+    f.unverified.length > 0 ||
+    f.staleCitations.length > 0 ||
+    f.rollovers.length > 0 ||
+    f.recentlyActivated.length > 0 ||
+    (f.missing?.length ?? 0) > 0
+  );
 }
