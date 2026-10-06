@@ -63,9 +63,33 @@ m.incomeTax.filter((e) => e.verified).map((e) => e.code);
 ```
 
 - Capabilities: `gstVat`, `incomeTax`, `companyTax`, `cgt`, `studentLoan`, `retirement`.
-- Every entry is **derived** from the registry holding the figures (the rate ledger, `INCOME_TAX_SCHEMES`, `COMPANY_TAX_RATES`, the Finnish capital-income years, the AU and GB CGT provenance, the student-loan and retirement schemes). There is no second list to keep in step, and the tests pin each count to its registry.
+- Every entry is **derived** from the registry holding the figures (the rate ledger, `INCOME_TAX_SCHEMES`, `COMPANY_TAX_RATES`, `CAPITAL_GAINS_RULES`, the student-loan and retirement schemes). There is no second list to keep in step, and the tests pin each count to its registry.
 - `verified` means the figures were confirmed on the official page on `citationDate` **and**, for a yearly schedule, a set covers the tax year `asOf` falls in. A country whose newest income-tax year has ended is still listed, but as unverified. Present only `verified` entries as fact.
-- `scope` says when coverage is partial: Canadian and US income tax are federal only, AU CGT is the discount rule rather than a calculation, and company tax is the headline rate.
+- `scope` says when coverage is partial: Canadian and US income tax are federal only, company tax is the headline rate, and each CGT entry says whether the estimator computes shares, property, both or neither.
+
+## Capital gains: rules for 71 countries, cited, and an estimator
+
+`CAPITAL_GAINS_RULES` holds, per country, effective-dated rule sets for a resident individual selling **listed shares** or **investment property**: the regime, the rate or rule, holding-period rules, the annual exemption, the main-residence exemption, the sources (authority, URL, citation date, `verified`) and what could not be confirmed (`uncertainties`).
+
+```ts
+import { resolveCapitalGainsRules, estimateCapitalGainsTax } from '@ai2/tax-plugins';
+
+resolveCapitalGainsRules('LK', '2026-06-03').set.property.treatment; // { kind: 'flat', rate: 0.15 } (10% the day before)
+
+estimateCapitalGainsTax({
+  country: 'AU', asset: 'shares', proceeds: 50000, costBase: 30000,
+  acquiredOn: '2024-01-10', disposedOn: '2026-03-01', otherIncome: 90000,
+});
+// { status: 'computed', verified: true, tax: 3200, taxBase: 10000, step: 'Held at least 12 months: the 50% CGT discount applies', … }
+```
+
+- **What it computes.** A flat or banded separate rate (DE, FR shares, ES, IE, GB, JP, US long-term …), a schedule by years held (MY, SI, TW, HU, PT …), a tax on the sale price (PH, ID, MT), exempt regimes (AE, SG, HK, NL …), and a gain added to income — through the income-tax engine, so only where it holds the country and the year (AU, CA federal, NZ, US short-term). Finland goes through `finnishCapitalGainTax`.
+- **What it only summarises.** Everything else: the rule in words with its sources and the `reason` there is no figure — a cantonal or municipal tax (CH, DK property), an abatement not modelled (FR property, BR property), a gain taxed as income where the engine has no income tax for the country yet (ZA, NG, CZ, MX …; picked up automatically when it does), AU from 1 July 2027 (indexation needs CPI not yet published).
+- **Never a figure from unverified data.** `status: 'computed'` only for a `verified` rule. An unverified one comes back `status: 'rule-only'`, `verified: false`, with the source, so the consumer says "confirm with the authority". Thirteen countries are wholly or partly unverified: BG, CN, CY, GR, GT, IL, LT, RS (no official source could be fetched), JM (the absence of CGT is stated only by PwC), IN (rates read from a gazette copy on a non-government host), BE property, HU shares, RO shares.
+- **One copy of each figure.** AU, GB and FI are derived from what the engine already held: the AU discount and its 1 July 2027 end from the AU-IT plugin and `AU_HOME_SPACE_FIGURES`, the GB rates and annual exempt amount from the watched GB CGT rows, Finland from `FI_CAPITAL_INCOME_YEARS`.
+- **Effective dating.** Sets run newest first; a new rule is a new set at the top, never an edit. A set whose start the research did not record starts on its citation date (2026-10-06), so an earlier disposal gets no rule rather than a guess. US and DK thresholds are yearly: from 2027 they count as unverified until the next year is added.
+- **Not covered:** CR, PE, TH, UY, VN (`CGT_NOT_RESEARCHED`). `coverage().cgt` lists the rest, and Rate Watch (`analyzeSchedules`, dataset `capitalGains`) reports unverified and stale CGT citations, upcoming sets (GR on 1 January 2027, AU on 1 July 2027) and the yearly rollovers.
+- Each figure states its assumptions beside it (`assumptions`): single filer and federal only for the US, provincial tax additional in Canada, the annual exemption otherwise unused, and so on. General information, not tax advice.
 
 ## Tax treatments
 

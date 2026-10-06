@@ -20,6 +20,7 @@
 import { RATE_LEDGER, activeNationalRows, isRateIndicative, toYmd, INCOME_TAX_SCHEMES, RETIREMENT_SCHEMES, STUDENT_LOAN_SCHEMES, COMPANY_TAX_RATES, FI_CAPITAL_INCOME_YEARS } from './data';
 import type { RateLedgerRow } from './data';
 import { addOneYear } from './data/effectiveDating';
+import { CAPITAL_GAINS_RULES } from './data/capitalGains';
 
 import { AU_CENTS_PER_KM_ROWS, AU_WFH_FIXED_RATE_ROWS, auIncomeYear, formatAuCents } from './countries/australiaDeductions';
 import { AU_INSTANT_ASSET_WRITE_OFF_ROWS } from './countries/australiaDepreciation';
@@ -513,6 +514,25 @@ export function shippedSchedules(): ScheduleSeries[] {
     rolloverGraceDays: graceFor('capitalGains', 'FI'),
     file: 'src/data/finland.ts',
   });
+  // Capital gains for every other country (src/data/capitalGains). FI is the
+  // series above; GB's rates and annual exempt amount are watched as deduction
+  // series (GB.cgt*, below), so neither is listed twice. A CGT rule holds until
+  // it changes (annual: false), except where a set carries one year's indexed
+  // thresholds (US, DK). Per-set citations, so the set in force is the one judged.
+  for (const c of Object.values(CAPITAL_GAINS_RULES)) {
+    if (c.code === 'FI' || c.code === 'GB') continue;
+    out.push({
+      dataset: 'capitalGains',
+      countryCode: c.code,
+      annual: c.annual === true,
+      sets: c.sets.map((s) => ({
+        effectiveFrom: s.effectiveFrom,
+        taxYearLabel: s.taxYearLabel ?? `from ${s.effectiveFrom}`,
+        ...(s.citationDate ? { citation: { citationDate: s.citationDate, verified: s.verified } } : {}),
+      })),
+      file: c.code === 'AU' ? 'src/data/capitalGains.ts' : 'src/data/capitalGains.data.ts',
+    });
+  }
   return out;
 }
 

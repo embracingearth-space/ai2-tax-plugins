@@ -16,6 +16,15 @@ member has a value on every rules object that ships, `declineInValue` still
 accepts `daysHeld` / `daysInYear` exactly as before, and a host on 2.1.0 keeps
 working untouched.
 
+### Added — capital gains for 71 countries, effective-dated and cited
+
+- `CAPITAL_GAINS_RULES` (`src/data/capitalGains.ts` and `.data.ts`): per country, effective-dated rule sets for a resident individual's gains on listed shares and on investment property — regime, rate or rule, holding-period rules, annual exemption, main-residence exemption, sources with `citationDate` and `verified`, and `uncertainties`. 68 countries come from a research pass over official pages (2026-10-06); AU, GB and FI are derived from the figures the engine already held, so there is no second copy of them.
+- `resolveCapitalGainsRules(country, asOf?)`: the set in force, or null before the first one (never the oldest set as a fallback). AU switches to indexation and the 30% minimum tax on 1 July 2027; LK goes from 10% to 15% on 3 June 2026; BE taxes financial-asset gains at 10% from 2026; NG taxes gains as income from 2026; FR's flat tax is 31.4%.
+- `estimateCapitalGainsTax(input)`: a figure only where the rule is verified and fully encoded (separate rates, schedules by years held, taxes on the sale price, exempt regimes, and gains added to income where the income-tax engine covers the country and year). Otherwise the rule in words, its sources and the reason, with `verified: false` for unverified data. Payroll levies (US FICA) are left out of a gain taxed as income; AU's Medicare levy is kept.
+- `coverage().cgt` now lists all 71 countries (58 verified on 2026-10-06), each with a `scope` saying what the estimator computes. The thirteen not verified, and why, are in the README. CR, PE, TH, UY and VN were not researched (`CGT_NOT_RESEARCHED`).
+- Rate Watch: `shippedSchedules()` adds a `capitalGains` series per country (GB stays in the deduction series), so unverified and stale CGT citations, upcoming sets and the yearly US/DK thresholds are reported.
+- Canada keeps the 1/2 inclusion rate. The official notice cancelling the proposed 2/3 rate was not found; current CRA pages still apply 1/2, and the set says so.
+
 ### Added — `coverage()`, one cited answer to "what does the engine cover?"
 
 - `coverage(asOf?)` returns, per capability (`gstVat`, `incomeTax`, `companyTax`, `cgt`, `studentLoan`, `retirement`), the countries covered, each with `{ code, verified, citationDate, sourceUrl }`, plus `counts`. It is derived from the registries and pinned to them by tests, so it cannot claim more than the data holds. An income-tax year that has ended is reported unverified.

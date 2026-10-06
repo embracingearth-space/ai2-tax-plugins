@@ -86,6 +86,7 @@ describe('hasActionableFindings', () => {
 // do not rot when a real set is appended; the shipped data gets its own checks.
 // ─────────────────────────────────────────────────────────────────────────────
 import { analyzeSchedules, hasActionableScheduleFindings, shippedSchedules } from '../src/rateWatch';
+import { listCapitalGainsCountries } from '../src';
 import type { ScheduleSeries } from '../src/rateWatch';
 
 const us = (sets: ScheduleSeries['sets'], citation = { citationDate: '2026-08-20', verified: true }): ScheduleSeries[] => [
@@ -163,16 +164,21 @@ describe('analyzeSchedules — the shipped data', () => {
     const byDataset = (d: string) => shippedSchedules().filter((s) => s.dataset === d).map((s) => s.countryCode).sort();
     expect(byDataset('incomeTax')).toEqual(['AU', 'CA', 'FI', 'GB', 'IN', 'NZ', 'US']);
     expect(byDataset('companyTax')).toEqual(['AU', 'CA', 'FI', 'GB', 'IN', 'US']);
-    expect(byDataset('capitalGains')).toEqual(['FI']);
+    // FI from its capital-income years; every other CGT country from src/data/capitalGains,
+    // except GB, whose CGT rows are watched as deduction series (GB.cgt*).
+    expect(byDataset('capitalGains')).toEqual(listCapitalGainsCountries().filter((c) => c !== 'GB'));
+    expect(byDataset('capitalGains')).toHaveLength(70);
     expect(byDataset('retirement')).toEqual(['AU']);
     expect(byDataset('studentLoan')).toEqual(['AU']);
   });
 
   it('has no rollover gap and no unverified income schedule as of the 2026-09 audit', () => {
+    // The researched CGT sets (2026-10-06) postdate this audit; they have their own test below.
+    const audited = (x: { dataset: string; countryCode: string }) => x.dataset !== 'capitalGains' || x.countryCode === 'FI';
     const f = analyzeSchedules('2026-09-20');
-    expect(f.rollovers).toEqual([]);
-    expect(f.unverified).toEqual([]);
-    expect(f.staleCitations).toEqual([]);
+    expect(f.rollovers.filter(audited)).toEqual([]);
+    expect(f.unverified.filter(audited)).toEqual([]);
+    expect(f.staleCitations.filter(audited)).toEqual([]);
   });
 
   it('WILL flag the US in early 2027 unless the 2027 brackets are appended — the point of the check', () => {
@@ -286,12 +292,31 @@ describe('analyzeSchedules — company tax', () => {
 });
 
 describe('analyzeSchedules — the shipped data, 2026-10-06 audit', () => {
-  it('is clean: nothing missing, unverified, stale or rolled over', () => {
+  it('is clean apart from the CGT rules the research could not verify: nothing missing, stale or rolled over', () => {
     const f = analyzeSchedules('2026-10-06');
     expect(f.missing).toEqual([]);
-    expect(f.unverified).toEqual([]);
+    // Each is a country whose CGT rule (or one asset class of it) rests on a page
+    // that is not official or could not be fetched — a person should confirm it.
+    expect(f.unverified).toEqual(
+      ['BE', 'BG', 'CN', 'CY', 'GR', 'GT', 'HU', 'IL', 'IN', 'JM', 'LT', 'RO', 'RS'].map((countryCode) => ({ dataset: 'capitalGains', countryCode })),
+    );
     expect(f.staleCitations).toEqual([]);
     expect(f.rollovers).toEqual([]);
+  });
+
+  it('flags the CGT sets that start later: AU on 1 July 2027, the Greek property set on 1 January 2027', () => {
+    const up = analyzeSchedules('2026-10-06').upcoming.filter((u) => u.dataset === 'capitalGains').map((u) => `${u.countryCode}@${u.effectiveFrom}`);
+    expect(up).toEqual(['GR@2027-01-01', 'AU@2027-07-01']);
+  });
+
+  it('rolls the yearly CGT thresholds over like any annual schedule (US, DK), and goes stale a year after the audit', () => {
+    const roll = (d: string) => analyzeSchedules(d).rollovers.filter((r) => r.dataset === 'capitalGains').map((r) => r.countryCode).sort();
+    expect(roll('2027-01-30')).toEqual(['FI']);
+    expect(roll('2027-01-31')).toEqual(['DK', 'FI', 'US']);
+    // FI carries its own (earlier) citation date, so it is left out here.
+    const stale = (d: string) => analyzeSchedules(d).staleCitations.filter((s) => s.dataset === 'capitalGains' && s.countryCode !== 'FI').map((s) => s.countryCode);
+    expect(stale('2027-10-06')).toEqual([]);
+    expect(stale('2027-10-07')).toContain('AT');
   });
 
   it('watches Finnish capital income with its per-year citation', () => {
