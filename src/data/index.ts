@@ -35,6 +35,12 @@ export type {
   IncomeLineItem,
   IncomeBracketSet,
   IncomeTaxResult,
+  IncomeTaxRegion,
+  IncomeTaxRegionSet,
+  IncomeTaxRegionResult,
+  RegionalTaxContext,
+  RegionalTaxLines,
+  IncomeTaxProvenance,
   IncomeOffsetContext,
   IncomeLevyContext,
   IncomeDeductionContext,
@@ -51,6 +57,9 @@ export {
   getIncomeTaxYears,
   calcIncomeTax,
   getIncomeTaxBands,
+  getIncomeTaxRegionBands,
+  listIncomeTaxRegions,
+  incomeTaxSetProvenance,
   localToday,
 } from './incomeTax';
 
