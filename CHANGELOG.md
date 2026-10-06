@@ -16,7 +16,7 @@ working untouched.
 - CA-IT fixes after checking it against the CRA: the basic personal amount is now reduced above the 29% bracket; the RRSP limit is $32,490 for 2025 and $33,810 for 2026 (the old $31,560 was the 2024 limit); the first $200 of donations gets the lowest rate (14.5% / 14%) instead of 15%; and the capital-gains help text no longer says the inclusion rate goes to 2/3 (that increase was cancelled on 21 March 2025).
 - Rate Watch: `analyzeSchedules()` now also watches company tax (provenance only, since a company rate stays in force until it changes) and Finnish capital income. Rollover is checked by **coverage** ("no set covers the tax year `asOf` is in"), with a grace period per series. Finland and Canada get no grace, because their year is fixed before it starts. Everyone else keeps 30 days. A new `missing` finding reports a series with no set in force. The report links to the file that holds the next year.
 
- (`homeSpaceComparison`, `recommendHomeSpace`)
+### Added — the home-space verdict, like with like (`homeSpaceComparison`, `recommendHomeSpace`)
 
 The app and the website each weighed a place of business against a desk themselves, and the app weighed four years of occupancy deductions against CGT on growth to 30 June 2027 only. For a sale after that date, a place of business looked better when a desk was. One function now does it for both.
 

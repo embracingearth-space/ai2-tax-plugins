@@ -640,6 +640,10 @@ export const INCOME_TAX_SCHEMES: Record<string, IncomeTaxScheme> = {
     offsets: ({ taxable, incomeTax, taxYearLabel, q }) => {
       // Non-refundable: it can bring federal tax to nil, never below. Reduced
       // on a straight line above the 29% bracket (CRA line 30000 worksheet).
+      // The CRA reduces it by NET income (line 23600), not taxable income.
+      // They are the same number here only because this scheme has no
+      // deduction (taxable = gross = net). If a deduction is ever added (RRSP,
+      // union dues), pass net income here, not `taxable`.
       const y = canadaYearFor(taxYearLabel);
       const credit = Math.min(incomeTax, q.round(canadaBasicPersonalAmount(taxable, y) * y.lowestRate));
       return credit > 0 ? [{ name: 'Basic personal amount credit', amount: credit }] : [];

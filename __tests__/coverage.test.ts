@@ -20,6 +20,7 @@ import {
   STUDENT_LOAN_SCHEMES,
   RETIREMENT_SCHEMES,
   RATE_LEDGER,
+  calcIncomeTax,
 } from '../src';
 import type { CoverageEntry, CoverageManifest } from '../src';
 
@@ -157,6 +158,24 @@ describe('coverage() — verified is a claim about the date asked', () => {
   it('GB CGT stops counting as verified when 2027-28 starts with nothing published', () => {
     expect(coverage('2027-04-05').cgt.find((e) => e.code === 'GB')!.verified).toBe(true);
     expect(coverage('2027-04-06').cgt.find((e) => e.code === 'GB')).toMatchObject({ verified: false, citationDate: null });
+  });
+
+  it('reads an instant in each country time zone, as calcIncomeTax does', () => {
+    // 22:30Z on 31 December: already 1 January 2027 in Helsinki, still 2026 in
+    // New York and Toronto. Independent of the host's own time zone.
+    const m = coverage(new Date('2026-12-31T22:30:00Z'));
+    expect(m.incomeTax.find((e) => e.code === 'FI')).toMatchObject({ verified: false, taxYear: null });
+    expect(m.cgt.find((e) => e.code === 'FI')).toMatchObject({ verified: false });
+    expect(m.incomeTax.find((e) => e.code === 'US')).toMatchObject({ verified: true, taxYear: '2026' });
+    expect(m.incomeTax.find((e) => e.code === 'CA')).toMatchObject({ verified: true, taxYear: '2026' });
+    // A day string is that day everywhere: FI is still in 2026 on the 31st.
+    expect(coverage('2026-12-31').incomeTax.find((e) => e.code === 'FI')).toMatchObject({ verified: true, taxYear: '2026' });
+  });
+
+  it('agrees with the year calcIncomeTax serves right now, for every country', () => {
+    for (const e of coverage().incomeTax) {
+      if (e.taxYear !== null) expect(e.taxYear).toBe(calcIncomeTax(e.code, 50000)!.taxYear);
+    }
   });
 
   it('a company rate is not annual — an old set in force is still verified coverage', () => {

@@ -44,7 +44,9 @@ function calcFederalTax(taxable: number, year = currentTaxYear()): number {
     if (taxable > lower) tax += (Math.min(taxable, upper) - lower) * b.rate;
     lower = upper;
   }
-  // Basic personal amount credit (non-refundable, at the lowest rate)
+  // Basic personal amount credit (non-refundable, at the lowest rate). The CRA
+  // reduces it by NET income; this return sets taxable_income = net_income, so
+  // `taxable` is net income here. Keep it that way if line 26000 adjustments land.
   tax -= canadaBasicPersonalAmount(taxable, p) * p.lowestRate;
   return Math.max(0, Math.round(tax * 100) / 100);
 }

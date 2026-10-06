@@ -21,6 +21,17 @@
  * answers for it) but is reported unverified, because the engine is then
  * serving last year's figures. A consumer that only wants claims it may
  * present as fact filters on `verified`.
+ *
+ * WHICH DAY. A `YYYY-MM-DD` string is taken as that calendar day everywhere.
+ * A `Date` (or no argument, meaning now) is an INSTANT, and for the yearly
+ * schedules it is read in each country's own time zone, the same way
+ * calcIncomeTax picks its year (localToday(scheme.timeZone)). So at
+ * 2026-12-31T22:30Z Finland (already 1 January in Helsinki) is reported
+ * against 2027 while the United States is still in 2026, and the manifest
+ * never disagrees with the figure the engine would actually serve. Rates that
+ * are not yearly (GST/VAT rows, company tax) use the caller's calendar day,
+ * the convention of resolveRateRow and getCompanyTaxRate. `asOf` in the
+ * result is that caller's day.
  */
 import {
   activeNationalRows,
@@ -80,6 +91,20 @@ function annualSetFor<T extends Dated>(sets: readonly T[], ymd: string): T | und
 
 const byCode = (a: CoverageEntry, b: CoverageEntry) => a.code.localeCompare(b.code);
 
+/** What the caller asked for: a calendar-day string, or an instant. */
+type AsOf = string | Date;
+
+/** The calendar day `asOf` falls on in `timeZone`. A day string is already a day. */
+function dayIn(timeZone: string, asOf: AsOf): string {
+  if (typeof asOf === 'string') return asOf.slice(0, 10);
+  const parts = new Intl.DateTimeFormat('en-US', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(asOf);
+  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? '';
+  return `${get('year')}-${get('month')}-${get('day')}`;
+}
+
+/** Time zones of the yearly schedules that do not carry one themselves. */
+const TZ = { FI: 'Europe/Helsinki', GB: 'Europe/London', AU: 'Australia/Sydney' } as const;
+
 function gstVat(ymd: string): CoverageEntry[] {
   return activeNationalRows(ymd)
     .map((r) => ({
@@ -92,10 +117,10 @@ function gstVat(ymd: string): CoverageEntry[] {
     .sort(byCode);
 }
 
-function incomeTax(ymd: string): CoverageEntry[] {
+function incomeTax(asOf: AsOf): CoverageEntry[] {
   return Object.values(INCOME_TAX_SCHEMES)
     .map((s) => {
-      const set = annualSetFor(s.sets, ymd);
+      const set = annualSetFor(s.sets, dayIn(s.timeZone, asOf));
       return {
         code: s.code,
         verified: s.verified && Boolean(set),
@@ -138,7 +163,7 @@ function gbRow(rows: readonly HomeRateRow[], ymd: string): HomeRateRow | undefin
  * US_UNRECAPTURED_1250_MAX_RATE_ROWS is deliberately NOT counted: one maximum
  * rate for depreciation recapture on a home office is not CGT coverage.
  */
-function cgt(ymd: string): CoverageEntry[] {
+function cgt(asOf: AsOf): CoverageEntry[] {
   const out: CoverageEntry[] = [];
 
   out.push({
@@ -149,7 +174,7 @@ function cgt(ymd: string): CoverageEntry[] {
     scope: AU_CGT_PROVENANCE.scope,
   });
 
-  const fi = annualSetFor(FI_CAPITAL_INCOME_YEARS.map((y) => ({ ...y, taxYearLabel: y.taxYear })), ymd);
+  const fi = annualSetFor(FI_CAPITAL_INCOME_YEARS.map((y) => ({ ...y, taxYearLabel: y.taxYear })), dayIn(TZ.FI, asOf));
   out.push({
     code: 'FI',
     verified: Boolean(fi?.verified),
@@ -160,7 +185,8 @@ function cgt(ymd: string): CoverageEntry[] {
   });
 
   // GB counts only while every figure it relies on has a verified row in force.
-  const gb = [GB_CGT_BASIC_RATE_ROWS, GB_CGT_HIGHER_RATE_ROWS, GB_CGT_ANNUAL_EXEMPT_ROWS].map((rows) => gbRow(rows, ymd));
+  const gbDay = dayIn(TZ.GB, asOf);
+  const gb = [GB_CGT_BASIC_RATE_ROWS, GB_CGT_HIGHER_RATE_ROWS, GB_CGT_ANNUAL_EXEMPT_ROWS].map((rows) => gbRow(rows, gbDay));
   const gbVerified = gb.every((r) => Boolean(r?.verified && r.value !== null && r.readOn));
   const gbReadOn = gb.map((r) => r?.readOn).filter((d): d is string => Boolean(d)).sort();
   out.push({
@@ -180,10 +206,12 @@ function cgt(ymd: string): CoverageEntry[] {
  * they are reported unverified rather than promoted on the strength of a
  * comment.
  */
-function undatedAnnual<T extends Dated & { source: string }>(info: Record<string, { countryCode: string; schemes: T[] }>, ymd: string): CoverageEntry[] {
+function undatedAnnual<T extends Dated & { source: string }>(info: Record<string, { countryCode: string; schemes: T[] }>, asOf: AsOf): CoverageEntry[] {
   return Object.values(info)
     .map((s) => {
-      const set = annualSetFor(s.schemes, ymd);
+      // Only AU ships these today; any other country falls back to the caller's day.
+      const tz = (TZ as Record<string, string>)[s.countryCode];
+      const set = annualSetFor(s.schemes, tz ? dayIn(tz, asOf) : toYmd(asOf));
       return { code: s.countryCode, verified: false, citationDate: null, sourceUrl: set?.source ?? null, taxYear: set?.taxYearLabel ?? null };
     })
     .sort(byCode);
@@ -198,14 +226,16 @@ function undatedAnnual<T extends Dated & { source: string }>(info: Record<string
  *   m.counts.companyTax; // { countries: 6, verified: 6 }
  */
 export function coverage(asOf?: string | Date): CoverageManifest {
-  const ymd = toYmd(asOf ?? new Date());
+  // One instant for the whole manifest, so no two capabilities straddle midnight.
+  const at: AsOf = asOf ?? new Date();
+  const ymd = toYmd(at);
   const lists: Record<CoverageCapability, CoverageEntry[]> = {
     gstVat: gstVat(ymd),
-    incomeTax: incomeTax(ymd),
+    incomeTax: incomeTax(at),
     companyTax: companyTax(ymd),
-    cgt: cgt(ymd),
-    studentLoan: undatedAnnual(STUDENT_LOAN_SCHEMES, ymd),
-    retirement: undatedAnnual(RETIREMENT_SCHEMES, ymd),
+    cgt: cgt(at),
+    studentLoan: undatedAnnual(STUDENT_LOAN_SCHEMES, at),
+    retirement: undatedAnnual(RETIREMENT_SCHEMES, at),
   };
   const counts = Object.fromEntries(
     COVERAGE_CAPABILITIES.map((c) => [c, { countries: lists[c].length, verified: lists[c].filter((e) => e.verified).length }]),

@@ -67,6 +67,8 @@ m.incomeTax.filter((e) => e.verified).map((e) => e.code);
 - `verified` means the figures were confirmed on the official page on `citationDate` **and**, for a yearly schedule, a set covers the tax year `asOf` falls in. A country whose newest income-tax year has ended is still listed, but as unverified. Present only `verified` entries as fact.
 - `scope` says when coverage is partial: Canadian and US income tax are federal only, AU CGT is the discount rule rather than a calculation, and company tax is the headline rate.
 
+## Tax treatments
+
 
 Every activity statement is a sum of classified transactions, so the package ships a catalogue of **tax treatments**: jurisdiction-neutral codes that a host app stores once per category or transaction, which each country plugin then translates into its own vocabulary and into the official boxes it feeds. The codes are deliberately small in number and mean the same thing everywhere; the plugin supplies the local label, the rate, whether tax is in the price, whether a credit is claimable, and the box list.
 
