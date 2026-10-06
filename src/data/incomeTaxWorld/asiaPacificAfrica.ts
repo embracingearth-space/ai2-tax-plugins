@@ -1,5 +1,5 @@
 /**
- * Data-built income-tax countries: TH MY PH EG KE NG ZA SG. @ai2/tax-plugins — embracingearth.space
+ * Data-built income-tax countries: TH MY PH EG KE NG ZA SG ID VN CN. @ai2/tax-plugins — embracingearth.space
  * One file per country beside this one; this list only registers them.
  */
 import type { CountryIncomeTaxData } from '../incomeTaxFactory';
@@ -13,6 +13,7 @@ import { ZA_INCOME_TAX } from './za';
 import { SG_INCOME_TAX } from './sg';
 import { ID_INCOME_TAX } from './id';
 import { VN_INCOME_TAX } from './vn';
+import { CN_INCOME_TAX } from './cn';
 
 export const ASIA_PACIFIC_AFRICA: CountryIncomeTaxData[] = [
   TH_INCOME_TAX,
@@ -25,4 +26,5 @@ export const ASIA_PACIFIC_AFRICA: CountryIncomeTaxData[] = [
   SG_INCOME_TAX,
   ID_INCOME_TAX,
   VN_INCOME_TAX,
+  CN_INCOME_TAX,
 ];

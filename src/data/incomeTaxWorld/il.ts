@@ -47,7 +47,7 @@ export const IL_INCOME_TAX: CountryIncomeTaxData = {
       citationDate: '2026-10-06',
       verified: false,
       verificationNote:
-        'The widened 20% and 31% band limits (ILS 228,000 / 301,200) enacted in March 2026 come from secondary sources only; gov.il blocked automated access, and the Tax Authority booklet read via an archive copy predates the amendment.',
+        'The widened 20% and 31% band limits (ILS 228,000 / 301,200) enacted in March 2026 come from secondary sources only; gov.il blocked automated access, the Tax Authority booklet read via an archive copy predates the amendment, and the number of resident credit points is not confirmed officially.',
     },
     {
       taxYear: '2025',
@@ -68,7 +68,7 @@ export const IL_INCOME_TAX: CountryIncomeTaxData = {
       citationDate: '2026-10-06',
       verified: false,
       verificationNote:
-        'The figures were read from an Internet Archive copy of the Tax Authority 2025 booklet because gov.il blocked automated access; they match the OECD tax database, but confirm on gov.il.',
+        'The bands were read from an Internet Archive copy of the Tax Authority 2025 booklet because gov.il blocked automated access, and the number of resident credit points (2.25) is not confirmed from an official source; re-check on gov.il.',
     },
   ],
 };

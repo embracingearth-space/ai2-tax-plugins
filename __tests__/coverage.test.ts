@@ -125,15 +125,15 @@ describe('coverage() — counts equal the registries (it cannot claim more than 
     // together with the data, never on its own.
     expect(m.counts).toEqual({
       gstVat: { countries: 88, verified: 86 },
-      incomeTax: { countries: 56, verified: 51 },
+      incomeTax: { countries: 57, verified: 53 },
       companyTax: { countries: 6, verified: 6 },
       cgt: { countries: 3, verified: 3 },
       studentLoan: { countries: 1, verified: 0 },
       retirement: { countries: 1, verified: 0 },
     });
-    // Unverified on this date: CL 2026, CO, GT, IL 2026 (research could not confirm them on the
+    // Unverified on this date: CL 2026, GT, IL (both years) (research could not confirm them on the
     // authority page) and FR (no scale enacted for 2026 income yet — a coverage gap, not a figure).
-    expect(m.incomeTax.filter((e) => !e.verified).map((e) => e.code)).toEqual(['CL', 'CO', 'FR', 'GT', 'IL']);
+    expect(m.incomeTax.filter((e) => !e.verified).map((e) => e.code)).toEqual(['CL', 'FR', 'GT', 'IL']);
     expect(codes(m.companyTax)).toEqual(['AU', 'CA', 'FI', 'GB', 'IN', 'US']);
   });
 });
