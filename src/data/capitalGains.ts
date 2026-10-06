@@ -431,7 +431,12 @@ export function getCapitalGainsCountry(code?: string | null): CgtCountry | null 
 
 /** The calendar day `asOf` falls on, in `timeZone` when given (a day string is already a day). */
 export function cgtDay(asOf: string | Date | undefined, timeZone?: string): string {
-  if (typeof asOf === 'string') return asOf.slice(0, 10);
+  if (typeof asOf === 'string') {
+    // Reject a malformed day: rule sets are picked by string comparison.
+    const day = asOf.slice(0, 10);
+    parseYmd(day, 'asOf');
+    return day;
+  }
   const at = asOf ?? new Date();
   if (!timeZone) return toYmd(at);
   const parts = new Intl.DateTimeFormat('en-US', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(at);

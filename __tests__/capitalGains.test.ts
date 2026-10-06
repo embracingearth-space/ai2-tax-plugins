@@ -357,3 +357,10 @@ describe('registry is immutable to consumers', () => {
     for (const c of Object.values(CAPITAL_GAINS_RULES)) expect(Object.isFrozen(c.sets)).toBe(true);
   });
 });
+
+describe('asOf validation', () => {
+  it('rejects a malformed day string instead of mis-ordering it', () => {
+    expect(() => resolveCapitalGainsRules('AU', '2026-1-1')).toThrow(RangeError);
+    expect(resolveCapitalGainsRules('AU', '2026-01-01T09:00:00Z')).not.toBeNull();
+  });
+});
