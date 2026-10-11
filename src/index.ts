@@ -331,6 +331,32 @@ export {
 export type { HomeRateRow, ResolvedHomeRate } from './decisions/homeRuleRates';
 export type { HomePropertyRule, HomePropertyRuleKey, DecisionNote } from './decisions/homePropertyRules';
 
+// Organisations (clubs, PTAs, charities) — what applies to an org type in a country, with sourced, dated figures. 2fin
+export {
+  orgTypesFor,
+  orgRulesFor,
+  orgReportingThresholds,
+  giftAidScheduleColumns,
+  formatGiftAidDate,
+  giftAidClaimValue,
+  orgRulesInventory,
+  orgRulesPastReview,
+  ORG_REPORTS,
+} from './decisions/organisations';
+export type {
+  OrgKind,
+  OrgType,
+  OrgIncomeTaxStatus,
+  OrgReport,
+  OrgDonationRelief,
+  OrgAccounts,
+  OrgRegulator,
+  OrgRules,
+  OrgRuleInventoryItem,
+} from './decisions/organisations';
+export { ORG_RULE_SOURCES, ORG_FIGURES, ORG_URLS, ORG_RULES_READ_ON, GB_CC_THRESHOLDS_FROM_YEAR_END } from './decisions/organisationSources';
+export type { OrgSource, OrgSourceKey, OrgFigure, OrgFigureTest } from './decisions/organisationSources';
+
 // Australia — per-unit deduction rates (WFH fixed rate, cents per km), effective-dated by income year.
 export {
   workFromHomeFixedRate,

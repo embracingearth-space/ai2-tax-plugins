@@ -63,6 +63,11 @@ function renderDeductions(L, d) {
     for (const h of d.home) L.push(`- **${h.country}** ${h.label} — review was due ${h.reviewBy}. Re-read ${h.sourceUrl} and move \`reviewBy\` in \`${h.file}\`.`);
     L.push('');
   }
+  if (d.organisations && d.organisations.length) {
+    L.push('## ⏰ Organisation rules (clubs, PTAs, charities) past their review date');
+    for (const o of d.organisations) L.push(`- **${o.country}** ${o.label} — review was due ${o.reviewBy}. Re-read ${o.sourceUrl} and move \`reviewBy\` in \`${o.file}\`.`);
+    L.push('');
+  }
   if (d.upcoming.length) {
     L.push('## 🗓️ Upcoming deduction-rate rows');
     for (const r of d.upcoming) L.push(`- ${tag(r)} → ${r.incomeYear} from ${r.effectiveFrom}: ${r.value ?? 'no rate published yet'}`);
@@ -190,6 +195,7 @@ async function main({ now = () => new Date(), fetchExternal = fetchExternalRates
     hasActionableDeductionFindings,
   } = require('../../dist/rateWatch');
   const { homeFiguresPastReview } = require('../../dist/decisions/homeRatesFreshness');
+  const { orgRulesPastReview } = require('../../dist/decisions/organisations');
   // ONE timestamp for the whole run. The awaited external check sits between the
   // analyses; if the local date rolled over during it, the ledger, schedule and
   // deduction findings would be computed against different days while the report
@@ -199,6 +205,7 @@ async function main({ now = () => new Date(), fetchExternal = fetchExternalRates
   const findings = analyzeLedger(asOf);
   const deductions = analyzeDeductionRates(asOf);
   deductions.home = homeFiguresPastReview(asOf);
+  deductions.organisations = orgRulesPastReview(asOf);
   const external = await fetchExternal();
   const schedules = analyzeSchedules(asOf);
   const report = render(findings, mode, external, schedules, deductions);
@@ -212,7 +219,8 @@ async function main({ now = () => new Date(), fetchExternal = fetchExternalRates
     hasActionableFindings(findings) ||
     hasActionableScheduleFindings(schedules) ||
     hasActionableDeductionFindings(deductions) ||
-    deductions.home.length > 0;
+    deductions.home.length > 0 ||
+    deductions.organisations.length > 0;
   const title = `Rate Watch — ${findings.asOf} (${mode})`;
 
   console.log(report);

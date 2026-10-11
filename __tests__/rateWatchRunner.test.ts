@@ -12,6 +12,7 @@ const analyzeLedger = jest.fn();
 const analyzeSchedules = jest.fn();
 const analyzeDeductionRates = jest.fn();
 const homeFiguresPastReview = jest.fn();
+const orgRulesPastReview = jest.fn();
 
 // The runner requires the BUILT module; mock it virtually so the suite does not
 // depend on `dist/` existing.
@@ -30,6 +31,11 @@ jest.mock(
 jest.mock(
   '../dist/decisions/homeRatesFreshness',
   () => ({ homeFiguresPastReview: (...a: unknown[]) => homeFiguresPastReview(...a) }),
+  { virtual: true },
+);
+jest.mock(
+  '../dist/decisions/organisations',
+  () => ({ orgRulesPastReview: (...a: unknown[]) => orgRulesPastReview(...a) }),
   { virtual: true },
 );
 
@@ -69,6 +75,7 @@ describe('rate-watch runner — single asOf', () => {
       .mockReset()
       .mockImplementation(() => ({ unverifiedCurrent: [], staleCitations: [], pastReviewBy: [], upcoming: [] }));
     homeFiguresPastReview.mockReset().mockImplementation(() => []);
+    orgRulesPastReview.mockReset().mockImplementation(() => []);
     writeSpy = jest.spyOn(fs, 'writeFileSync').mockImplementation(() => undefined);
     logSpy = jest.spyOn(console, 'log').mockImplementation(() => undefined);
   });
