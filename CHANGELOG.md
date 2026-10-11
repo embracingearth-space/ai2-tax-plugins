@@ -2,6 +2,32 @@
 
 ## 2.2.0 — Unreleased
 
+### Added — organisations: clubs, PTAs and charities (GB, AU, generic)
+
+- `orgTypesFor(country)` returns the org types for a country, each with `registeredWith` and `group: 'organisation'`:
+  - GB: `GB_CLUB`, `GB_PTA`, `GB_CASC`, `GB_CHARITY`, `GB_CIO` and `GB_CHARITABLE_COMPANY` ('UK' is accepted);
+  - AU: `AU_INCORPORATED_ASSOCIATION`, `AU_ACNC_CHARITY` and `AU_CLUB`;
+  - any other country: the generic `CLUB` and `CHARITY`.
+- `orgRulesFor(country, code, yearEnd?)` returns, for one type:
+  - the income tax status and a note;
+  - Gift Aid (GB) or DGR information (AU);
+  - the `reports` the app switches on (`receipts_payments`, `gift_aid_schedule`, `vat`, `gst_bas`);
+  - `incomeTaxForecast`;
+  - `accounts`, which says whether receipts and payments accounts are allowed. They are not for a charitable company.
+  - `regulators`: the Charity Commission, OSCR and CCNI for a GB registered charity, HMRC, Companies House, the ACNC, the ATO, or the state regulator;
+  - the dated sources the answer rests on.
+- `orgReportingThresholds(country, yearEnd?)` returns the figures behind those rules, as `SourcedFigure`s:
+  - the Charity Commission thresholds, with both sets kept. The new ones apply to financial years ending on or after 30 September 2026: receipts and payments up to £500,000, independent examination over £40,000, audit over £1.5 million or assets over £5 million;
+  - the OSCR and CCNI receipts and payments limits;
+  - the Gift Aid and small donations scheme figures;
+  - the CASC trading and property limits, the £100 dormant-club test and the £90,000 VAT threshold;
+  - the ACNC charity sizes and the $150,000 NFP GST threshold.
+- Gift Aid schedule helpers:
+  - `giftAidScheduleColumns()` returns the headings of HMRC's schedule table, read from the spreadsheet itself. HMRC pre-fills the `Item` column, so it is left out.
+  - `formatGiftAidDate(d)` formats a date as DD/MM/YY.
+  - `giftAidClaimValue(total)` returns 25p per £1, to the penny.
+- The organisation sources and figures have their own freshness test and Rate Watch section, `orgRulesInventory()` and `orgRulesPastReview(asOf)`. GB rows are due for review on 5 April 2027 and AU rows on 30 June 2027. All pages were read on 11 October 2026.
+
 ### Added — GST/VAT for every country, US states and Canadian provinces (rate ledger)
 
 The rate ledger grows from 88 countries to 199 (every UN member and observer, plus Kosovo, Taiwan, Hong Kong and Macao), and from one sub-national row (Ontario HST) to 64 jurisdictions: every US state plus DC (state-level rate; local taxes are named in each note, not modelled) and every Canadian province and territory. 107 rows become 299. Rows were researched on 2026-10-06 against official sources; 35 are `verified: false` with the reason in the note.

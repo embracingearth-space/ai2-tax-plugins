@@ -436,6 +436,44 @@ The files, by figure:
 
 Items for an accountant stay notes, never numbers.
 
+## Organisations: clubs, PTAs and charities
+
+The app asks what applies to an organisation type in a country, and turns exports, reports and tax behaviour on from the answer. The rules are data with sources; they are not a tax computation.
+
+```ts
+import { orgTypesFor, orgRulesFor, orgReportingThresholds, giftAidScheduleColumns, formatGiftAidDate, giftAidClaimValue } from '@ai2/tax-plugins';
+
+orgTypesFor('GB');                       // GB_CLUB, GB_PTA, GB_CASC, GB_CHARITY, GB_CIO, GB_CHARITABLE_COMPANY ('UK' works too)
+orgRulesFor('GB', 'GB_CIO');             // { incomeTax, donationRelief, reports, incomeTaxForecast, accounts, regulators, sources }
+orgReportingThresholds('GB', '2027-03-31'); // the figures for a financial year ending on that day
+giftAidScheduleColumns();                // ['Title', 'First name', 'Last name', 'House name or number', 'Postcode', …]
+formatGiftAidDate(new Date(2026, 3, 5)); // '05/04/26'
+giftAidClaimValue(100);                  // 25
+```
+
+- **Types.** GB has six types, AU has three (`AU_INCORPORATED_ASSOCIATION`, `AU_ACNC_CHARITY`, `AU_CLUB`), and every other country gets the generic `CLUB` and `CHARITY`. Each type carries `registeredWith` and `group: 'organisation'`.
+- **Income tax.** The `status` is one of `exempt`, `exempt_if_conditions`, `mutuality`, `taxable` or `check_locally`.
+  - GB charities, CIOs, charitable companies and CASCs are `exempt_if_conditions`: charities use the money for charitable purposes, and CASCs stay within £50,000 of trading turnover and £30,000 of rental income.
+  - GB clubs and PTAs are `mutuality`: Corporation Tax applies to non-member trading and investment income, not to dealings with members.
+  - An AU charity is `exempt_if_conditions`: it must be registered with the ACNC and endorsed by the ATO.
+  - AU associations and clubs are `check_locally`: they self-assess under Division 50, or they are taxable.
+  - Everything else is `check_locally`.
+- **Income tax forecast.** `incomeTaxForecast` is true only for `mutuality` and `taxable`.
+- **Reports.** `reports` uses the vocabulary `receipts_payments` (every type), `gift_aid_schedule` (GB charities and CASCs), `vat` (GB) and `gst_bas` (AU). No type lists an income tax return export.
+- **Accounts.** `accounts` says whether receipts and payments accounts are an allowed statutory format.
+  - A charitable company must prepare accruals accounts at any size, so it is false there.
+  - A non-company charity or CIO can use them up to the Charity Commission limit for the year end. It is £500,000 for years ending on or after 30 September 2026 and £250,000 before. OSCR (Scotland) and CCNI (Northern Ireland) stay at £250,000.
+- **Regulators.** `regulators` lists the Charity Commission, OSCR and CCNI for a GB registered charity, HMRC for a CASC, Companies House for a charitable company, the ACNC and the ATO for an AU charity, and the state or territory regulator for an incorporated association.
+- **Thresholds.** `orgReportingThresholds(country, yearEnd?)` returns `OrgFigure` rows, which are `SourcedFigure`s. Each has an `id`, a comparison `test` (`over`, `at_least`, `or_less`, `under` or `is`), its `regulator`, the type codes it `appliesTo`, and the financial years it covers. They cover:
+  - Charity Commission registration, the annual return, independent examination, receipts and payments, a qualified examiner and audit;
+  - the OSCR and CCNI receipts and payments limits;
+  - Gift Aid: the rate, the claim window, keeping declarations, schedule rows and aggregation;
+  - the small donations scheme;
+  - the CASC limits, a dormant club, and VAT registration;
+  - the ACNC charity sizes and NFP GST registration.
+
+Every statement and figure cites a row in `src/decisions/organisationSources.ts`: the page, its last-updated date, the day it was read, and `reviewBy`. `__tests__/organisationRulesFreshness.test.ts` fails the build once any of them is past `reviewBy`. Rate Watch lists them under "Organisation rules past their review date". To update one, re-read the page, then fix the claim or the figure and move `readOn` and `reviewBy`, as for the home rules above.
+
 ## Development
 
 ```bash
