@@ -3,14 +3,21 @@
  *
  * Base tariff (tarif de base, applicable from tax year 2025; no later
  * adaptation published) on taxable income after the minimum flat frais
- * d'obtention (540), dépenses spéciales (480) and employee social
- * contributions. Credits CIS and CI-CO2 salarié on gross salary. The fonds
- * pour l'emploi surcharge (7%, 9% above 150,000) is part of income tax.
+ * d'obtention (540), dépenses spéciales (480) and the employee pension and
+ * health contributions, which art. 110 no. 1 LIR makes deductible without
+ * limit. The dependency-insurance contribution is NOT deductible (ACD,
+ * guichet.lu) and is not deducted. Credits CIS and CI-CO2 salarié on gross
+ * salary. The fonds pour l'emploi surcharge (7%; 9% on the slice above
+ * 150,000) is part of income tax.
  *
- * Figures read on impotsdirects.public.lu, ccss.public.lu and guichet.lu on 2026-10-06.
+ * Tariff, credits and deductibility read on impotsdirects.public.lu and
+ * guichet.lu, contribution rates and ceilings on the CCSS notices of
+ * 16.01.2026 and 14.08.2026, the fonds formula in the Recueil des barèmes
+ * (legilux), on 2026-10-11.
  */
 import type { CountryIncomeTaxData, CreditRule, DeductionRule, LevyRule } from '../incomeTaxFactory';
 import type { IncomeTaxBand } from '../incomeTax';
+import { progressive } from '../incomeTaxMath';
 
 const ACD_TARIF = 'https://impotsdirects.public.lu/fr/az/t/tarif_pers.html';
 
@@ -61,11 +68,19 @@ const co2 = (amount: number): CreditRule => ({
   points: [[936, 0], [936, amount], [40000, amount], [80000, 0]],
 });
 
-/** 7% of the income tax; 9% where taxable income exceeds 150,000 (class 1). */
+const FONDS_THRESHOLD = 150000;
+/** 2% of the tariff tax at 150,000: the 931.80 in the Recueil des barèmes' "0,09 * I - 931,80" (class 1). */
+const FONDS_OFFSET = 0.02 * progressive(FONDS_THRESHOLD, BANDS);
+
+/**
+ * Loi modifiée du 30 juin 1976, art. 6: the tax is "porté à 107%", and "à
+ * 109% pour la tranche de revenu imposable ajusté dépassant 150.000 euros"
+ * (class 1). 9% on the slice above, not on the whole tax, so there is no cliff.
+ */
 const fondsEmploi: LevyRule = {
   kind: 'custom',
   name: "Contribution au fonds pour l'emploi",
-  amount: ({ taxable, incomeTax }) => incomeTax * (taxable > 150000 ? 0.09 : 0.07),
+  amount: ({ taxable, incomeTax }) => (taxable > FONDS_THRESHOLD ? 0.09 * incomeTax - FONDS_OFFSET : 0.07 * incomeTax),
 };
 
 export const LU_INCOME_TAX: CountryIncomeTaxData = {
@@ -75,12 +90,12 @@ export const LU_INCOME_TAX: CountryIncomeTaxData = {
   locale: 'fr-LU',
   timeZone: 'Europe/Luxembourg',
   file: 'src/data/incomeTaxWorld/lu.ts',
-  note: "Income tax for a tax-class-1 employee under the base tariff, after the minimum flat frais d'obtention and dépenses spéciales and the verified employee social contributions, less the CIS and CI-CO2 salarié credits, plus the fonds pour l'emploi surcharge. Luxembourg has no municipal income tax. Excludes the 2026 employee pension contribution from the base (its rate is not officially confirmed), the dependency-insurance abatement, and social contributions as a charge.",
+  note: "Income tax for a tax-class-1 employee under the base tariff, after the minimum flat frais d'obtention and dépenses spéciales and the deductible employee pension and health contributions, less the CIS and CI-CO2 salarié credits, plus the fonds pour l'emploi surcharge. Luxembourg has no municipal income tax. Excludes social contributions as a charge, including the dependency insurance, which is not tax-deductible.",
   assumptions: [
     'Single, no children, under 64, tax class 1, resident employee; minimum flat frais d\'obtention (540) and dépenses spéciales (480) only.',
-    'Social contributions are not included in the tax. Employee health (2.80% + 0.25%, up to the maximum contributory base) and dependency insurance (1.40%, without its abatement) are deducted from taxable income; the pension contribution is deducted for 2025 (8%) but not for 2026, whose employee share is not stated on an official page — so 2026 tax may be overstated.',
+    'Social contributions are not included in the tax. The employee pension contribution (8.50% from 2026 per the CCSS notice of 16 January 2026; 8% in 2025) and health contributions (2.80% + 0.25%), each up to the maximum contributory base, are deducted from taxable income. The dependency-insurance contribution (1.40%) is not tax-deductible and is not deducted.',
     'CIS and CI-CO2 are applied as non-refundable reductions of the tax; in payroll they are paid out even when no tax is due.',
-    "The fonds pour l'emploi surcharge is charged on the tariff tax before the CIS / CI-CO2 credits; the official rounding of the tariff is not applied.",
+    "The fonds pour l'emploi surcharge is 7% of the tariff tax, and 9% on the part of the tax above taxable income of 150,000 (0.09 × tax − 931.80); it is charged before the CIS / CI-CO2 credits. The official rounding of the tariff is not applied.",
   ],
   incomeBasis: {
     default: 'employment',
@@ -94,15 +109,17 @@ export const LU_INCOME_TAX: CountryIncomeTaxData = {
       bands: BANDS,
       deductions: [
         ...flat,
-        // Max contributory base 13,518.68/month Jan–May, 13,856.63 from June: 5 × 13,518.68 + 7 × 13,856.63 = 164,589.81.
+        // Max contributory base (5 × SSM) 13,518.68/month Jan–May (CCSS 16.01.2026) and 13,856.63 from
+        // June (CCSS 14.08.2026): 5 × 13,518.68 + 7 × 13,856.63 = 164,589.81. Pension 25.5% from
+        // 1 January 2026 (loi du 19 décembre 2025, Mémorial A606), a third each: employee 8.50%.
+        { kind: 'share', name: 'Employee pension insurance', rate: 0.085, ceiling: 164589.81 },
         { kind: 'share', name: 'Employee health insurance (soins de santé + prestations en espèces)', rate: 0.0305, ceiling: 164589.81 },
-        { kind: 'share', name: 'Employee dependency insurance', rate: 0.014 },
       ],
       credits: [cis, co2(216)],
       levies: [fondsEmploi],
       source: ACD_TARIF,
       authorityName: 'Administration des contributions directes (ACD)',
-      citationDate: '2026-10-06',
+      citationDate: '2026-10-11',
       verified: true,
     },
     {
@@ -114,13 +131,12 @@ export const LU_INCOME_TAX: CountryIncomeTaxData = {
         // 13,188.96/month Jan–Apr, 13,518.68 from May: 4 × 13,188.96 + 8 × 13,518.68 = 160,905.28.
         { kind: 'share', name: 'Employee pension insurance', rate: 0.08, ceiling: 160905.28 },
         { kind: 'share', name: 'Employee health insurance (soins de santé + prestations en espèces)', rate: 0.0305, ceiling: 160905.28 },
-        { kind: 'share', name: 'Employee dependency insurance', rate: 0.014 },
       ],
       credits: [cis, co2(192)],
       levies: [fondsEmploi],
       source: ACD_TARIF,
       authorityName: 'Administration des contributions directes (ACD)',
-      citationDate: '2026-10-06',
+      citationDate: '2026-10-11',
       verified: true,
     },
   ],
