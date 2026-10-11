@@ -35,7 +35,7 @@ export const EE_INCOME_TAX: CountryIncomeTaxData = {
     'No municipal income tax is set locally; no security tax applies to wages (EMTA).',
   ],
   incomeBasis: {
-    default: 'any',
+    default: 'employment',
     selfEmployed: 'differs',
     selfEmployedNote: 'A sole proprietor (FIE) also pays 33% social tax on profit and can deduct it, so their income tax is lower.',
   },

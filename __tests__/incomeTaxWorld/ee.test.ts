@@ -40,6 +40,13 @@ describe('Estonia (own arithmetic from the published rates — not official exam
     expect(calcIncomeTax('EE', 25200, '2025')!.totalTax).toBe(5344);
   });
 
+  it('is an employment-income figure, because the unemployment premium is withheld from wages only', () => {
+    const r = calcIncomeTax('EE', 30000, '2026')!;
+    expect(r.incomeBasis).toBe('employment');
+    expect(r.assumptions![0]).toMatch(/^Computed as employment income/);
+    expect(() => calcIncomeTax('EE', 30000, '2026', { incomeType: 'self-employed' })).toThrow(RangeError);
+  });
+
   it('names both contributions as deductions and says the II-pillar rate is the default 2%', () => {
     const a = calcIncomeTax('EE', 30000, '2026')!.assumptions!.join(' ');
     expect(a).toMatch(/unemployment-insurance premium \(1\.6%\)/);
