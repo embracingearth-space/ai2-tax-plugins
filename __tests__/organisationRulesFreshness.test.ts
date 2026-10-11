@@ -40,6 +40,7 @@ describe('the gate itself (fixed dates)', () => {
   // GB (6 April), AU (1 July). The day after its review date every one of its rows is due, and no row of a later country.
   const REVIEW_BY: Array<[string, string, string]> = [
     ['US', '2027-01-31', '2027-02-01'],
+    ['CA', '2027-01-31', '2027-02-01'],
     ['IN', '2027-03-31', '2027-04-01'],
     ['GB', '2027-04-05', '2027-04-06'],
     ['AU', '2027-06-30', '2027-07-01'],

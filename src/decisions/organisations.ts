@@ -27,7 +27,7 @@
  *   'vat'                every GB type (any of them may be VAT registered)
  *   'gst_bas'            every AU type (any of them may be GST registered)
  *   'gst'                every type in a country whose GST return the package
- *                        files that is not a BAS: IN (GSTR-3B). Added because
+ *                        files that is not a BAS: IN (GSTR-3B), CA (GST/HST). Added because
  *                        'gst_bas' names Australia's activity statement and
  *                        'vat' is not GST; any of these orgs may be registered.
  * US types list only 'receipts_payments': there is no federal VAT/GST, and the
@@ -82,7 +82,8 @@ export interface OrgDonationRelief {
   /**
    * 'gift_aid': the org claims tax back on donations (GB). 'dgr': donors deduct gifts (AU) — information only, nothing
    * to claim. 'donor_deduction': donors deduct gifts, or claim a credit for them, under the country's own approval (IN
-   * section 354) — information only for the org's tax; the note says what the org must issue or file for its donors.
+   * section 354, US 501(c)(3), CA registered charity or RCAAA) — information only for the org's tax; the note says what
+   * the org must issue or file for its donors (a certificate, a written acknowledgment, an official donation receipt).
    */
   scheme: 'gift_aid' | 'dgr' | 'donor_deduction';
   /** What the org is repaid per £1 donated (Gift Aid: 0.25). */
@@ -167,8 +168,14 @@ const US_TYPES: OrgType[] = [
   t('US_CLUB', 'Club or group not recognised as exempt', 'US', 'community', 'Not registered'),
 ];
 
+const CA_TYPES: OrgType[] = [
+  t('CA_REGISTERED_CHARITY', 'Registered charity', 'CA', 'charity', 'CRA'),
+  t('CA_NPO', 'Non-profit organisation (club, association or society)', 'CA', 'community', 'Not registered with the CRA'),
+  t('CA_RCAAA', 'Registered Canadian amateur athletic association (national)', 'CA', 'club', 'CRA'),
+];
+
 /** The countries with their own types; every other country gets the generic ones. */
-const COUNTRY_TYPES: Record<string, OrgType[]> = { GB: GB_TYPES, AU: AU_TYPES, IN: IN_TYPES, US: US_TYPES };
+const COUNTRY_TYPES: Record<string, OrgType[]> = { GB: GB_TYPES, AU: AU_TYPES, IN: IN_TYPES, US: US_TYPES, CA: CA_TYPES };
 
 const GENERIC_CODES = ['CLUB', 'CHARITY'] as const;
 const genericTypes = (country: string): OrgType[] => [
@@ -278,6 +285,12 @@ const REGULATORS = {
     covers: 'Charitable solicitation registration, state by state',
     url: ORG_URLS.usStateSolicitation,
     note: 'Many states require a charity to register before soliciting donations from their residents; the rules differ by state and are not modelled here.',
+  },
+  craCharities: {
+    name: 'CRA (Canada Revenue Agency)',
+    covers: 'Registered charities and registered Canadian amateur athletic associations',
+    url: ORG_URLS.caCharityAdvantages,
+    note: 'Registration, official donation receipts, the annual information return (T3010 for a charity, T2052 for an RCAAA) and the disbursement quota.',
   },
 } satisfies Record<string, OrgRegulator>;
 
@@ -742,6 +755,80 @@ function usRules(code: string): OrgRules | null {
   }
 }
 
+const CA_RECEIPTS_NOTE =
+  'Information only for its own tax: it issues official donation receipts for gifts from individuals and corporations, which donors ' +
+  'use to claim a donation tax credit or deduction. A receipt must be complete and accurate, with a duplicate kept.';
+
+const CA_ACCOUNTS_NOTE =
+  'No accounts format is set on the CRA pages read: keep reliable and complete books and records. Provincial incorporation law may ' +
+  'set one — not modelled.';
+
+function caRules(code: string): OrgRules | null {
+  const base = { country: 'CA', code };
+  switch (code) {
+    case 'CA_REGISTERED_CHARITY':
+      return {
+        ...base,
+        incomeTax: {
+          status: 'exempt_if_conditions',
+          note:
+            'A registered charity is exempt from income tax while it stays registered: it files the T3010 return within six months ' +
+            'of its fiscal year end, meets its disbursement quota (3.5% of the average value of property not used in charitable ' +
+            'activities up to $1 million and 5% above, once that value exceeds $100,000), keeps books and records and issues ' +
+            'accurate receipts. GST/HST: most of its supplies are exempt; it is a small supplier with gross revenue of $250,000 or ' +
+            'less, or taxable supplies of $50,000 or less.',
+        },
+        donationRelief: { scheme: 'donor_deduction', declarationRequired: false, note: CA_RECEIPTS_NOTE },
+        reports: ['receipts_payments', 'gst'],
+        incomeTaxForecast: false,
+        accounts: { receiptsAndPaymentsAllowed: true, note: CA_ACCOUNTS_NOTE },
+        regulators: reg('craCharities'),
+        sources: src('caCharityAdvantages', 'caCharityVsNpo', 'caT3010', 'caDisbursementQuota', 'caDonors', 'caGstCharities'),
+      };
+    case 'CA_NPO':
+      return {
+        ...base,
+        incomeTax: {
+          status: 'exempt_if_conditions',
+          note:
+            'A non-profit organization (a club, association or society operated for social welfare, civic improvement, pleasure, ' +
+            'sport or recreation, not a charity) is generally exempt from income tax if no income is available for the personal ' +
+            'benefit of a member, but may owe tax on property income or capital gains: one whose main purpose is providing dining, ' +
+            'recreational or sporting facilities may be taxed on its property income (subsection 149(5), a T3 return). It files Form ' +
+            'T1044 within six months of the year end if its taxable dividends, interest, rentals or royalties exceed $10,000, its ' +
+            'total assets exceeded $200,000, or it had to file before; an incorporated NPO generally also files a T2. It cannot ' +
+            'issue official donation receipts. GST/HST: a small supplier at $50,000 or less of taxable supplies.',
+        },
+        donationRelief: null,
+        reports: ['receipts_payments', 'gst'],
+        incomeTaxForecast: false,
+        accounts: { receiptsAndPaymentsAllowed: true, note: CA_ACCOUNTS_NOTE },
+        regulators: [],
+        sources: src('caCharityVsNpo', 'caNpoReturn', 'caGstNpos'),
+      };
+    case 'CA_RCAAA':
+      return {
+        ...base,
+        incomeTax: {
+          status: 'exempt_if_conditions',
+          note:
+            'A registered Canadian amateur athletic association is exempt from income tax while registered: its exclusive purpose ' +
+            'is promoting amateur athletics in Canada nation-wide (a local, regional, provincial or territorial body, or one that ' +
+            'fields a single team, cannot register — choose "Non-profit organisation"). It files Form T2052 within six months of its ' +
+            'fiscal period end. Many of its goods and services are exempt from GST/HST.',
+        },
+        donationRelief: { scheme: 'donor_deduction', declarationRequired: false, note: CA_RECEIPTS_NOTE },
+        reports: ['receipts_payments', 'gst'],
+        incomeTaxForecast: false,
+        accounts: { receiptsAndPaymentsAllowed: true, note: CA_ACCOUNTS_NOTE },
+        regulators: reg('craCharities'),
+        sources: src('caRcaaaAdvantages', 'caRcaaaEligibility', 'caRcaaaReceipts', 'caDonors', 'caGstNpos'),
+      };
+    default:
+      return null;
+  }
+}
+
 function genericRules(country: string, code: string): OrgRules | null {
   if (!(GENERIC_CODES as readonly string[]).includes(code)) return null;
   return {
@@ -773,6 +860,7 @@ export function orgRulesFor(country: string, code: string, yearEnd?: string | Da
   if (c === 'AU') return auRules(k);
   if (c === 'IN') return inRules(k);
   if (c === 'US') return usRules(k);
+  if (c === 'CA') return caRules(k);
   return genericRules(c, k);
 }
 
@@ -785,7 +873,7 @@ function yearEndOf(yearEnd?: string | Date): string {
 
 /**
  * The dated figures for a country's organisations (GB: Charity Commission, OSCR, CCNI and HMRC; AU: ACNC and ATO;
- * IN: Income Tax Department and CBIC; US: IRS), for a financial year ending on `yearEnd` (default today). One row per figure
+ * IN: Income Tax Department and CBIC; US: IRS; CA: CRA), for a financial year ending on `yearEnd` (default today). One row per figure
  * id; empty for other countries.
  */
 export function orgReportingThresholds(country: string, yearEnd?: string | Date): OrgFigure[] {

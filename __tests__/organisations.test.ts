@@ -42,7 +42,8 @@ const IN_CODES = [...IN_NPO_CODES, 'IN_CLUB'];
 /** Every country with its own types, and its codes. */
 const US_EXEMPT_CODES = ['US_501C3', 'US_501C7', 'US_501C4'];
 const US_CODES = [...US_EXEMPT_CODES, 'US_CLUB'];
-const COUNTRY_CODES: Record<string, string[]> = { GB: GB_CODES, AU: AU_CODES, IN: IN_CODES, US: US_CODES };
+const CA_CODES = ['CA_REGISTERED_CHARITY', 'CA_NPO', 'CA_RCAAA'];
+const COUNTRY_CODES: Record<string, string[]> = { GB: GB_CODES, AU: AU_CODES, IN: IN_CODES, US: US_CODES, CA: CA_CODES };
 const ALL: Array<[string, string]> = [
   ...Object.entries(COUNTRY_CODES).flatMap(([country, codes]) => codes.map((c): [string, string] => [country, c])),
   ['FR', 'CLUB'],
@@ -329,7 +330,7 @@ describe('orgReportingThresholds', () => {
 });
 
 /** The currency every money figure of a country is in. */
-const CURRENCY: Record<string, string> = { GB: 'GBP', AU: 'AUD', IN: 'INR', US: 'USD' };
+const CURRENCY: Record<string, string> = { GB: 'GBP', AU: 'AUD', IN: 'INR', US: 'USD', CA: 'CAD' };
 
 describe('every country: figures in its own currency, sources in its own country', () => {
   it.each(Object.keys(COUNTRY_CODES))('%s', (c) => {
@@ -494,6 +495,71 @@ describe('United States (US) — federal (IRS)', () => {
       expect({ id: s.id, readOn: s.readOn, reviewBy: s.reviewBy }).toEqual({ id: s.id, readOn: '2026-10-11', reviewBy: '2027-01-31' });
     }
     for (const code of US_CODES) expect(rules('US', code).sources.length).toBeGreaterThan(3);
+  });
+});
+
+describe('Canada (CA) — CRA', () => {
+  it('types: registered charity, non-profit organisation, national RCAAA', () => {
+    expect(orgTypesFor('CA').map((t) => [t.code, t.label, t.kind, t.registeredWith])).toEqual([
+      ['CA_REGISTERED_CHARITY', 'Registered charity', 'charity', 'CRA'],
+      ['CA_NPO', 'Non-profit organisation (club, association or society)', 'community', 'Not registered with the CRA'],
+      ['CA_RCAAA', 'Registered Canadian amateur athletic association (national)', 'club', 'CRA'],
+    ]);
+  });
+
+  it('statuses: all exempt if conditions; notes name the return each files', () => {
+    for (const code of CA_CODES) {
+      expect(rules('CA', code).incomeTax.status).toBe('exempt_if_conditions');
+      expect(rules('CA', code).incomeTaxForecast).toBe(false);
+    }
+    expect(rules('CA', 'CA_REGISTERED_CHARITY').incomeTax.note).toContain('T3010');
+    expect(rules('CA', 'CA_REGISTERED_CHARITY').incomeTax.note).toContain('disbursement quota');
+    expect(rules('CA', 'CA_NPO').incomeTax.note).toContain('T1044');
+    expect(rules('CA', 'CA_NPO').incomeTax.note).toContain('149(5)');
+    expect(rules('CA', 'CA_RCAAA').incomeTax.note).toContain('T2052');
+    expect(rules('CA', 'CA_RCAAA').incomeTax.note).toContain('choose "Non-profit organisation"');
+  });
+
+  it('official donation receipts for the charity and the RCAAA only; information only', () => {
+    for (const code of ['CA_REGISTERED_CHARITY', 'CA_RCAAA']) {
+      expect(rules('CA', code).donationRelief).toMatchObject({ scheme: 'donor_deduction', declarationRequired: false });
+      expect(rules('CA', code).donationRelief!.note).toContain('official donation receipts');
+    }
+    expect(rules('CA', 'CA_NPO').donationRelief).toBeNull();
+  });
+
+  it('reports: receipts and payments and GST/HST; regulator: the CRA for the registered types', () => {
+    for (const code of CA_CODES) expect(rules('CA', code).reports).toEqual(['receipts_payments', 'gst']);
+    expect(rules('CA', 'CA_REGISTERED_CHARITY').regulators.map((r) => r.name)).toEqual(['CRA (Canada Revenue Agency)']);
+    expect(rules('CA', 'CA_RCAAA').regulators.map((r) => r.name)).toEqual(['CRA (Canada Revenue Agency)']);
+    expect(rules('CA', 'CA_NPO').regulators).toEqual([]);
+  });
+
+  it('figures: T3010 / T1044 / T2052 six months, disbursement quota, T1044 tests, GST/HST small supplier', () => {
+    expect(orgReportingThresholds('CA').map((f) => [f.id, f.value, f.test, f.currency])).toEqual([
+      ['CA.cra.t3010DueMonths', 6, 'or_less', null],
+      ['CA.cra.dqThresholdOver', 100000, 'over', 'CAD'],
+      ['CA.cra.dqRate', 0.035, 'is', null],
+      ['CA.cra.dqRateOverMillion', 0.05, 'is', null],
+      ['CA.cra.dqHigherRateOver', 1000000, 'over', 'CAD'],
+      ['CA.cra.t1044PropertyIncomeOver', 10000, 'over', 'CAD'],
+      ['CA.cra.t1044TotalAssetsOver', 200000, 'over', 'CAD'],
+      ['CA.cra.t1044DueMonths', 6, 'or_less', null],
+      ['CA.cra.t2052DueMonths', 6, 'or_less', null],
+      ['CA.cra.gstSmallSupplierTaxableSuppliesUpTo', 50000, 'or_less', 'CAD'],
+      ['CA.cra.gstCharityGrossRevenueUpTo', 250000, 'or_less', 'CAD'],
+    ]);
+  });
+
+  it('sources: every CA row a canada.ca CRA page, read today, reviewed by 31 January 2027', () => {
+    const rows = Object.values(ORG_RULE_SOURCES).filter((s) => s.country === 'CA');
+    expect(rows.length).toBeGreaterThan(8);
+    for (const s of rows) {
+      expect(s.authority).toBe('CRA');
+      expect(s.sourceUrl).toMatch(/^https:\/\/www\.canada\.ca\/en\/revenue-agency\//);
+      expect({ id: s.id, readOn: s.readOn, reviewBy: s.reviewBy }).toEqual({ id: s.id, readOn: '2026-10-11', reviewBy: '2027-01-31' });
+    }
+    for (const code of CA_CODES) expect(rules('CA', code).sources.length).toBeGreaterThan(2);
   });
 });
 

@@ -61,6 +61,8 @@ const AU_REVIEW_BY = '2027-06-30';
 const IN_REVIEW_BY = '2027-03-31';
 /** US rows are re-read before the 2027 filing season (IRS pages are revised for each calendar tax year). */
 const US_REVIEW_BY = '2027-01-31';
+/** CA rows are re-read before the 2027 calendar year's returns, like the US rows. */
+const CA_REVIEW_BY = '2027-01-31';
 
 /** The day the new Charity Commission thresholds start: financial years ENDING on or after it. */
 export const GB_CC_THRESHOLDS_FROM_YEAR_END = '2026-09-30';
@@ -152,15 +154,33 @@ export const ORG_URLS = {
   usWrittenAcknowledgments: 'https://www.irs.gov/charities-non-profits/charitable-organizations/charitable-contributions-written-acknowledgments',
   usUbit: 'https://www.irs.gov/charities-non-profits/unrelated-business-income-tax',
   usStateSolicitation: 'https://www.irs.gov/charities-non-profits/charitable-organizations/charitable-solicitation-state-requirements',
+  // Canada — CRA (canada.ca)
+  caCharityAdvantages:
+    'https://www.canada.ca/en/revenue-agency/services/charities-giving/charities/registering-charitable-qualified-donee-status/apply-become-registered-charity/deciding/advantages-obligations-becoming-registered-charity.html',
+  caCharityVsNpo:
+    'https://www.canada.ca/en/revenue-agency/services/charities-giving/about-registered-charities/what-difference-between-a-registered-charity-a-non-profit-organization.html',
+  caT3010Filing: 'https://www.canada.ca/en/revenue-agency/services/charities-giving/charities/operating-a-registered-charity/filing-t3010-charity-return.html',
+  caDisbursementQuota:
+    'https://www.canada.ca/en/revenue-agency/services/charities-giving/charities/operating-a-registered-charity/annual-spending-requirement-disbursement-quota/disbursement-quota-calculation.html',
+  caNpoReturnGuide: 'https://www.canada.ca/en/revenue-agency/services/forms-publications/publications/t4117/income-tax-guide-non-profit-organization-information-return.html',
+  caRcaaaAdvantages:
+    'https://www.canada.ca/en/revenue-agency/services/charities-giving/charities/registering-charitable-qualified-donee-status/applying-other-qualified-donee-status/advantages-obligations-becoming-oqd.html',
+  caRcaaaApplying:
+    'https://www.canada.ca/en/revenue-agency/services/charities-giving/charities/registering-charitable-qualified-donee-status/applying-other-qualified-donee-status/applying-registered-canadian-amateur-athletic-association.html',
+  caRcaaaReceipts:
+    'https://www.canada.ca/en/revenue-agency/services/charities-giving/other-organizations-that-issue-donation-receipts-qualified-donees/canadian-amateur-athletic-associations.html',
+  caDonors: 'https://www.canada.ca/en/revenue-agency/services/charities-giving/giving-charity-information-donors.html',
+  caGstCharities: 'https://www.canada.ca/en/revenue-agency/services/forms-publications/publications/rc4082/gst-hst-information-charities.html',
+  caGstNpos: 'https://www.canada.ca/en/revenue-agency/services/forms-publications/publications/rc4081/gst-hst-information-non-profit-organizations.html',
 } as const;
 
 const U = ORG_URLS;
 
 /** The countries with their own organisation rules. */
-export type OrgCountry = 'GB' | 'AU' | 'IN' | 'US';
+export type OrgCountry = 'GB' | 'AU' | 'IN' | 'US' | 'CA';
 
 /** The currencies their figures are in (ISO 4217). */
-export type OrgCurrency = 'GBP' | 'AUD' | 'INR' | 'USD';
+export type OrgCurrency = 'GBP' | 'AUD' | 'INR' | 'USD' | 'CAD';
 
 export interface OrgSource {
   /** The key in ORG_RULE_SOURCES. */
@@ -178,7 +198,8 @@ export interface OrgSource {
     | 'Income Tax Department (India)'
     | 'CBIC (India)'
     | 'Supreme Court of India'
-    | 'IRS';
+    | 'IRS'
+    | 'CRA';
   sourceUrl: string;
   /** The page's own "last updated" date (YYYY-MM-DD), or null where it shows none. */
   pageLastUpdated: string | null;
@@ -753,17 +774,111 @@ const US_SOURCES = {
   ),
 } satisfies Record<string, SourceRow>;
 
+const ca = (sourceUrl: string, pageLastUpdated: string | null, claim: string): SourceRow => ({
+  country: 'CA',
+  claim,
+  authority: 'CRA',
+  sourceUrl,
+  pageLastUpdated,
+  readOn: R,
+  reviewBy: CA_REVIEW_BY,
+});
+
+const CA_SOURCES = {
+  caCharityAdvantages: ca(
+    U.caCharityAdvantages,
+    '2018-10-16',
+    'A registered charity is "exempt from paying income tax", can issue official donation receipts for gifts from individuals and ' +
+      'corporations, and many goods and services it provides are exempt from GST/HST. It must "file your annual Form T3010" within ' +
+      'six months of the fiscal year-end, meet the annual spending requirement (disbursement quota), "keep reliable and complete ' +
+      'books and records" and "issue complete and accurate official donation receipts".',
+  ),
+  caCharityVsNpo: ca(
+    U.caCharityVsNpo,
+    '2025-09-02',
+    'A registered charity is established and operated exclusively for charitable purposes, must apply to register, can issue ' +
+      'official donation receipts, files the T3010 and has a spending requirement. A non-profit organization "Is not registered with ' +
+      'the CRA", "Cannot issue official donation receipts", is "Generally exempt from paying income tax" but may owe tax on property ' +
+      'income or capital gains, may need to file Form T1044 plus a T2 or T3 return, and has "No spending requirement".',
+  ),
+  caT3010: ca(
+    U.caT3010Filing,
+    '2026-06-12',
+    '"All registered charities must file their annual T3010 return." "File your return within six months of your fiscal year end."',
+  ),
+  caDisbursementQuota: ca(
+    U.caDisbursementQuota,
+    '2023-10-18',
+    'Disbursement quota: "3.5% of the average value of that property up to $1 million" and "5% on the amount that exceeds $1 million", ' +
+      'on property not used in charitable activities; it applies to a charitable organization when that average value "exceeds ' +
+      '$100,000" ($25,000 for a public or private foundation).',
+  ),
+  caNpoReturn: ca(
+    U.caNpoReturnGuide,
+    '2020-02-28',
+    'T4117: an NPO files Form T1044 if it received or was entitled to receive taxable dividends, interest, rentals or royalties ' +
+      '"totalling more than $10,000 in the fiscal period", its total assets were "more than $200,000 at the end of the immediately ' +
+      'preceding fiscal period", or it had to file an NPO information return for a previous fiscal period; due "no later than six ' +
+      'months after the end of its fiscal period". A corporation generally also files a T2. An organization whose main purpose is ' +
+      'providing dining, recreational or sporting facilities may be taxed on its property income under subsection 149(5) (deemed ' +
+      'trust, T3 return).',
+  ),
+  caRcaaaAdvantages: ca(
+    U.caRcaaaAdvantages,
+    '2021-06-10',
+    'RCAAAs "are exempt from paying income tax", many of their goods and services are exempt from GST/HST, they issue official ' +
+      'donation receipts and receive gifts from registered charities; they devote their resources to "promoting amateur athletics in ' +
+      'Canada on a nationwide basis" and file "Form T2052, Registered Canadian Amateur Athletic Association Information Return" ' +
+      'within six months of the fiscal period end.',
+  ),
+  caRcaaaEligibility: ca(
+    U.caRcaaaApplying,
+    '2025-01-27',
+    'An RCAAA must be created and resident in Canada with the "promotion of amateur athletics in Canada nation-wide" as its exclusive ' +
+      'purpose; organizations of a "local, regional, provincial, or territorial character", or that only field a single team or run ' +
+      'a local facility, cannot register.',
+  ),
+  caRcaaaReceipts: ca(
+    U.caRcaaaReceipts,
+    '2022-11-25',
+    'Canadian amateur athletic associations registered as qualified donees "can issue official donation receipts for income tax ' +
+      'purposes" for gifts from individuals and corporations; they keep a duplicate of each receipt and copies of the annual ' +
+      'information return (Form T2052).',
+  ),
+  caDonors: ca(
+    U.caDonors,
+    '2025-09-02',
+    'Giving to a registered charity or another qualified donee: donors "may also be able to receive an official donation receipt" for ' +
+      'a gift, and the page covers how to "claim a donation tax credit or deduction".',
+  ),
+  caGstCharities: ca(
+    U.caGstCharities,
+    null,
+    'RC4082 (Rev. 23): a charity is a small supplier under either test — "The fiscal-year limit for the gross revenue test for a ' +
+      'charity is $250,000" or "The taxable supplies limit for charities and other PSB is $50,000"; "You only have to meet one of ' +
+      'these tests to be a small supplier."',
+  ),
+  caGstNpos: ca(
+    U.caGstNpos,
+    null,
+    'RC4081 (Rev. 23): an NPO, a public service body, "is a small supplier if the total amount of all revenues (before expenses) from ' +
+      'the worldwide taxable supplies" of it and its associates "is $50,000 or less in any single calendar quarter and in the last ' +
+      'four consecutive calendar quarters."',
+  ),
+} satisfies Record<string, SourceRow>;
+
 export type GbOrgSourceKey = keyof typeof GB_SOURCES;
 export type AuOrgSourceKey = keyof typeof AU_SOURCES;
 export type InOrgSourceKey = keyof typeof IN_SOURCES;
 export type UsOrgSourceKey = keyof typeof US_SOURCES;
-export type OrgSourceKey = GbOrgSourceKey | AuOrgSourceKey | InOrgSourceKey | UsOrgSourceKey;
+export type CaOrgSourceKey = keyof typeof CA_SOURCES;
+export type OrgSourceKey = GbOrgSourceKey | AuOrgSourceKey | InOrgSourceKey | UsOrgSourceKey | CaOrgSourceKey;
 
 const withIds = <K extends string>(rows: Record<K, SourceRow>): Record<K, OrgSource> =>
   Object.fromEntries(Object.entries<SourceRow>(rows).map(([id, r]) => [id, { id, ...r }])) as Record<K, OrgSource>;
 
 /** Every rule source, by key. Keys do not overlap between countries. */
-export const ORG_RULE_SOURCES: Record<OrgSourceKey, OrgSource> = { ...withIds(GB_SOURCES), ...withIds(AU_SOURCES), ...withIds(IN_SOURCES), ...withIds(US_SOURCES) };
+export const ORG_RULE_SOURCES: Record<OrgSourceKey, OrgSource> = { ...withIds(GB_SOURCES), ...withIds(AU_SOURCES), ...withIds(IN_SOURCES), ...withIds(US_SOURCES), ...withIds(CA_SOURCES) };
 
 // ─── Figures ────────────────────────────────────────────────────────────────
 
@@ -801,6 +916,7 @@ const AU_ALL = ['AU_INCORPORATED_ASSOCIATION', 'AU_ACNC_CHARITY', 'AU_CLUB'];
 const IN_NPOS = ['IN_PUBLIC_TRUST', 'IN_SOCIETY', 'IN_SECTION8_COMPANY'];
 const IN_ALL = [...IN_NPOS, 'IN_CLUB'];
 const US_EXEMPT = ['US_501C3', 'US_501C7', 'US_501C4'];
+const CA_ALL = ['CA_REGISTERED_CHARITY', 'CA_NPO', 'CA_RCAAA'];
 
 const CC = 'Charity Commission (England and Wales)';
 const NEW = GB_CC_THRESHOLDS_FROM_YEAR_END;
@@ -947,4 +1063,16 @@ export const ORG_FIGURES: readonly OrgFigure[] = [
   fig({ id: 'US.irs.socialClubNonmemberShareUpTo', country: 'US', label: 'Social club: gross receipts from nonmember sources (investment income included) up to', value: 0.35, taxYear: 'current', currency: null, test: 'or_less', regulator: 'IRS', appliesTo: ['US_501C7'], yearsEndingFrom: null, yearsEndingBefore: null, source: 'usSocialClubs', note: 'Up to 35% of gross receipts from nonmember sources, of which no more than 15% from nonmember use of club facilities and services.' }),
   fig({ id: 'US.irs.socialClubNonmemberFacilitiesShareUpTo', country: 'US', label: 'Social club: gross receipts from nonmember use of facilities and services up to', value: 0.15, taxYear: 'current', currency: null, test: 'or_less', regulator: 'IRS', appliesTo: ['US_501C7'], yearsEndingFrom: null, yearsEndingBefore: null, source: 'usSocialClubs', note: 'Within the 35%: no more than 15% of gross receipts from nonmembers using the club\'s facilities and services. Over the safe harbor, the facts must show the club is organized substantially for exempt purposes.' }),
   fig({ id: 'US.irs.writtenAcknowledgmentAtLeast', country: 'US', label: 'Donor needs a written acknowledgment from the charity: single contribution of at least', value: 250, taxYear: 'current', currency: 'USD', test: 'at_least', regulator: 'IRS', appliesTo: ['US_501C3'], yearsEndingFrom: null, yearsEndingBefore: null, source: 'usWrittenAcknowledgments', note: 'For a contribution of $250 or more the donor needs the charity\'s written acknowledgment: its name, the amount, a description of non-cash gifts, and any goods or services given in return with their estimated value.' }),
+  // ─── CA — CRA ───
+  fig({ id: 'CA.cra.t3010DueMonths', country: 'CA', label: 'T3010 registered charity return due within (months after the fiscal year end)', value: 6, taxYear: 'current', currency: null, test: 'or_less', regulator: 'CRA', appliesTo: ['CA_REGISTERED_CHARITY'], yearsEndingFrom: null, yearsEndingBefore: null, source: 'caT3010', note: 'Every registered charity files the T3010 within six months of its fiscal year end.' }),
+  fig({ id: 'CA.cra.dqThresholdOver', country: 'CA', label: 'Disbursement quota applies: average property not used in charitable activities over', value: 100000, taxYear: 'current', currency: 'CAD', test: 'over', regulator: 'CRA', appliesTo: ['CA_REGISTERED_CHARITY'], yearsEndingFrom: null, yearsEndingBefore: null, source: 'caDisbursementQuota', note: 'For a charitable organization ($25,000 for a public or private foundation), on the average value over the previous 24 months.' }),
+  fig({ id: 'CA.cra.dqRate', country: 'CA', label: 'Disbursement quota rate on that property up to $1 million', value: 0.035, taxYear: 'current', currency: null, test: 'is', regulator: 'CRA', appliesTo: ['CA_REGISTERED_CHARITY'], yearsEndingFrom: null, yearsEndingBefore: null, source: 'caDisbursementQuota', note: '3.5% of the average value of property not used in charitable activities up to $1 million.' }),
+  fig({ id: 'CA.cra.dqRateOverMillion', country: 'CA', label: 'Disbursement quota rate on that property over $1 million', value: 0.05, taxYear: 'current', currency: null, test: 'is', regulator: 'CRA', appliesTo: ['CA_REGISTERED_CHARITY'], yearsEndingFrom: null, yearsEndingBefore: null, source: 'caDisbursementQuota', note: '5% on the amount that exceeds $1 million.' }),
+  fig({ id: 'CA.cra.dqHigherRateOver', country: 'CA', label: 'Disbursement quota: the 5% rate applies to property over', value: 1000000, taxYear: 'current', currency: 'CAD', test: 'over', regulator: 'CRA', appliesTo: ['CA_REGISTERED_CHARITY'], yearsEndingFrom: null, yearsEndingBefore: null, source: 'caDisbursementQuota', note: 'The first $1 million at 3.5%, the excess at 5%.' }),
+  fig({ id: 'CA.cra.t1044PropertyIncomeOver', country: 'CA', label: 'NPO files Form T1044: taxable dividends, interest, rentals or royalties in the fiscal period over', value: 10000, taxYear: 'current', currency: 'CAD', test: 'over', regulator: 'CRA', appliesTo: ['CA_NPO'], yearsEndingFrom: null, yearsEndingBefore: null, source: 'caNpoReturn', note: 'One of the three T1044 tests (with total assets over $200,000, or having had to file before). Due six months after the fiscal period ends.' }),
+  fig({ id: 'CA.cra.t1044TotalAssetsOver', country: 'CA', label: 'NPO files Form T1044: total assets at the end of the previous fiscal period over', value: 200000, taxYear: 'current', currency: 'CAD', test: 'over', regulator: 'CRA', appliesTo: ['CA_NPO'], yearsEndingFrom: null, yearsEndingBefore: null, source: 'caNpoReturn', note: 'Book value under generally accepted accounting principles.' }),
+  fig({ id: 'CA.cra.t1044DueMonths', country: 'CA', label: 'T1044 NPO information return due within (months after the fiscal period end)', value: 6, taxYear: 'current', currency: null, test: 'or_less', regulator: 'CRA', appliesTo: ['CA_NPO'], yearsEndingFrom: null, yearsEndingBefore: null, source: 'caNpoReturn', note: 'No later than six months after the end of the fiscal period.' }),
+  fig({ id: 'CA.cra.t2052DueMonths', country: 'CA', label: 'T2052 RCAAA return due within (months after the fiscal period end)', value: 6, taxYear: 'current', currency: null, test: 'or_less', regulator: 'CRA', appliesTo: ['CA_RCAAA'], yearsEndingFrom: null, yearsEndingBefore: null, source: 'caRcaaaAdvantages', note: 'Form T2052 within six months of the fiscal period end.' }),
+  fig({ id: 'CA.cra.gstSmallSupplierTaxableSuppliesUpTo', country: 'CA', label: 'GST/HST small supplier (public service body): taxable supplies up to', value: 50000, taxYear: 'current', currency: 'CAD', test: 'or_less', regulator: 'CRA', appliesTo: CA_ALL, yearsEndingFrom: null, yearsEndingBefore: null, source: 'caGstNpos', note: 'Taxable supplies of $50,000 or less in a single calendar quarter and in the last four consecutive quarters: a small supplier, registration voluntary.' }),
+  fig({ id: 'CA.cra.gstCharityGrossRevenueUpTo', country: 'CA', label: 'GST/HST small supplier, charity gross revenue test: gross revenue up to', value: 250000, taxYear: 'current', currency: 'CAD', test: 'or_less', regulator: 'CRA', appliesTo: ['CA_REGISTERED_CHARITY'], yearsEndingFrom: null, yearsEndingBefore: null, source: 'caGstCharities', note: 'A charity is a small supplier if it meets either test: gross revenue of $250,000 or less in the fiscal year, or taxable supplies of $50,000 or less.' }),
 ];

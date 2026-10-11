@@ -109,6 +109,10 @@ These four countries left out a published employee deduction "because it was not
   - 501(c)(3) and 501(c)(4) are `exempt_if_conditions`, a 501(c)(7) club is `mutuality` (taxed on nonmember and investment income), an unrecognised club is `check_locally`;
   - donor deduction for 501(c)(3) only, information only, with the $250 written acknowledgment; state charity registration named as a regulator, not modelled;
   - figures in USD: Form 990-N up to $50,000, 990-EZ under $200,000 / $500,000 assets, the 5th-month due date, automatic revocation after 3 years, Form 990-T at $1,000, the social club 35% / 15% limits. US rows are due for review on 31 January 2027.
+- Canada (CA), from canada.ca (CRA):
+  - types `CA_REGISTERED_CHARITY`, `CA_NPO` (club, association or society) and `CA_RCAAA` (national amateur athletic association), all `exempt_if_conditions`;
+  - the T3010 / T1044 / T2052 returns (six months), the disbursement quota (3.5% up to $1 million, 5% above, once property not used in charitable activities exceeds $100,000), the T1044 tests ($10,000 property income, $200,000 assets), subsection 149(5) for dining, recreational and sporting clubs;
+  - official donation receipts for charities and RCAAAs as `'donor_deduction'`, information only; `'gst'` for the GST/HST return, with the $50,000 small-supplier and $250,000 charity gross-revenue tests. CA rows are due for review on 31 January 2027.
 
 ### Added — GST/VAT for every country, US states and Canadian provinces (rate ledger)
 
