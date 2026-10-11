@@ -353,7 +353,8 @@ const auItPlugin: TaxFilingPlugin = {
           { id: 'franking_credit_offset', label: 'Franking credit tax offset', type: 'currency', calculated: true, editable: false, required: false, helpText: 'Refundable: whatever is left after your tax and Medicare levy is refunded.' },
           { id: 'has_study_loan', label: 'Has HELP / study or training loan', type: 'boolean', editable: true, required: false, helpText: 'Tick to include the compulsory annual repayment (HELP, VSL, SFSS, SSL, AASL).' },
           { id: 'study_loan_repayment', label: 'Compulsory study/training loan repayment', type: 'currency', calculated: true, editable: false, required: false, helpText: 'Marginal rates on repayment income above the ATO minimum threshold for the income year. Added to the amount payable, separate from income tax.' },
-          { id: 'total_tax', label: 'Total tax liability', type: 'currency', calculated: true, editable: false, required: true, helpText: 'Income tax less LITO and the small business offset (not below nil), plus the Medicare levy and surcharge, less franking credits. Below nil when franking credits exceed the rest — the excess is refunded.' },
+          { id: 'total_tax', label: 'Total tax liability', type: 'currency', calculated: true, editable: false, required: true, helpText: 'Income tax less LITO and the small business offset (not below nil), plus the Medicare levy and surcharge, less franking credits — never below nil. Franking credits beyond that are refunded (see the franking credit refund).' },
+          { id: 'franking_credit_refund', label: 'Franking credit refund', type: 'currency', calculated: true, editable: false, required: false, helpText: 'Franking credits left after your tax and Medicare levy are covered. Refunded, and taken off the balance due.' },
         ],
       },
       {
@@ -414,10 +415,14 @@ const auItPlugin: TaxFilingPlugin = {
     // Order, as the ATO's myTax estimate applies it: non-refundable offsets
     // reduce income tax to nil and no further; the Medicare levy and surcharge
     // are added after (LITO never reduces them); refundable franking credits
-    // come off last, and NOT clamped — an excess is a refund, not lost.
+    // come off last — an excess is a refund, not lost. total_tax stays a
+    // liability (never below nil, as consumers read it as tax owed); the
+    // excess is its own franking_credit_refund and comes off balance_due.
     const tax_after_offsets = Math.max(0, income_tax - lito - small_business_offset);
     const franking_credit_offset = frankingCredits;
-    const total_tax = tax_after_offsets + medicare_levy + medicareSurcharge - franking_credit_offset;
+    const liability = tax_after_offsets + medicare_levy + medicareSurcharge;
+    const total_tax = Math.max(0, liability - franking_credit_offset);
+    const franking_credit_refund = Math.max(0, franking_credit_offset - liability);
 
     // Compulsory study/training loan (HELP) repayment. Repayment income is a
     // BROADER base than taxable income — per the ATO it adds back: reportable
@@ -446,9 +451,9 @@ const auItPlugin: TaxFilingPlugin = {
 
     const withheld = Number(v.tax_withheld) || 0;
     const instalments = Number(v.payg_instalments) || 0;
-    const balance_due = total_tax + study_loan_repayment - withheld - instalments;
+    const balance_due = total_tax + study_loan_repayment - withheld - instalments - franking_credit_refund;
 
-    return { total_income, total_deductions, taxable_income, income_tax, medicare_levy, lito, small_business_offset, franking_credit_offset, study_loan_repayment, total_tax, balance_due };
+    return { total_income, total_deductions, taxable_income, income_tax, medicare_levy, lito, small_business_offset, franking_credit_offset, franking_credit_refund, study_loan_repayment, total_tax, balance_due };
   },
 
   getAutoPopulateMapping: (): AggregationMapping[] => [
