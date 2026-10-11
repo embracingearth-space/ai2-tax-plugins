@@ -27,7 +27,7 @@
  *   'vat'                every GB and IE type (any of them may be VAT registered)
  *   'gst_bas'            every AU type (any of them may be GST registered)
  *   'gst'                every type in a country whose GST return the package
- *                        files that is not a BAS: IN (GSTR-3B), CA (GST/HST), NZ. Added because
+ *                        files that is not a BAS: IN (GSTR-3B), CA (GST/HST), NZ, SG. Added because
  *                        'gst_bas' names Australia's activity statement and
  *                        'vat' is not GST; any of these orgs may be registered.
  * US types list only 'receipts_payments': there is no federal VAT/GST, and the
@@ -82,7 +82,7 @@ export interface OrgDonationRelief {
   /**
    * 'gift_aid': the org claims tax back on donations (GB). 'dgr': donors deduct gifts (AU) — information only, nothing
    * to claim. 'donor_deduction': donors deduct gifts, or claim a credit for them, under the country's own approval (IN
-   * section 354, US 501(c)(3), CA registered charity or RCAAA, NZ donee organisation) — information only for the org's tax; the note says what
+   * section 354, US 501(c)(3), CA registered charity or RCAAA, NZ donee organisation, SG IPC) — information only for the org's tax; the note says what
    * the org must issue or file for its donors (a certificate, a written acknowledgment, an official donation receipt).
    * 'charitable_donation_scheme': IE — the charity claims back the tax its donor paid (grossed up at Revenue's specified
    * rate, see orgReportingThresholds), with the donor's certificate; a claim like Gift Aid's but not Gift Aid, so no
@@ -189,8 +189,14 @@ const IE_TYPES: OrgType[] = [
   t('IE_CLUB', 'Members\' club or society', 'IE', 'club', 'Not registered'),
 ];
 
+const SG_TYPES: OrgType[] = [
+  t('SG_REGISTERED_CHARITY', 'Registered charity (Commissioner of Charities)', 'SG', 'charity', 'Commissioner of Charities'),
+  t('SG_IPC', 'Institution of a Public Character (IPC)', 'SG', 'charity', 'Commissioner of Charities (IPC status)'),
+  t('SG_CLUB', 'Club, society or association (not a charity)', 'SG', 'club', 'Not a registered charity'),
+];
+
 /** The countries with their own types; every other country gets the generic ones. */
-const COUNTRY_TYPES: Record<string, OrgType[]> = { GB: GB_TYPES, AU: AU_TYPES, IN: IN_TYPES, US: US_TYPES, CA: CA_TYPES, NZ: NZ_TYPES, IE: IE_TYPES };
+const COUNTRY_TYPES: Record<string, OrgType[]> = { GB: GB_TYPES, AU: AU_TYPES, IN: IN_TYPES, US: US_TYPES, CA: CA_TYPES, NZ: NZ_TYPES, IE: IE_TYPES, SG: SG_TYPES };
 
 const GENERIC_CODES = ['CLUB', 'CHARITY'] as const;
 const genericTypes = (country: string): OrgType[] => [
@@ -334,12 +340,24 @@ const REGULATORS = {
     url: ORG_URLS.ieCharitableExemption,
     note: 'Exemption conditions: tax compliant, all income for the main purpose, proper records, audited accounts over €250,000 income, changes notified.',
   },
+  commissionerOfCharitiesSg: {
+    name: 'Commissioner of Charities (Singapore)',
+    covers: 'Registered charities and IPC status',
+    url: ORG_URLS.sgCocAnnualSubmissions,
+    note: 'Annual Report (with financial statements) and Governance Evaluation Checklist within 6 months of the financial year end; examination or audit by size, every IPC audited.',
+  },
+  irasSg: {
+    name: 'IRAS',
+    covers: 'Income tax (charity exemption, clubs on Form P1), IPC donation deductions and GST',
+    url: ORG_URLS.sgCharitiesTax,
+    note: 'Registered charities are exempt automatically and file no income tax return; a club files Form P1 by 15 April.',
+  },
   charitiesRegulatorIe: {
     name: 'Charities Regulator (Ireland)',
     covers: 'The Register of Charities (Charities Act 2009)',
     url: ORG_URLS.ieCharitiesRegulator,
     note:
-      'Revenue grants charitable tax exemption only to a charity registered with the Charities Regulator, and the charity must stay ' +
+      'Revenue grants charitable tax exemption only to a charity registered with the Charities Regulator, and it must stay ' +
       'registered. The Regulator\'s own filing rules (annual report) are not modelled: its site could not be read automatically.',
   },
 } satisfies Record<string, OrgRegulator>;
@@ -1038,6 +1056,86 @@ function ieRules(code: string): OrgRules | null {
   }
 }
 
+const SG_CHARITY_TAX_NOTE =
+  'A charity registered under the Charities Act is automatically exempt from income tax (section 13(1)(zm) of the Income Tax Act) ' +
+  'and files no income tax return. It submits its Annual Report, with financial statements, and a Governance Evaluation Checklist to ' +
+  'the Commissioner of Charities within 6 months of its financial year end. GST: registration is compulsory over $1 million of ' +
+  'taxable turnover in a calendar year (or expected in the next 12 months).';
+
+const SG_SOURCES_CHARITY: OrgSourceKey[] = ['sgCharityExempt', 'sgAnnualSubmissions', 'sgLargeCharities', 'sgGstRegistration'];
+
+function sgRules(code: string): OrgRules | null {
+  const base = { country: 'SG', code };
+  switch (code) {
+    case 'SG_REGISTERED_CHARITY':
+      return {
+        ...base,
+        incomeTax: {
+          status: 'exempt',
+          note: `${SG_CHARITY_TAX_NOTE} Donations to a charity that is not an IPC are not tax deductible for donors — choose "Institution of a Public Character (IPC)" if it has IPC status.`,
+        },
+        donationRelief: null,
+        reports: ['receipts_payments', 'gst'],
+        incomeTaxForecast: false,
+        accounts: {
+          receiptsAndPaymentsAllowed: true,
+          upToGrossIncome: figureFor('SG.coc.auditOver').value,
+          currency: 'SGD',
+          thresholdId: 'SG.coc.auditOver',
+          note:
+            'Gross income or total expenditure of $250,000 or less: examination by a competent independent person; up to $500,000, by ' +
+            'an ISCA member or someone qualified to be one; over $500,000, an audit by a public accountant, with statements under FRS ' +
+            'or the Charities Accounting Standard. Below the audit level the page read sets no format, so receipts and payments is ' +
+            'taken as allowed — check the Charities (Accounts and Annual Report) Regulations. A company limited by guarantee follows ' +
+            'the Companies Act audit rules.',
+        },
+        regulators: reg('commissionerOfCharitiesSg', 'irasSg'),
+        sources: src(...SG_SOURCES_CHARITY, 'sgDonations'),
+      };
+    case 'SG_IPC':
+      return {
+        ...base,
+        incomeTax: { status: 'exempt', note: `${SG_CHARITY_TAX_NOTE} As an IPC it is audited by a public accountant whatever its size, by auditors approved by the Commissioner or its Sector Administrator and rotated at least every 5 years.` },
+        donationRelief: {
+          scheme: 'donor_deduction',
+          declarationRequired: false,
+          note:
+            'Information only: donors deduct up to 2.5 times a qualifying donation to an approved IPC. IRAS allows the deduction from ' +
+            'the information the IPC gives it, not from receipts: the IPC issues receipts marked "Tax Deductible" and collects each ' +
+            'corporate donor\'s name and tax reference number.',
+        },
+        reports: ['receipts_payments', 'gst'],
+        incomeTaxForecast: false,
+        accounts: {
+          receiptsAndPaymentsAllowed: false,
+          note: 'Every IPC is audited by a public accountant; audited statements follow FRS or the Charities Accounting Standard. Receipts and payments is a working report only.',
+        },
+        regulators: reg('commissionerOfCharitiesSg', 'irasSg'),
+        sources: src(...SG_SOURCES_CHARITY, 'sgDonations'),
+      };
+    case 'SG_CLUB':
+      return {
+        ...base,
+        incomeTax: {
+          status: 'mutuality',
+          note:
+            'A club or association with 50% or more of its gross revenue receipts from members (subscriptions and entrance fees ' +
+            'count) is not deemed to carry on a business: it is taxed only on income from non-members such as interest, rent and ' +
+            'dividends. Under 50%, it is deemed to carry on a business and its operating surplus is taxed too. Rate 17%; Form P1 by ' +
+            '15 April of the year after the accounting year.',
+        },
+        donationRelief: null,
+        reports: ['receipts_payments', 'gst'],
+        incomeTaxForecast: false,
+        accounts: { receiptsAndPaymentsAllowed: true, note: 'No accounts format is set on the IRAS pages read: its own rules decide (any registry duties are not modelled).' },
+        regulators: reg('irasSg'),
+        sources: src('sgClubs', 'sgCharityExempt', 'sgGstRegistration'),
+      };
+    default:
+      return null;
+  }
+}
+
 function genericRules(country: string, code: string): OrgRules | null {
   if (!(GENERIC_CODES as readonly string[]).includes(code)) return null;
   return {
@@ -1072,6 +1170,7 @@ export function orgRulesFor(country: string, code: string, yearEnd?: string | Da
   if (c === 'CA') return caRules(k);
   if (c === 'NZ') return nzRules(k);
   if (c === 'IE') return ieRules(k);
+  if (c === 'SG') return sgRules(k);
   return genericRules(c, k);
 }
 
@@ -1084,7 +1183,8 @@ function yearEndOf(yearEnd?: string | Date): string {
 
 /**
  * The dated figures for a country's organisations (GB: Charity Commission, OSCR, CCNI and HMRC; AU: ACNC and ATO;
- * IN: Income Tax Department and CBIC; US: IRS; CA: CRA; NZ: Charities Services, Companies Office, Inland Revenue; IE: Revenue), for a financial year ending on `yearEnd` (default today). One row per figure
+ * IN: Income Tax Department and CBIC; US: IRS; CA: CRA; NZ: Charities Services, Companies Office, Inland Revenue; IE: Revenue; SG: Commissioner of
+ * Charities and IRAS), for a financial year ending on `yearEnd` (default today). One row per figure
  * id; empty for other countries.
  */
 export function orgReportingThresholds(country: string, yearEnd?: string | Date): OrgFigure[] {

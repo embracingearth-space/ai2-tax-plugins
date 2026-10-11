@@ -45,7 +45,8 @@ const US_CODES = [...US_EXEMPT_CODES, 'US_CLUB'];
 const CA_CODES = ['CA_REGISTERED_CHARITY', 'CA_NPO', 'CA_RCAAA'];
 const NZ_CODES = ['NZ_REGISTERED_CHARITY', 'NZ_INCORPORATED_SOCIETY', 'NZ_CLUB'];
 const IE_CODES = ['IE_REGISTERED_CHARITY', 'IE_SPORTS_BODY', 'IE_CLUB'];
-const COUNTRY_CODES: Record<string, string[]> = { GB: GB_CODES, AU: AU_CODES, IN: IN_CODES, US: US_CODES, CA: CA_CODES, NZ: NZ_CODES, IE: IE_CODES };
+const SG_CODES = ['SG_REGISTERED_CHARITY', 'SG_IPC', 'SG_CLUB'];
+const COUNTRY_CODES: Record<string, string[]> = { GB: GB_CODES, AU: AU_CODES, IN: IN_CODES, US: US_CODES, CA: CA_CODES, NZ: NZ_CODES, IE: IE_CODES, SG: SG_CODES };
 const ALL: Array<[string, string]> = [
   ...Object.entries(COUNTRY_CODES).flatMap(([country, codes]) => codes.map((c): [string, string] => [country, c])),
   ['FR', 'CLUB'],
@@ -332,7 +333,7 @@ describe('orgReportingThresholds', () => {
 });
 
 /** The currency every money figure of a country is in. */
-const CURRENCY: Record<string, string> = { GB: 'GBP', AU: 'AUD', IN: 'INR', US: 'USD', CA: 'CAD', NZ: 'NZD', IE: 'EUR' };
+const CURRENCY: Record<string, string> = { GB: 'GBP', AU: 'AUD', IN: 'INR', US: 'USD', CA: 'CAD', NZ: 'NZD', IE: 'EUR', SG: 'SGD' };
 
 describe('every country: figures in its own currency, sources in its own country', () => {
   it.each(Object.keys(COUNTRY_CODES))('%s', (c) => {
@@ -704,6 +705,66 @@ describe('Ireland (IE) — Revenue', () => {
       expect({ id: s.id, readOn: s.readOn, reviewBy: s.reviewBy }).toEqual({ id: s.id, readOn: '2026-10-11', reviewBy: '2027-01-31' });
     }
     for (const code of IE_CODES) expect(rules('IE', code).sources.length).toBeGreaterThan(1);
+  });
+});
+
+describe('Singapore (SG) — Commissioner of Charities and IRAS', () => {
+  it('types: registered charity, IPC, club or association', () => {
+    expect(orgTypesFor('SG').map((t) => [t.code, t.kind])).toEqual([
+      ['SG_REGISTERED_CHARITY', 'charity'],
+      ['SG_IPC', 'charity'],
+      ['SG_CLUB', 'club'],
+    ]);
+  });
+
+  it('statuses: charities exempt (automatic, section 13(1)(zm)); a club on the 50% members test', () => {
+    for (const code of ['SG_REGISTERED_CHARITY', 'SG_IPC']) {
+      expect(rules('SG', code).incomeTax.status).toBe('exempt');
+      expect(rules('SG', code).incomeTax.note).toContain('13(1)(zm)');
+    }
+    expect(rules('SG', 'SG_CLUB').incomeTax.status).toBe('mutuality');
+    expect(rules('SG', 'SG_CLUB').incomeTax.note).toContain('50%');
+    for (const code of SG_CODES) {
+      expect(rules('SG', code).incomeTaxForecast).toBe(false);
+      expect(rules('SG', code).reports).toEqual(['receipts_payments', 'gst']);
+    }
+  });
+
+  it('donor deduction (2.5 times) only for an IPC, information only; a plain charity has none', () => {
+    expect(rules('SG', 'SG_IPC').donationRelief).toMatchObject({ scheme: 'donor_deduction', declarationRequired: false });
+    expect(rules('SG', 'SG_IPC').donationRelief!.note).toContain('2.5 times');
+    expect(rules('SG', 'SG_REGISTERED_CHARITY').donationRelief).toBeNull();
+    expect(rules('SG', 'SG_REGISTERED_CHARITY').incomeTax.note).toContain('not tax deductible');
+    expect(rules('SG', 'SG_CLUB').donationRelief).toBeNull();
+  });
+
+  it('accounts: an IPC is always audited; a charity up to the $500,000 audit level', () => {
+    expect(rules('SG', 'SG_IPC').accounts.receiptsAndPaymentsAllowed).toBe(false);
+    expect(rules('SG', 'SG_REGISTERED_CHARITY').accounts).toMatchObject({ receiptsAndPaymentsAllowed: true, upToGrossIncome: 500000, currency: 'SGD', thresholdId: 'SG.coc.auditOver' });
+    expect(rules('SG', 'SG_REGISTERED_CHARITY').regulators.map((r) => r.name)).toEqual(['Commissioner of Charities (Singapore)', 'IRAS']);
+    expect(rules('SG', 'SG_CLUB').regulators.map((r) => r.name)).toEqual(['IRAS']);
+  });
+
+  it('figures: 6 months, $250,000 / $500,000 / $10 million, 2.5 times, 50%, 17%, GST $1 million', () => {
+    expect(orgReportingThresholds('SG').map((f) => [f.id, f.value, f.test, f.currency])).toEqual([
+      ['SG.coc.annualSubmissionDueMonths', 6, 'or_less', null],
+      ['SG.coc.anyIndependentExaminerUpTo', 250000, 'or_less', 'SGD'],
+      ['SG.coc.auditOver', 500000, 'over', 'SGD'],
+      ['SG.coc.largeCharityReceiptsAtLeast', 10000000, 'at_least', 'SGD'],
+      ['SG.iras.ipcDonationDeductionMultiple', 2.5, 'is', null],
+      ['SG.iras.clubMemberReceiptsShareAtLeast', 0.5, 'at_least', null],
+      ['SG.iras.clubTaxRate', 0.17, 'is', null],
+      ['SG.iras.gstRegistrationOver', 1000000, 'over', 'SGD'],
+    ]);
+  });
+
+  it('sources: every SG row an IRAS or Commissioner of Charities page, read today, reviewed by 31 March 2027', () => {
+    const rows = Object.values(ORG_RULE_SOURCES).filter((s) => s.country === 'SG');
+    expect(rows.length).toBeGreaterThan(5);
+    for (const s of rows) {
+      expect(s.sourceUrl).toMatch(/^https:\/\/www\.(iras|charities)\.gov\.sg\//);
+      expect({ id: s.id, readOn: s.readOn, reviewBy: s.reviewBy }).toEqual({ id: s.id, readOn: '2026-10-11', reviewBy: '2027-03-31' });
+    }
   });
 });
 

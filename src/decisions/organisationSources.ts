@@ -55,6 +55,9 @@
  * behind a bot check and was not read: the Charities Regulator's own
  * filing rules (annual report, accounts) are not modelled.
  *
+ * SG rows are IRAS pages ("Last updated") and Commissioner of Charities
+ * pages read in a browser (no page date shown).
+ *
  * Nothing here is a number the app may use without its row: a test holds
  * every figure to an https source, a read date and a review date, and the
  * freshness test fails the build once a review date passes. 2fin
@@ -79,6 +82,8 @@ const CA_REVIEW_BY = '2027-01-31';
 const NZ_REVIEW_BY = '2027-03-31';
 /** IE rows are re-read after the Finance Act that follows Budget 2027 (in force 1 January 2027). */
 const IE_REVIEW_BY = '2027-01-31';
+/** SG rows are re-read after Budget 2027 (February) and before YA 2027 filing. */
+const SG_REVIEW_BY = '2027-03-31';
 
 /** The day the new Charity Commission thresholds start: financial years ENDING on or after it. */
 export const GB_CC_THRESHOLDS_FROM_YEAR_END = '2026-09-30';
@@ -219,15 +224,22 @@ export const ORG_URLS = {
   ieVatThresholds: 'https://www.revenue.ie/en/vat/vat-registration/who-should-register-for-vat/vat-thresholds.aspx',
   /** The regulator's address for the app to link to; not a source (its pages sit behind a bot check). */
   ieCharitiesRegulator: 'https://www.charitiesregulator.ie',
+  // Singapore — IRAS and the Commissioner of Charities
+  sgCharitiesTax: 'https://www.iras.gov.sg/taxes/other-taxes/charities/charities-ipcs-taxes',
+  sgDonations: 'https://www.iras.gov.sg/taxes/other-taxes/charities/donations-tax-deductions',
+  sgClubs: 'https://www.iras.gov.sg/taxes/other-taxes/bodiesofpersons/overview_bodiesofpersons',
+  sgGstRegistration: 'https://www.iras.gov.sg/taxes/goods-services-tax-(gst)/gst-registration-deregistration/do-i-need-to-register-for-gst',
+  sgCocAnnualSubmissions: 'https://www.charities.gov.sg/Pages/Charities-and-IPCs/Manage-Your-Charity/Annual-Submissions.aspx',
+  sgCocLargeCharities: 'https://www.charities.gov.sg/Pages/Charities-and-IPCs/Manage-Your-Charity/Additional-Requirements-for-Large-Charities-IPCs.aspx',
 } as const;
 
 const U = ORG_URLS;
 
 /** The countries with their own organisation rules. */
-export type OrgCountry = 'GB' | 'AU' | 'IN' | 'US' | 'CA' | 'NZ' | 'IE';
+export type OrgCountry = 'GB' | 'AU' | 'IN' | 'US' | 'CA' | 'NZ' | 'IE' | 'SG';
 
 /** The currencies their figures are in (ISO 4217). */
-export type OrgCurrency = 'GBP' | 'AUD' | 'INR' | 'USD' | 'CAD' | 'NZD' | 'EUR';
+export type OrgCurrency = 'GBP' | 'AUD' | 'INR' | 'USD' | 'CAD' | 'NZD' | 'EUR' | 'SGD';
 
 export interface OrgSource {
   /** The key in ORG_RULE_SOURCES. */
@@ -250,7 +262,9 @@ export interface OrgSource {
     | 'Inland Revenue (NZ)'
     | 'Charities Services (NZ)'
     | 'Companies Office (NZ)'
-    | 'Revenue (Ireland)';
+    | 'Revenue (Ireland)'
+    | 'IRAS'
+    | 'Commissioner of Charities (SG)';
   sourceUrl: string;
   /** The page's own "last updated" date (YYYY-MM-DD), or null where it shows none. */
   pageLastUpdated: string | null;
@@ -1113,6 +1127,71 @@ const IE_SOURCES = {
   ),
 } satisfies Record<string, SourceRow>;
 
+const sg = (authority: OrgSource['authority'], sourceUrl: string, pageLastUpdated: string | null, claim: string): SourceRow => ({
+  country: 'SG',
+  claim,
+  authority,
+  sourceUrl,
+  pageLastUpdated,
+  readOn: R,
+  reviewBy: SG_REVIEW_BY,
+});
+const COC = 'Commissioner of Charities (SG)';
+
+const SG_SOURCES = {
+  sgCharityExempt: sg(
+    'IRAS',
+    U.sgCharitiesTax,
+    '2024-04-16',
+    '"registered charities enjoy automatic income tax exemption under section 13(1)(zm) of the Income Tax Act" from YA 2008 and are ' +
+      'not required to file income tax returns. "An IPC is an organisation approved by the Commissioner of Charities to receive tax ' +
+      'deductible donations."',
+  ),
+  sgDonations: sg(
+    'IRAS',
+    U.sgDonations,
+    '2026-04-14',
+    'Donors get "up to 2.5 times the qualifying donation amount" for donations to Community Chest or an approved IPC; donations to a ' +
+      'charity without IPC status are not tax deductible. Deductions are allowed "based on the information from the IPC"; corporate ' +
+      'donors give the IPC their name and tax reference number; "IRAS does not accept claims for tax deduction based on donation ' +
+      'receipts."',
+  ),
+  sgClubs: sg(
+    'IRAS',
+    U.sgClubs,
+    '2026-01-22',
+    'A club is not deemed to carry on a business "Where 50% or more of the gross receipts on revenue accounts are from members" ' +
+      '(section 11(1)); it is then taxed only on income from "other sources derived from dealings with non-members such as interest, ' +
+      'rent and dividends". Under 50% it is "deemed to be carrying on a business" and also taxed on its operating surplus. Rate 17%; ' +
+      'Form P1 by 15 April of the year after the accounting year.',
+  ),
+  sgGstRegistration: sg(
+    'IRAS',
+    U.sgGstRegistration,
+    '2026-09-15',
+    'Compulsory GST registration if taxable turnover for the calendar year exceeded $1 million (apply by 30 January; registered from ' +
+      '1 March), or is "expected to be more than $1 million in the next 12 months" (apply within 30 days of the forecast).',
+  ),
+  sgAnnualSubmissions: sg(
+    COC,
+    U.sgCocAnnualSubmissions,
+    null,
+    'A charity submits its Annual Report (including Financial Statements) and Governance Evaluation Checklist "within 6 months from the ' +
+      'end of each financial year". Gross income or total expenditure of $250,000 or less: examination by an independent person; ' +
+      'between $250,000 and $500,000: by an ISCA member or someone qualified to be one; above $500,000, and all IPCs: "audited by a ' +
+      'public accountant". Audited statements use FRS or the Charities Accounting Standard; a company limited by guarantee follows the ' +
+      'Companies Act audit rules.',
+  ),
+  sgLargeCharities: sg(
+    COC,
+    U.sgCocLargeCharities,
+    null,
+    'A large charity or IPC has "gross annual receipts of not less than $10 million in each of the last 2 financial years"; it needs at ' +
+      'least 10 governing board members and auditors approved by the COC or its Sector Administrator, changed at least once every 5 ' +
+      'years — the last two also apply to all IPCs.',
+  ),
+} satisfies Record<string, SourceRow>;
+
 export type GbOrgSourceKey = keyof typeof GB_SOURCES;
 export type AuOrgSourceKey = keyof typeof AU_SOURCES;
 export type InOrgSourceKey = keyof typeof IN_SOURCES;
@@ -1120,13 +1199,22 @@ export type UsOrgSourceKey = keyof typeof US_SOURCES;
 export type CaOrgSourceKey = keyof typeof CA_SOURCES;
 export type NzOrgSourceKey = keyof typeof NZ_SOURCES;
 export type IeOrgSourceKey = keyof typeof IE_SOURCES;
-export type OrgSourceKey = GbOrgSourceKey | AuOrgSourceKey | InOrgSourceKey | UsOrgSourceKey | CaOrgSourceKey | NzOrgSourceKey | IeOrgSourceKey;
+export type SgOrgSourceKey = keyof typeof SG_SOURCES;
+export type OrgSourceKey =
+  | GbOrgSourceKey
+  | AuOrgSourceKey
+  | InOrgSourceKey
+  | UsOrgSourceKey
+  | CaOrgSourceKey
+  | NzOrgSourceKey
+  | IeOrgSourceKey
+  | SgOrgSourceKey;
 
 const withIds = <K extends string>(rows: Record<K, SourceRow>): Record<K, OrgSource> =>
   Object.fromEntries(Object.entries<SourceRow>(rows).map(([id, r]) => [id, { id, ...r }])) as Record<K, OrgSource>;
 
 /** Every rule source, by key. Keys do not overlap between countries. */
-export const ORG_RULE_SOURCES: Record<OrgSourceKey, OrgSource> = { ...withIds(GB_SOURCES), ...withIds(AU_SOURCES), ...withIds(IN_SOURCES), ...withIds(US_SOURCES), ...withIds(CA_SOURCES), ...withIds(NZ_SOURCES), ...withIds(IE_SOURCES) };
+export const ORG_RULE_SOURCES: Record<OrgSourceKey, OrgSource> = { ...withIds(GB_SOURCES), ...withIds(AU_SOURCES), ...withIds(IN_SOURCES), ...withIds(US_SOURCES), ...withIds(CA_SOURCES), ...withIds(NZ_SOURCES), ...withIds(IE_SOURCES), ...withIds(SG_SOURCES) };
 
 // ─── Figures ────────────────────────────────────────────────────────────────
 
@@ -1168,6 +1256,8 @@ const CA_ALL = ['CA_REGISTERED_CHARITY', 'CA_NPO', 'CA_RCAAA'];
 const NZ_ALL = ['NZ_REGISTERED_CHARITY', 'NZ_INCORPORATED_SOCIETY', 'NZ_CLUB'];
 const NZ_TAXABLE_NFPS = ['NZ_INCORPORATED_SOCIETY', 'NZ_CLUB'];
 const IE_ALL = ['IE_REGISTERED_CHARITY', 'IE_SPORTS_BODY', 'IE_CLUB'];
+const SG_CHARITIES = ['SG_REGISTERED_CHARITY', 'SG_IPC'];
+const SG_ALL = [...SG_CHARITIES, 'SG_CLUB'];
 
 const CC = 'Charity Commission (England and Wales)';
 const NEW = GB_CC_THRESHOLDS_FROM_YEAR_END;
@@ -1347,4 +1437,13 @@ export const ORG_FIGURES: readonly OrgFigure[] = [
   fig({ id: 'IE.revenue.auditedAccountsIncomeOver', country: 'IE', label: 'Audited accounts required to keep the exemption: annual income over', value: 250000, taxYear: 'current', currency: 'EUR', test: 'over', regulator: 'Revenue (Ireland)', appliesTo: ['IE_REGISTERED_CHARITY', 'IE_SPORTS_BODY'], yearsEndingFrom: null, yearsEndingBefore: null, source: 'ieCharityConditions', note: 'A charity or exempt sports body with annual income over €250,000 keeps audited accounts (a condition of its Revenue exemption).' }),
   fig({ id: 'IE.revenue.vatServicesOver', country: 'IE', label: 'VAT registration, supplying services only: turnover in a calendar year over', value: 42500, taxYear: 'from 1 January 2025', currency: 'EUR', test: 'over', regulator: 'Revenue (Ireland)', appliesTo: IE_ALL, yearsEndingFrom: null, yearsEndingBefore: null, source: 'ieVatThresholds', note: 'Obligatory above €42,500 for services (€85,000 for goods); voluntary below.' }),
   fig({ id: 'IE.revenue.vatGoodsOver', country: 'IE', label: 'VAT registration, supplying goods: turnover in a calendar year over', value: 85000, taxYear: 'from 1 January 2025', currency: 'EUR', test: 'over', regulator: 'Revenue (Ireland)', appliesTo: IE_ALL, yearsEndingFrom: null, yearsEndingBefore: null, source: 'ieVatThresholds', note: 'Also for goods and services where 90% or more of turnover is from goods.' }),
+  // ─── SG — Commissioner of Charities and IRAS ───
+  fig({ id: 'SG.coc.annualSubmissionDueMonths', country: 'SG', label: 'Charity annual report and financial statements due within (months after the financial year end)', value: 6, taxYear: 'current', currency: null, test: 'or_less', regulator: COC, appliesTo: SG_CHARITIES, yearsEndingFrom: null, yearsEndingBefore: null, source: 'sgAnnualSubmissions', note: 'Annual Report (with financial statements) and Governance Evaluation Checklist through the Charity Portal within 6 months.' }),
+  fig({ id: 'SG.coc.anyIndependentExaminerUpTo', country: 'SG', label: 'Charity accounts examined by any competent independent person: gross income or total expenditure up to', value: 250000, taxYear: 'current', currency: 'SGD', test: 'or_less', regulator: COC, appliesTo: ['SG_REGISTERED_CHARITY'], yearsEndingFrom: null, yearsEndingBefore: null, source: 'sgAnnualSubmissions', note: 'Gross income or total expenditure of $250,000 or less: an independent examiner; up to $500,000 the examiner must be an ISCA member or qualified to be one. Not for an IPC.' }),
+  fig({ id: 'SG.coc.auditOver', country: 'SG', label: 'Charity accounts audited by a public accountant: gross income or total expenditure over', value: 500000, taxYear: 'current', currency: 'SGD', test: 'over', regulator: COC, appliesTo: ['SG_REGISTERED_CHARITY'], yearsEndingFrom: null, yearsEndingBefore: null, source: 'sgAnnualSubmissions', note: 'Above $500,000 a public accountant audits the accounts; every IPC is audited whatever its size.' }),
+  fig({ id: 'SG.coc.largeCharityReceiptsAtLeast', country: 'SG', label: 'Large charity or IPC: gross annual receipts in each of the last 2 financial years of at least', value: 10000000, taxYear: 'current', currency: 'SGD', test: 'at_least', regulator: COC, appliesTo: SG_CHARITIES, yearsEndingFrom: null, yearsEndingBefore: null, source: 'sgLargeCharities', note: 'At least 10 governing board members, COC-approved auditors and auditor rotation every 5 years.' }),
+  fig({ id: 'SG.iras.ipcDonationDeductionMultiple', country: 'SG', label: 'Donor tax deduction for a qualifying donation to an IPC: times the donation', value: 2.5, taxYear: 'current', currency: null, test: 'is', regulator: 'IRAS', appliesTo: ['SG_IPC'], yearsEndingFrom: null, yearsEndingBefore: null, source: 'sgDonations', note: 'Information only: donors deduct up to 2.5 times a qualifying donation, from the information the IPC gives IRAS.' }),
+  fig({ id: 'SG.iras.clubMemberReceiptsShareAtLeast', country: 'SG', label: 'Club not deemed to carry on a business: share of gross revenue receipts from members of at least', value: 0.5, taxYear: 'current', currency: null, test: 'at_least', regulator: 'IRAS', appliesTo: ['SG_CLUB'], yearsEndingFrom: null, yearsEndingBefore: null, source: 'sgClubs', note: '50% or more from members: taxed only on non-member income such as interest, rent and dividends; under 50%, on the operating surplus too.' }),
+  fig({ id: 'SG.iras.clubTaxRate', country: 'SG', label: 'Income tax rate for clubs and associations', value: 0.17, taxYear: 'from YA 2020', currency: null, test: 'is', regulator: 'IRAS', appliesTo: ['SG_CLUB'], yearsEndingFrom: null, yearsEndingBefore: null, source: 'sgClubs', note: 'The prevailing corporate rate, 17%; Form P1 by 15 April.' }),
+  fig({ id: 'SG.iras.gstRegistrationOver', country: 'SG', label: 'GST registration: taxable turnover in a calendar year (or expected in the next 12 months) over', value: 1000000, taxYear: 'current', currency: 'SGD', test: 'over', regulator: 'IRAS', appliesTo: SG_ALL, yearsEndingFrom: null, yearsEndingBefore: null, source: 'sgGstRegistration', note: 'Over $1 million in a calendar year (apply by 30 January) or expected over $1 million in the next 12 months (apply within 30 days).' }),
 ];

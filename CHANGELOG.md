@@ -121,6 +121,10 @@ These four countries left out a published employee deduction "because it was not
   - types `IE_REGISTERED_CHARITY` and `IE_SPORTS_BODY` (`exempt_if_conditions`: Revenue's charitable and section 235 sports exemptions, audited accounts over €250,000 income) and `IE_CLUB` (`mutuality`: members' club surplus not taxed, non-member surplus taxed);
   - the Charitable Donation Scheme as the new `donationRelief.scheme` `'charitable_donation_scheme'`: the charity claims the donor's tax back (€250 minimum, 31% specified rate, donor certificate, four years) — a claim like Gift Aid's, so not `'donor_deduction'`, but not Gift Aid either;
   - `'vat'` with the €42,500 services / €85,000 goods thresholds. The Charities Regulator's own filing rules are not modelled: its site could not be read. IE rows are due for review on 31 January 2027.
+- Singapore (SG), from IRAS and the Commissioner of Charities:
+  - types `SG_REGISTERED_CHARITY` and `SG_IPC` (`exempt`: automatic under section 13(1)(zm), no income tax return) and `SG_CLUB` (`mutuality`: 50% or more of revenue receipts from members, else the operating surplus is taxed; 17%, Form P1);
+  - annual submission within 6 months, examination up to $250,000 / $500,000 and audit above $500,000 (every IPC audited), the $10 million large-charity rules;
+  - IPC donations (up to 2.5 times) as `'donor_deduction'`, information only; `'gst'` with the $1 million threshold. SG rows are due for review on 31 March 2027.
 
 ### Added — GST/VAT for every country, US states and Canadian provinces (rate ledger)
 
