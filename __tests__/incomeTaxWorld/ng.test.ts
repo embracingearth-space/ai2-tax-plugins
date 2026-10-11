@@ -77,6 +77,7 @@ describe('Nigeria — the audit case and the quantified alternatives', () => {
 
   it('N2,000,000: 156,000 with the pension (172,500 before, with NHF and no pension)', () => {
     expect(r(2000000, '2026').incomeTax).toBe(156000);
+    expect(tax2026(2000000, [{ kind: 'share', name: 'National Housing Fund (2.5%)', rate: 0.025 }])).toBe(172500);
   });
 
   const a = r(2000000, '2026').assumptions!.join(' ');

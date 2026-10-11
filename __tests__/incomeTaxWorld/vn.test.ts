@@ -10,6 +10,8 @@
  *       UI ceiling 12 × 99.2m = 1,190.4m. Bands 5/10/15/20/25/30/35% to 60m/120m/216m/384m/624m/960m.
  */
 import { calcIncomeTax } from '../../src';
+import { VN_INCOME_TAX } from '../../src/data/incomeTaxWorld/vn';
+import { applyDeductions } from '../../src/data/incomeTaxFactory';
 
 const r = (g: number, y: string) => calcIncomeTax('VN', g, y)!;
 
@@ -59,8 +61,22 @@ describe('Vietnam — the audit case and the assumptions', () => {
     expect(a).toMatch(/social insurance 8% and health insurance 1\.5%/);
     expect(a).toMatch(/46\.8m a month \(50\.6m from July 2026\)/);
     expect(a).toMatch(/Region I/);
-    expect(a).toMatch(/only above VND 828m a year/);
+    expect(a).toMatch(/only above VND 828m a year in 2025 and 888m in 2026/);
   });
+
+  it('the Region IV thresholds it quotes are where a Region IV ceiling starts to change the deduction', () => {
+    // Region IV unemployment-insurance ceiling: 20 × 3.45m (2025) and 20 × 3.70m (2026), per month.
+    const regionIV: Record<string, number> = { '2025': 12 * 69000000, '2026': 12 * 74000000 };
+    for (const [label, ceiling] of Object.entries(regionIV)) {
+      const year = VN_INCOME_TAX.years.find((y) => y.taxYear === label)!;
+      const asRegionIV = { ...year, deductions: year.deductions!.map((d) => (d.kind === 'share' && d.name.startsWith('Unemployment') ? { ...d, ceiling } : d)) };
+      const q = { round: Math.round, floor: Math.floor };
+      expect(ceiling).toBe(label === '2025' ? 828000000 : 888000000);
+      expect(applyDeductions(asRegionIV, ceiling, q)).toBe(applyDeductions(year, ceiling, q)); // same up to the threshold
+      expect(applyDeductions(asRegionIV, ceiling + 100000000, q)).toBeLessThan(applyDeductions(year, ceiling + 100000000, q)); // lower above it
+    }
+  });
+
   it('carries no unquantified hedge', () => {
     expect(a).not.toMatch(/slightly|may be overstated/);
   });
