@@ -187,9 +187,12 @@ function computeReturn(v: FieldValues) {
   // earned from the home; otherwise the true limit is lower (Schedule C
   // instructions, Simplified Method Worksheet line 1).
   const homeOfficeLimit = Math.max(0, gross_income - total_expenses);
-  const homeOfficeSqft = Math.min(Number(v.home_office_sqft) || 0, 300);
+  // Clamped to 0–300 sq ft: a negative area must not create income.
+  const homeOfficeSqft = Math.min(Math.max(0, Number(v.home_office_sqft) || 0), 300);
   const home_office_calc = Math.min(homeOfficeSqft * 5, homeOfficeLimit);
-  const homeOfficeOverridden = !isBlank(v.home_office_deduction);
+  // An override must be a usable number; '1,500' or '-' is treated as blank
+  // rather than turning every figure on the return into NaN.
+  const homeOfficeOverridden = !isBlank(v.home_office_deduction) && Number.isFinite(Number(v.home_office_deduction));
   const home_office_deduction = homeOfficeOverridden ? Number(v.home_office_deduction) : home_office_calc;
 
   const net_profit_loss = gross_income - total_expenses - home_office_deduction;

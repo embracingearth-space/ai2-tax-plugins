@@ -123,20 +123,24 @@ describe('17 — Medicare levy low-income reduction, and LITO does not reduce th
 describe('18 — excess franking credits are refunded, not clamped away', () => {
   it('$7,000 franked amount + $3,000 credits only: a $3,000 refund', () => {
     // taxable: 7,000 + 3,000 = 10,000 → income tax nil, Medicare nil (≤ $28,011)
-    // total: 0 + 0 − 3,000 = −3,000; balance due −3,000 (a refund)
+    // liability 0; total_tax stays nil and the 3,000 is a franking_credit_refund;
+    // balance due −3,000 (a refund)
     // old: max(0, 0 + 200 − 700 − 3,000) = 0 → the $3,000 refund was lost
     const r = calc({ income_year: '2025-26', franked_dividends: 7000, franking_credits: 3000 });
     expect(num(r, 'taxable_income')).toBe(10000);
-    expect(num(r, 'total_tax')).toBe(-3000);
+    expect(num(r, 'total_tax')).toBe(0);
+    expect(num(r, 'franking_credit_refund')).toBe(3000);
     expect(num(r, 'balance_due')).toBe(-3000);
   });
 
   it('non-refundable LITO stops at nil; the franking credit is still refunded in full', () => {
     // salary 10,000 + 7,000 + 3,000 = 20,000; income tax 1,800 × 16% = 288
     // LITO 700 → tax nil (412 unused, lost); Medicare nil; franking 3,000 refunded
-    // total: 0 + 0 − 3,000 = −3,000   (old: max(0, 288 + 400 − 700 − 3,000) = 0)
+    // refund 3,000   (old: max(0, 288 + 400 − 700 − 3,000) = 0 — refund lost)
     const r = calc({ income_year: '2025-26', salary_wages: 10000, franked_dividends: 7000, franking_credits: 3000 });
-    expect(num(r, 'total_tax')).toBe(-3000);
+    expect(num(r, 'total_tax')).toBe(0);
+    expect(num(r, 'franking_credit_refund')).toBe(3000);
+    expect(num(r, 'balance_due')).toBe(-3000);
   });
 
   it('withholding on top of an excess credit adds to the refund', () => {
