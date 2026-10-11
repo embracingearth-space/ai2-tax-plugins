@@ -24,6 +24,15 @@ These five countries taxed the employee on income their law lets them deduct, so
 - CN, VN and NG now apply employee-only contributions, so their `incomeBasis.default` is `'employment'` (was `'any'`); CN and VN refuse `incomeType: 'self-employed'` as before. NG now models self-employed profit (`selfEmployed: 'modelled'`): the pension is voluntary for the self-employed, so it is dropped, and the compulsory 2.5% NHF contribution is deducted instead. That gives the same figure the self-employed path returned before this change.
 - Each country's tests assert that its assumptions carry no unquantified hedge, and recompute every "what if" figure the text quotes.
 
+### Fixed — DE, BE, LU and EE deduct the employee deductions their law allows
+
+These four countries left out a published employee deduction "because it was not confirmed on an official page", so `calcIncomeTax` overstated the tax: DE by 49% at €50,000 (10,106; now 6,788), BE by 28% (12,781; now 9,956), LU by 21% at €60,000 (9,998; now 8,242) and EE by about 4–5%. Each figure below was read on 11 October 2026 on an official page cited in the country file.
+
+- **DE**: the Lohnsteuer Vorsorgepauschale (§39b(2) Satz 5 Nr. 3 EStG), computed step by step as the BMF Programmablaufplan 2025 and 2026 do. It covers pension 9.3% up to the pension ceiling, plus health (7% + half the average additional rate, 2.9% in 2026 and 2.5% in 2025) and care (2.4%, childless) up to the health ceiling. Each part is cut down to cents and the total rounded up to whole euros. In 2026 unemployment insurance (1.3%) counts only inside the 1,900 Höchstbetrag; in 2025 the Mindestvorsorgepauschale (12%, at most 1,900) applies where larger. Each year now cites that year's PAP.
+- **BE**: the flat-rate professional-expenses deduction (art. 51 CIR 92): 30% of pay after the 13.07% ONSS, capped at 6,070 for income year 2026 and 5,930 for 2025. The tax-free amount for income year 2026 (AY 2027) is now **11,550**, not 11,180: the law of 15 July 2026 raised its base, and the SPF explainer page still shows the old figure. Both years cite the SPF Finances indexation notice.
+- **LU**: the 2026 employee pension contribution of 8.50% (CCSS notice of 16 January 2026), up to the maximum contributory base. The dependency-insurance contribution (1.40%) is **no longer deducted**: it is not tax-deductible (ACD, guichet.lu), so 2025 tax **rises** by 0.5–10.5%. The fonds pour l'emploi now charges 9% only on the slice of tax above taxable income of 150,000 (0.09 × tax − 931.80, the Recueil des barèmes formula), not on the whole tax, so there is no ~930 cliff at the threshold.
+- **EE**: the 1.6% unemployment-insurance premium and the default 2% II-pillar contribution are deducted before tax (Income Tax Act § 28¹), as EMTA's own payroll examples do. The 2025 exemption taper is fed gross income. EE now applies a wage-only contribution, so its `incomeBasis.default` is `'employment'` (was `'any'`).
+
 ### Added — organisations: clubs, PTAs and charities (GB, AU, generic)
 
 - `orgTypesFor(country)` returns the org types for a country, each with `registeredWith` and `group: 'organisation'`:
