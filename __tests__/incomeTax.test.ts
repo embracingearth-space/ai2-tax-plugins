@@ -548,7 +548,9 @@ describe('Canada — the take-home scheme and the CA-IT plugin quote the same fe
   });
 
   it.each([30000, 100000, 200000, 300000])('$%i of employment income (2026)', (income) => {
-    const plugin = Number(canadaIncomeTaxPlugin.calculateFields({ employment_income: income }).federal_tax);
+    // The scheme leaves CPP/EI out by design; zeroing the T4 contribution
+    // overrides keeps this a comparison of the federal brackets and the BPA.
+    const plugin = Number(canadaIncomeTaxPlugin.calculateFields({ employment_income: income, cpp_employee: 0, cpp2_employee: 0 }).federal_tax);
     const scheme = calcIncomeTax('CA', income, '2026')!.totalTax;
     // The plugin works in cents, the scheme in whole dollars.
     expect(Math.abs(plugin - scheme)).toBeLessThanOrEqual(1);
@@ -557,7 +559,7 @@ describe('Canada — the take-home scheme and the CA-IT plugin quote the same fe
   it('the plugin applies the BPA reduction too (it used to credit the full amount at every income)', () => {
     // $300,000: 8,193.22 + 11,997.01 + 16,742.70 + 22,342.18 + 13,700.94 = 72,976.05,
     // less 14,829 × 14% = 2,076.06 → 70,899.99.
-    expect(Number(canadaIncomeTaxPlugin.calculateFields({ employment_income: 300000 }).federal_tax)).toBeCloseTo(70899.99, 2);
+    expect(Number(canadaIncomeTaxPlugin.calculateFields({ employment_income: 300000, cpp_employee: 0, cpp2_employee: 0 }).federal_tax)).toBeCloseTo(70899.99, 2);
   });
 
   it('warns above the 2026 RRSP dollar limit ($33,810), not the 2024 figure it used to quote', () => {

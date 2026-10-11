@@ -4,9 +4,11 @@
  * Reference: https://www.ato.gov.au/individuals-and-families/your-tax-return
  * ARCHITECTURE: Compound-key plugin 'AU-IT' alongside 'AU' (BAS).
  *   Brackets: 0% ($0-$18,200), then $18,201-$45,000 / 30% ($45,001-$135,000) /
- *   37% ($135,001-$190,000) / 45% ($190,001+). Medicare levy: 2%.
+ *   37% ($135,001-$190,000) / 45% ($190,001+). Medicare levy: 2%, reduced for
+ *   low incomes in the years whose thresholds are recorded below.
  *   First-bracket rate is FY-dependent (legislated cuts): 16% to FY2025-26,
  *   15% from FY2026-27 (1 Jul 2026), 14% from FY2027-28 (1 Jul 2027).
+ *   The year is the return's (`income_year`), not today's, when it is given.
  *   FY: Jul 1 - Jun 30. Annual filing by Oct 31 (self) or May (via agent).
  */
 
@@ -23,6 +25,7 @@ import {
   centsPerKmRate,
   workFromHomeFixedRate,
   type AuDeductionRate,
+  type AuIncomeYear,
   type AuIncomeYearInput,
 } from './australiaDeductions';
 
@@ -51,6 +54,116 @@ export function calcAuTax(taxable: number, fyStartYear = currentFyStartYear()): 
   if (taxable > 135000) tax += Math.min(taxable - 135000, 190000 - 135000) * 0.37;
   if (taxable > 190000) tax += (taxable - 190000) * 0.45;
   return Math.round(tax);
+}
+
+// ─── The return's income year ───────────────────────────────────────────────
+//
+// getFormSchema() is told the return's year, but calculateFields() only sees
+// field values, so the year travels as the `income_year` field. Without it the
+// form fell back to today's year: a 2025-26 return done after 1 July 2026 got
+// the 15% first bracket instead of 16%. Blank still means today's year. An
+// unreadable value also falls back, so the form still calculates, and
+// validateForm reports it as an error.
+
+/** The first year this return models: the brackets above start in 2024-25. */
+const AU_IT_FIRST_MODELLED_YEAR = 2024;
+
+function returnIncomeYear(v: FieldValues): { year: AuIncomeYear; unreadable?: string } {
+  const raw = v.income_year;
+  const today = auIncomeYear(new Date());
+  if (raw === undefined || raw === null || raw === '') return { year: today };
+  try {
+    return { year: auIncomeYear(String(raw)) };
+  } catch {
+    return { year: today, unreadable: String(raw) };
+  }
+}
+
+// Grouped by hand, not toLocaleString: the output must not depend on the host's ICU build.
+const grouped = (n: number) => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+
+// ─── Offsets and the Medicare levy ──────────────────────────────────────────
+//
+// Twin of the AU scheme in src/data/incomeTax.ts (the world take-home engine):
+// same LITO schedule, same year-keyed Medicare low-income table. That file is a
+// separate estimator and is deliberately not imported here; change both.
+//
+// ONE DIFFERENCE, ON PURPOSE: the world engine lets LITO spill over onto the
+// Medicare levy. The ATO says otherwise (myTax 2026 Tax estimate, read via
+// search 2026-10-11): non-refundable offsets such as LITO reduce only the tax on
+// taxable income, and "Any excess offset is not refundable and not offset
+// against other liabilities" (the foreign income tax offset is the exception).
+// So LITO and the small business offset reduce income tax to nil and stop; the
+// levy is added after. Franking credits are refundable — the ATO refunds what
+// is left once tax and the Medicare levy are met — so they come off last and
+// can take the total below nil.
+
+/**
+ * LITO (ATO low income tax offset page): $700 up to $37,500; less 5c per $1 to
+ * $45,000 (→ $325); less 1.5c per $1 to $66,667 (→ $0). Not indexed.
+ */
+function auLowIncomeTaxOffset(taxable: number): number {
+  let lito = 0;
+  if (taxable <= 37500) lito = 700;
+  else if (taxable <= 45000) lito = Math.round(700 - (taxable - 37500) * 0.05);
+  else if (taxable <= 66667) lito = Math.round(325 - (taxable - 45000) * 0.015);
+  return Math.max(0, lito);
+}
+
+/**
+ * Medicare levy low-income thresholds (single, not entitled to SAPTO), keyed by
+ * income year. Medicare Levy Act 1986 s 7: nil up to the lower threshold, then
+ * the levy "shall not exceed 10% of the amount of the excess" until the full 2%
+ * takes over at the upper threshold. Indexed annually, so a year with no entry
+ * keeps the flat 2% — borrowing another year's thresholds would invent a figure.
+ * 2025-26 and 2026-27 are the world engine's rows (2026-27 carried forward per
+ * the Act until amended). 2024-25 ($27,222 / $34,027) is from the ATO's M1
+ * Medicare levy reduction or exemption 2025 instructions, read 2026-10-11; the
+ * world engine's table does not have it yet. Family and SAPTO thresholds are
+ * not modelled.
+ */
+const AU_IT_MEDICARE_LOW_INCOME: Record<string, { lower: number; upper: number }> = {
+  '2026-27': { lower: 28011, upper: 35013 },
+  '2025-26': { lower: 28011, upper: 35013 },
+  '2024-25': { lower: 27222, upper: 34027 },
+};
+
+function auMedicareLevy(taxable: number, incomeYearLabel: string): number {
+  const full = taxable * 0.02;
+  const band = AU_IT_MEDICARE_LOW_INCOME[incomeYearLabel];
+  if (!band) return Math.round(full);
+  if (taxable <= band.lower) return 0;
+  // Capped at the ordinary 2%: the ATO rounds the thresholds independently, so
+  // the two lines cross a few cents before the upper threshold.
+  return Math.round(Math.min(full, (taxable - band.lower) * 0.10));
+}
+
+function auMedicareHelpText(incomeYearLabel: string): string {
+  const band = AU_IT_MEDICARE_LOW_INCOME[incomeYearLabel];
+  if (!band) {
+    return (
+      `2% of taxable income. The low-income thresholds for ${incomeYearLabel} are not recorded here, so the flat 2% ` +
+      `is used — on a low income the ATO may charge less. Offsets such as LITO do not reduce it.`
+    );
+  }
+  return (
+    `2% of taxable income. For ${incomeYearLabel} it is nil up to $${grouped(band.lower)}, then 10c per $1 above ` +
+    `that until the full 2% applies (by $${grouped(band.upper)}). Single thresholds without the seniors and ` +
+    `pensioners offset; family thresholds are not applied. Offsets such as LITO do not reduce it.`
+  );
+}
+
+/**
+ * Small business income tax offset (ATO SBITO page): 16% of the income tax on
+ * net small business income, capped at $1,000, for aggregated turnover under
+ * $5 million. The share of tax is basic income tax liability × net small
+ * business income ÷ taxable income, and is the whole liability when that
+ * income is at least the taxable income. A business loss counts as nil.
+ */
+function auSmallBusinessOffset(incomeTax: number, netSmallBusinessIncome: number, taxable: number): number {
+  if (!(netSmallBusinessIncome > 0) || !(taxable > 0) || !(incomeTax > 0)) return 0;
+  const share = Math.min(1, netSmallBusinessIncome / taxable);
+  return Math.round(Math.min(1000, incomeTax * share * 0.16));
 }
 
 // ─── Year-specific help text ────────────────────────────────────────────────
@@ -88,9 +201,7 @@ export function auWorkFromHomeHelpText(incomeYear: AuIncomeYearInput): string {
 /** The car-expenses help text for an income year, built from AU_CENTS_PER_KM_ROWS. */
 export function auCarExpensesHelpText(incomeYear: AuIncomeYearInput): string {
   const r = centsPerKmRate(incomeYear);
-  // Grouped by hand, not toLocaleString: the output must not depend on the host's ICU build.
-  const km = String(AU_CENTS_PER_KM_MAX_BUSINESS_KM).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-  const cap = `max ${km} business km per car`;
+  const cap = `max ${grouped(AU_CENTS_PER_KM_MAX_BUSINESS_KM)} business km per car`;
   if (r.verified && r.rate !== null) {
     return `Cents per km (${Math.round(r.rate * 100)}c/km ${r.incomeYear}, ${cap}) or logbook`;
   }
@@ -178,18 +289,32 @@ const auItPlugin: TaxFilingPlugin = {
    * Omitted, it is the income year of today — the same default calcAuTax uses.
    */
   getFormSchema(opts?: { incomeYear?: string | Date }): FormSection[] {
-    const year = auIncomeYear(opts?.incomeYear ?? new Date()).label;
+    const schemaYear = auIncomeYear(opts?.incomeYear ?? new Date());
+    const year = schemaYear.label;
+    const today = auIncomeYear(new Date());
+    const lastOption = Math.max(2027, schemaYear.startYear, today.startYear);
+    const yearOptions: { value: string; label: string }[] = [];
+    for (let y = AU_IT_FIRST_MODELLED_YEAR; y <= lastOption; y++) {
+      const label = auIncomeYear(`${y}-07-01`).label;
+      yearOptions.push({ value: label, label });
+    }
     return [
       {
         id: 'income',
         title: 'Income',
         fields: [
+          { id: 'income_year', label: 'Income year', type: 'select', editable: true, required: false, selectOptions: yearOptions, helpText: `The income year this return is for. It sets the tax rates, LITO and Medicare levy thresholds. Left blank, the current income year (${today.label}) is used.` },
           { id: 'salary_wages', label: 'Salary and wages', type: 'currency', editable: true, required: false, helpText: 'As per payment summary / income statement from employer' },
           { id: 'business_income', label: 'Business income (sole trader)', type: 'currency', editable: true, required: false, autoPopulateFrom: 'income_business', helpText: 'Net profit from your sole trader business' },
+          { id: 'small_business_turnover_under_5m', label: 'Business aggregated turnover under $5 million', type: 'boolean', editable: true, required: false, helpText: 'Needed for the small business income tax offset. Assumed yes when you have business income — untick it if your aggregated turnover is $5 million or more.' },
           { id: 'interest', label: 'Interest income', type: 'currency', editable: true, required: false },
           { id: 'dividends', label: 'Dividends (unfranked)', type: 'currency', editable: true, required: false },
-          { id: 'franked_dividends', label: 'Franked dividends (grossed up)', type: 'currency', editable: true, required: false, helpText: 'Include franking credits as income' },
-          { id: 'franking_credits', label: 'Franking credits', type: 'currency', editable: true, required: false },
+          // ONE convention, matching the myTax labels: the cash "Franked amount"
+          // here, the "Franking credit" in its own field. calculateFields adds
+          // both to income (the gross-up). The old label asked for the grossed-up
+          // figure while the code also added the credit, counting it twice.
+          { id: 'franked_dividends', label: 'Franked dividends (franked amount)', type: 'currency', editable: true, required: false, helpText: 'The franked amount you received (myTax "Franked amount"), NOT grossed up. Enter the franking credit in its own field; it is added to your income for you.' },
+          { id: 'franking_credits', label: 'Franking credits', type: 'currency', editable: true, required: false, helpText: 'The franking credit on those dividends (myTax "Franking credit"). Added to your income, then claimed back as a refundable tax offset.' },
           { id: 'rental_income', label: 'Net rental income', type: 'currency', editable: true, required: false },
           { id: 'capital_gains', label: 'Net capital gains', type: 'currency', editable: true, required: false, helpText: auCapitalGainsHelpText(year) },
           { id: 'other_income', label: 'Other income', type: 'currency', editable: true, required: false },
@@ -221,13 +346,15 @@ const auItPlugin: TaxFilingPlugin = {
         fields: [
           { id: 'taxable_income', label: 'Taxable income', type: 'currency', calculated: true, editable: false, required: true },
           { id: 'income_tax', label: 'Tax on taxable income', type: 'currency', calculated: true, editable: false, required: true },
-          { id: 'medicare_levy', label: 'Medicare levy (2%)', type: 'currency', calculated: true, editable: false, required: true },
+          { id: 'medicare_levy', label: 'Medicare levy', type: 'currency', calculated: true, editable: false, required: true, helpText: auMedicareHelpText(year) },
           { id: 'medicare_surcharge', label: 'Medicare levy surcharge', type: 'currency', editable: true, required: false, helpText: '1-1.5% if no private health insurance and income >$101,000 single (2025-26)' },
-          { id: 'lito', label: 'Low Income Tax Offset (LITO)', type: 'currency', calculated: true, editable: false, required: false, helpText: 'Up to $700 for income ≤$45,000' },
-          { id: 'franking_credit_offset', label: 'Franking credit tax offset', type: 'currency', calculated: true, editable: false, required: false },
+          { id: 'lito', label: 'Low Income Tax Offset (LITO)', type: 'currency', calculated: true, editable: false, required: false, helpText: 'Up to $700: the full amount to $37,500, less 5c per $1 to $45,000 ($325), then 1.5c per $1 until nil at $66,667. Reduces income tax only, never below nil — not the Medicare levy.' },
+          { id: 'small_business_offset', label: 'Small business income tax offset', type: 'currency', calculated: true, editable: false, required: false, helpText: '16% of the income tax on your net small business income (that income ÷ taxable income × tax on taxable income), up to $1,000. Needs aggregated turnover under $5 million. Reduces income tax only, never below nil.' },
+          { id: 'franking_credit_offset', label: 'Franking credit tax offset', type: 'currency', calculated: true, editable: false, required: false, helpText: 'Refundable: whatever is left after your tax and Medicare levy is refunded.' },
           { id: 'has_study_loan', label: 'Has HELP / study or training loan', type: 'boolean', editable: true, required: false, helpText: 'Tick to include the compulsory annual repayment (HELP, VSL, SFSS, SSL, AASL).' },
-          { id: 'study_loan_repayment', label: 'Compulsory study/training loan repayment', type: 'currency', calculated: true, editable: false, required: false, helpText: 'Marginal rates on repayment income above the ATO minimum threshold for the current year. Added to the amount payable, separate from income tax.' },
-          { id: 'total_tax', label: 'Total tax liability', type: 'currency', calculated: true, editable: false, required: true },
+          { id: 'study_loan_repayment', label: 'Compulsory study/training loan repayment', type: 'currency', calculated: true, editable: false, required: false, helpText: 'Marginal rates on repayment income above the ATO minimum threshold for the income year. Added to the amount payable, separate from income tax.' },
+          { id: 'total_tax', label: 'Total tax liability', type: 'currency', calculated: true, editable: false, required: true, helpText: 'Income tax less LITO and the small business offset (not below nil), plus the Medicare levy and surcharge, less franking credits — never below nil. Franking credits beyond that are refunded (see the franking credit refund).' },
+          { id: 'franking_credit_refund', label: 'Franking credit refund', type: 'currency', calculated: true, editable: false, required: false, helpText: 'Franking credits left after your tax and Medicare levy are covered. Refunded, and taken off the balance due.' },
         ],
       },
       {
@@ -267,19 +394,35 @@ const auItPlugin: TaxFilingPlugin = {
       'self_education', 'donations', 'tax_agent_fee', 'income_protection', 'other_deductions'];
     const total_deductions = dedFields.reduce((s, f) => s + (Number(v[f]) || 0), 0);
 
+    // Bands, LITO, Medicare thresholds and the study-loan scheme are all read
+    // against the RETURN's year, never a mix of it and today's.
+    const { year } = returnIncomeYear(v);
     const taxable_income = Math.max(0, total_income - total_deductions);
-    const income_tax = calcAuTax(taxable_income);
-    const medicare_levy = Math.round(taxable_income * 0.02);
+    const income_tax = calcAuTax(taxable_income, year.startYear);
+    const medicare_levy = auMedicareLevy(taxable_income, year.label);
     const medicareSurcharge = Number(v.medicare_surcharge) || 0;
 
-    // LITO: $700 if ≤$45,000, phases out $45,001-$66,667
-    let lito = 0;
-    if (taxable_income <= 45000) lito = 700;
-    else if (taxable_income <= 66667) lito = Math.round(700 - (taxable_income - 45000) * 0.0323);
-    lito = Math.max(0, lito);
+    const lito = auLowIncomeTaxOffset(taxable_income);
 
+    // Small business income tax offset. Net small business income is the net
+    // business profit: the deductions on this form (work-related, donations,
+    // tax agent fees) are not business deductions and do not reduce it. The
+    // turnover test is assumed met unless the box is explicitly unticked.
+    const sbFlag = v.small_business_turnover_under_5m;
+    const sbEligible = sbFlag === undefined || sbFlag === null || sbFlag === '' ? business > 0 : sbFlag === true || sbFlag === 'true';
+    const small_business_offset = sbEligible ? auSmallBusinessOffset(income_tax, business, taxable_income) : 0;
+
+    // Order, as the ATO's myTax estimate applies it: non-refundable offsets
+    // reduce income tax to nil and no further; the Medicare levy and surcharge
+    // are added after (LITO never reduces them); refundable franking credits
+    // come off last — an excess is a refund, not lost. total_tax stays a
+    // liability (never below nil, as consumers read it as tax owed); the
+    // excess is its own franking_credit_refund and comes off balance_due.
+    const tax_after_offsets = Math.max(0, income_tax - lito - small_business_offset);
     const franking_credit_offset = frankingCredits;
-    const total_tax = Math.max(0, income_tax + medicare_levy + medicareSurcharge - lito - franking_credit_offset);
+    const liability = tax_after_offsets + medicare_levy + medicareSurcharge;
+    const total_tax = Math.max(0, liability - franking_credit_offset);
+    const franking_credit_refund = Math.max(0, franking_credit_offset - liability);
 
     // Compulsory study/training loan (HELP) repayment. Repayment income is a
     // BROADER base than taxable income — per the ATO it adds back: reportable
@@ -299,15 +442,18 @@ const auItPlugin: TaxFilingPlugin = {
     const hasStudyLoan = v.has_study_loan === true || v.has_study_loan === 'true';
     const repaymentIncome =
       taxable_income + reportableSuper + reportableFringeBenefits + netInvestmentLoss + exemptForeignIncome;
+    // Resolved as of 1 July of the return's year, so a 2025-26 return gets the
+    // 2025-26 thresholds (a later year with no scheme yet carries the newest).
+    // startYmd parses as UTC midnight, exactly as the ledger's effectiveFrom does.
     const study_loan_repayment = hasStudyLoan
-      ? Math.round(getStudentLoanRepayment('AU', { repaymentIncome })?.repayment ?? 0)
+      ? Math.round(getStudentLoanRepayment('AU', { repaymentIncome, asOf: new Date(year.startYmd) })?.repayment ?? 0)
       : 0;
 
     const withheld = Number(v.tax_withheld) || 0;
     const instalments = Number(v.payg_instalments) || 0;
-    const balance_due = total_tax + study_loan_repayment - withheld - instalments;
+    const balance_due = total_tax + study_loan_repayment - withheld - instalments - franking_credit_refund;
 
-    return { total_income, total_deductions, taxable_income, income_tax, medicare_levy, lito, franking_credit_offset, study_loan_repayment, total_tax, balance_due };
+    return { total_income, total_deductions, taxable_income, income_tax, medicare_levy, lito, small_business_offset, franking_credit_offset, franking_credit_refund, study_loan_repayment, total_tax, balance_due };
   },
 
   getAutoPopulateMapping: (): AggregationMapping[] => [
@@ -320,6 +466,27 @@ const auItPlugin: TaxFilingPlugin = {
     const fc = Number(v.franking_credits) || 0;
     const fd = Number(v.franked_dividends) || 0;
     if (fc > 0 && fd === 0) r.push({ fieldId: 'franked_dividends', message: 'Franking credits entered but no franked dividends — verify', severity: 'warning' });
+
+    const { year, unreadable } = returnIncomeYear(v);
+    if (unreadable !== undefined) {
+      r.push({ fieldId: 'income_year', message: `"${unreadable}" is not an income year (use e.g. 2025-26) — the figures use ${year.label}.`, severity: 'error' });
+    } else if (year.startYear < AU_IT_FIRST_MODELLED_YEAR) {
+      r.push({ fieldId: 'income_year', message: `${year.label} is not modelled: the brackets used are the 2024-25 ones, which are wrong for ${year.label}.`, severity: 'error' });
+    }
+    const calc = auItPlugin.calculateFields(v);
+    const taxable = Number(calc.taxable_income) || 0;
+    if (!AU_IT_MEDICARE_LOW_INCOME[year.label] && Number(calc.medicare_levy) > 0) {
+      const latest = Object.values(AU_IT_MEDICARE_LOW_INCOME).reduce((m, b) => Math.max(m, b.upper), 0);
+      r.push({
+        fieldId: 'medicare_levy',
+        message: `The Medicare levy low-income thresholds for ${year.label} are not recorded here, so the flat 2% was used without the low-income reduction.`,
+        severity: taxable <= latest ? 'warning' : 'info',
+      });
+    }
+    const hasStudyLoan = v.has_study_loan === true || v.has_study_loan === 'true';
+    if (hasStudyLoan && year.startYear < 2025) {
+      r.push({ fieldId: 'study_loan_repayment', message: `Study loan repayments before 2025-26 used a different (whole-of-income) system that is not modelled; the 2025-26 rates were used.`, severity: 'warning' });
+    }
     return r;
   },
   getFieldHelp: () => null,
