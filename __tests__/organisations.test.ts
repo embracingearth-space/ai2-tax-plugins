@@ -113,11 +113,11 @@ describe('orgRulesFor — income tax, relief, reports', () => {
     expect(reports('FR', 'CHARITY')).toEqual(['receipts_payments']);
   });
 
-  it.each(ALL)('%s %s: reports come from the vocabulary; a forecast only where some income is known to be taxed', (c, code) => {
+  it.each(ALL)('%s %s: reports come from the vocabulary; a forecast only where the whole surplus is taxable', (c, code) => {
     const r = rules(c, code);
     for (const rep of r.reports) expect(ORG_REPORTS).toContain(rep);
     expect(r.reports[0]).toBe('receipts_payments');
-    expect(r.incomeTaxForecast).toBe(r.incomeTax.status === 'mutuality' || r.incomeTax.status === 'taxable');
+    expect(r.incomeTaxForecast).toBe(r.incomeTax.status === 'taxable');
     expect(r.incomeTax.note.length).toBeGreaterThan(40);
     expect(r.accounts.note.length).toBeGreaterThan(10);
   });
