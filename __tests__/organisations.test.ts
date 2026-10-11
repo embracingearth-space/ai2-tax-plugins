@@ -44,7 +44,8 @@ const US_EXEMPT_CODES = ['US_501C3', 'US_501C7', 'US_501C4'];
 const US_CODES = [...US_EXEMPT_CODES, 'US_CLUB'];
 const CA_CODES = ['CA_REGISTERED_CHARITY', 'CA_NPO', 'CA_RCAAA'];
 const NZ_CODES = ['NZ_REGISTERED_CHARITY', 'NZ_INCORPORATED_SOCIETY', 'NZ_CLUB'];
-const COUNTRY_CODES: Record<string, string[]> = { GB: GB_CODES, AU: AU_CODES, IN: IN_CODES, US: US_CODES, CA: CA_CODES, NZ: NZ_CODES };
+const IE_CODES = ['IE_REGISTERED_CHARITY', 'IE_SPORTS_BODY', 'IE_CLUB'];
+const COUNTRY_CODES: Record<string, string[]> = { GB: GB_CODES, AU: AU_CODES, IN: IN_CODES, US: US_CODES, CA: CA_CODES, NZ: NZ_CODES, IE: IE_CODES };
 const ALL: Array<[string, string]> = [
   ...Object.entries(COUNTRY_CODES).flatMap(([country, codes]) => codes.map((c): [string, string] => [country, c])),
   ['FR', 'CLUB'],
@@ -331,7 +332,7 @@ describe('orgReportingThresholds', () => {
 });
 
 /** The currency every money figure of a country is in. */
-const CURRENCY: Record<string, string> = { GB: 'GBP', AU: 'AUD', IN: 'INR', US: 'USD', CA: 'CAD', NZ: 'NZD' };
+const CURRENCY: Record<string, string> = { GB: 'GBP', AU: 'AUD', IN: 'INR', US: 'USD', CA: 'CAD', NZ: 'NZD', IE: 'EUR' };
 
 describe('every country: figures in its own currency, sources in its own country', () => {
   it.each(Object.keys(COUNTRY_CODES))('%s', (c) => {
@@ -640,6 +641,69 @@ describe('New Zealand (NZ) — Charities Services, Companies Office, Inland Reve
       expect({ id: s.id, readOn: s.readOn, reviewBy: s.reviewBy }).toEqual({ id: s.id, readOn: '2026-10-11', reviewBy: '2027-03-31' });
     }
     for (const code of NZ_CODES) expect(rules('NZ', code).sources.length).toBeGreaterThan(4);
+  });
+});
+
+describe('Ireland (IE) — Revenue', () => {
+  it('types: registered charity, sports body with Revenue exemption, members\' club', () => {
+    expect(orgTypesFor('IE').map((t) => [t.code, t.kind])).toEqual([
+      ['IE_REGISTERED_CHARITY', 'charity'],
+      ['IE_SPORTS_BODY', 'club'],
+      ['IE_CLUB', 'club'],
+    ]);
+  });
+
+  it('statuses: charity and sports body exempt if conditions; a members\' club on mutuality', () => {
+    expect(rules('IE', 'IE_REGISTERED_CHARITY').incomeTax.status).toBe('exempt_if_conditions');
+    expect(rules('IE', 'IE_SPORTS_BODY').incomeTax.status).toBe('exempt_if_conditions');
+    expect(rules('IE', 'IE_CLUB').incomeTax.status).toBe('mutuality');
+    expect(rules('IE', 'IE_CLUB').incomeTax.note).toContain('non-members is taxable');
+    for (const code of IE_CODES) {
+      expect(rules('IE', code).incomeTaxForecast).toBe(false);
+      expect(rules('IE', code).reports).toEqual(['receipts_payments', 'vat']);
+    }
+  });
+
+  it('the Charitable Donation Scheme: the charity claims, with a certificate, within 4 years; not Gift Aid', () => {
+    const d = rules('IE', 'IE_REGISTERED_CHARITY').donationRelief!;
+    expect(d).toMatchObject({ scheme: 'charitable_donation_scheme', declarationRequired: true, claimWindowYears: 4 });
+    expect(d.ratePerPound).toBeUndefined();
+    expect(d.note).toContain('€449.27');
+    expect(rules('IE', 'IE_REGISTERED_CHARITY').reports).not.toContain('gift_aid_schedule');
+    expect(rules('IE', 'IE_SPORTS_BODY').donationRelief).toBeNull();
+    expect(rules('IE', 'IE_CLUB').donationRelief).toBeNull();
+  });
+
+  it('regulators: Charities Regulator and Revenue for a charity; Revenue for a sports body', () => {
+    expect(rules('IE', 'IE_REGISTERED_CHARITY').regulators.map((r) => r.name)).toEqual(['Charities Regulator (Ireland)', 'Revenue (Ireland), Charities and Sports Exemptions Unit']);
+    expect(rules('IE', 'IE_SPORTS_BODY').regulators.map((r) => r.name)).toEqual(['Revenue (Ireland), Charities and Sports Exemptions Unit']);
+    expect(rules('IE', 'IE_CLUB').regulators).toEqual([]);
+  });
+
+  it('figures: CDS €250 / 31% / 4 years, audited accounts over €250,000, VAT €42,500 / €85,000', () => {
+    expect(orgReportingThresholds('IE').map((f) => [f.id, f.value, f.test, f.currency])).toEqual([
+      ['IE.revenue.cdsDonationAtLeast', 250, 'at_least', 'EUR'],
+      ['IE.revenue.cdsSpecifiedRate', 0.31, 'is', null],
+      ['IE.revenue.cdsClaimWindowYears', 4, 'is', null],
+      ['IE.revenue.auditedAccountsIncomeOver', 250000, 'over', 'EUR'],
+      ['IE.revenue.vatServicesOver', 42500, 'over', 'EUR'],
+      ['IE.revenue.vatGoodsOver', 85000, 'over', 'EUR'],
+    ]);
+    // Revenue's worked example: €1,000 is 69% of the gross, (€1,000 / 69) x 100 = €1,449.27, a €449.27 refund.
+    const rate = figure('IE', 'IE.revenue.cdsSpecifiedRate').value;
+    // Revenue's figure is cut to the cent (1,449.2753... -> 1,449.27), not rounded.
+    const gross = Math.floor((1000 / (1 - rate)) * 100) / 100;
+    expect((gross - 1000).toFixed(2)).toBe('449.27');
+  });
+
+  it('sources: every IE row a revenue.ie page, read today, reviewed by 31 January 2027', () => {
+    const rows = Object.values(ORG_RULE_SOURCES).filter((s) => s.country === 'IE');
+    expect(rows.length).toBeGreaterThan(5);
+    for (const s of rows) {
+      expect(s.sourceUrl).toMatch(/^https:\/\/www\.revenue\.ie\//);
+      expect({ id: s.id, readOn: s.readOn, reviewBy: s.reviewBy }).toEqual({ id: s.id, readOn: '2026-10-11', reviewBy: '2027-01-31' });
+    }
+    for (const code of IE_CODES) expect(rules('IE', code).sources.length).toBeGreaterThan(1);
   });
 });
 

@@ -24,7 +24,7 @@
  *   'receipts_payments'  every org type — a working report even where the
  *                        statutory accounts must be accruals (see `accounts`)
  *   'gift_aid_schedule'  GB charities, CIOs, charitable companies and CASCs
- *   'vat'                every GB type (any of them may be VAT registered)
+ *   'vat'                every GB and IE type (any of them may be VAT registered)
  *   'gst_bas'            every AU type (any of them may be GST registered)
  *   'gst'                every type in a country whose GST return the package
  *                        files that is not a BAS: IN (GSTR-3B), CA (GST/HST), NZ. Added because
@@ -84,8 +84,11 @@ export interface OrgDonationRelief {
    * to claim. 'donor_deduction': donors deduct gifts, or claim a credit for them, under the country's own approval (IN
    * section 354, US 501(c)(3), CA registered charity or RCAAA, NZ donee organisation) — information only for the org's tax; the note says what
    * the org must issue or file for its donors (a certificate, a written acknowledgment, an official donation receipt).
+   * 'charitable_donation_scheme': IE — the charity claims back the tax its donor paid (grossed up at Revenue's specified
+   * rate, see orgReportingThresholds), with the donor's certificate; a claim like Gift Aid's but not Gift Aid, so no
+   * 'gift_aid_schedule' report and no `ratePerPound`.
    */
-  scheme: 'gift_aid' | 'dgr' | 'donor_deduction';
+  scheme: 'gift_aid' | 'dgr' | 'donor_deduction' | 'charitable_donation_scheme';
   /** What the org is repaid per £1 donated (Gift Aid: 0.25). */
   ratePerPound?: number;
   /** Whether each donor must give a declaration before the org can claim. */
@@ -180,8 +183,14 @@ const NZ_TYPES: OrgType[] = [
   t('NZ_CLUB', 'Club or group (unincorporated)', 'NZ', 'community', 'Not registered'),
 ];
 
+const IE_TYPES: OrgType[] = [
+  t('IE_REGISTERED_CHARITY', 'Registered charity (with charitable tax exemption)', 'IE', 'charity', 'Charities Regulator, and Revenue for the tax exemption'),
+  t('IE_SPORTS_BODY', 'Sports body with Revenue tax exemption', 'IE', 'club', 'Revenue'),
+  t('IE_CLUB', 'Members\' club or society', 'IE', 'club', 'Not registered'),
+];
+
 /** The countries with their own types; every other country gets the generic ones. */
-const COUNTRY_TYPES: Record<string, OrgType[]> = { GB: GB_TYPES, AU: AU_TYPES, IN: IN_TYPES, US: US_TYPES, CA: CA_TYPES, NZ: NZ_TYPES };
+const COUNTRY_TYPES: Record<string, OrgType[]> = { GB: GB_TYPES, AU: AU_TYPES, IN: IN_TYPES, US: US_TYPES, CA: CA_TYPES, NZ: NZ_TYPES, IE: IE_TYPES };
 
 const GENERIC_CODES = ['CLUB', 'CHARITY'] as const;
 const genericTypes = (country: string): OrgType[] => [
@@ -318,6 +327,20 @@ const REGULATORS = {
     covers: 'Income tax exemption or not-for-profit status, donee organisation approval, GST',
     url: ORG_URLS.nzQualifyingExemption,
     note: 'A not-for-profit that is not a registered charity applies to Inland Revenue for an exemption, or for not-for-profit status to use the $1,000 deduction.',
+  },
+  revenueIe: {
+    name: 'Revenue (Ireland), Charities and Sports Exemptions Unit',
+    covers: 'Charitable tax exemption, sports body exemption and the Charitable Donation Scheme',
+    url: ORG_URLS.ieCharitableExemption,
+    note: 'Exemption conditions: tax compliant, all income for the main purpose, proper records, audited accounts over €250,000 income, changes notified.',
+  },
+  charitiesRegulatorIe: {
+    name: 'Charities Regulator (Ireland)',
+    covers: 'The Register of Charities (Charities Act 2009)',
+    url: ORG_URLS.ieCharitiesRegulator,
+    note:
+      'Revenue grants charitable tax exemption only to a charity registered with the Charities Regulator, and the charity must stay ' +
+      'registered. The Regulator\'s own filing rules (annual report) are not modelled: its site could not be read automatically.',
   },
 } satisfies Record<string, OrgRegulator>;
 
@@ -938,6 +961,83 @@ function nzRules(code: string): OrgRules | null {
   }
 }
 
+const IE_VAT_NOTE = 'VAT: registration is obligatory over €42,500 a calendar year for services (€85,000 for goods); charities have no general VAT exemption.';
+
+function ieRules(code: string): OrgRules | null {
+  const base = { country: 'IE', code };
+  const auditedNote =
+    'Revenue requires proper records and accounts, and audited accounts once annual income is over €250,000, to keep the ' +
+    'exemption. Below that, no statement format is modelled here.';
+  switch (code) {
+    case 'IE_REGISTERED_CHARITY':
+      return {
+        ...base,
+        incomeTax: {
+          status: 'exempt_if_conditions',
+          note:
+            'A charity registered with the Charities Regulator can apply to Revenue for charitable tax exemption (Income Tax or ' +
+            'Corporation Tax, CGT, DIRT and others). To keep it: stay tax compliant and registered, use all income for the main ' +
+            'charitable purpose only, keep proper records and accounts (audited over €250,000 income); trading needs Revenue ' +
+            `approval and its profits go to the main purpose. PAYE still applies to employees. ${IE_VAT_NOTE}`,
+        },
+        donationRelief: {
+          scheme: 'charitable_donation_scheme',
+          declarationRequired: true,
+          claimWindowYears: figureFor('IE.revenue.cdsClaimWindowYears').value,
+          note:
+            'Charitable Donation Scheme: for an individual\'s donations of €250 or more in a year, the charity (as an approved body) ' +
+            'claims a refund of the tax the donor paid — the donation grossed up at the specified rate of 31% (a €1,000 donation ' +
+            'gives a €449.27 refund), capped at the donor\'s tax for the year — with the donor\'s Enduring (five-year) or Annual ' +
+            'Certificate, within four years. A company donor claims a deduction itself.',
+        },
+        reports: ['receipts_payments', 'vat'],
+        incomeTaxForecast: false,
+        accounts: { receiptsAndPaymentsAllowed: true, note: auditedNote },
+        regulators: reg('charitiesRegulatorIe', 'revenueIe'),
+        sources: src('ieCharitableExemption', 'ieCharityConditions', 'ieCdsOverview', 'ieCdsClaiming', 'ieVatThresholds'),
+      };
+    case 'IE_SPORTS_BODY':
+      return {
+        ...base,
+        incomeTax: {
+          status: 'exempt_if_conditions',
+          note:
+            'A body established for the sole purpose of promoting an athletic or amateur game or sport can apply to Revenue (section ' +
+            '235) for exemption on the income it applies to that purpose, from the date Revenue approves it (a GS Number). It keeps ' +
+            'it while it uses all income to promote the athletic or amateur game or ' +
+            'sport, stays tax compliant, keeps proper records and accounts (audited over €250,000 income) and gets permission for ' +
+            `constitution changes; Revenue can withdraw it back to the date it was granted. ${IE_VAT_NOTE}`,
+        },
+        donationRelief: null,
+        reports: ['receipts_payments', 'vat'],
+        incomeTaxForecast: false,
+        accounts: { receiptsAndPaymentsAllowed: true, note: auditedNote },
+        regulators: reg('revenueIe'),
+        sources: src('ieSportsExemption', 'ieSportsBody', 'ieVatThresholds'),
+      };
+    case 'IE_CLUB':
+      return {
+        ...base,
+        incomeTax: {
+          status: 'mutuality',
+          note:
+            'A members\' club for social or recreational objects is not trading with its members, even if incorporated, and is not ' +
+            'taxed on the surplus from members (subscriptions, a members-only bar). A surplus from goods or services provided to ' +
+            'non-members is taxable (green fees charged to visitors, for example). Keep member and non-member income apart. A club ' +
+            `promoting an amateur game or sport can apply to Revenue for the sports exemption — choose "Sports body". ${IE_VAT_NOTE}`,
+        },
+        donationRelief: null,
+        reports: ['receipts_payments', 'vat'],
+        incomeTaxForecast: false,
+        accounts: { receiptsAndPaymentsAllowed: true, note: 'No statutory accounts format for an unincorporated members\' club: its own rules decide.' },
+        regulators: [],
+        sources: src('ieMutualTrading', 'ieSportsBody', 'ieVatThresholds'),
+      };
+    default:
+      return null;
+  }
+}
+
 function genericRules(country: string, code: string): OrgRules | null {
   if (!(GENERIC_CODES as readonly string[]).includes(code)) return null;
   return {
@@ -971,6 +1071,7 @@ export function orgRulesFor(country: string, code: string, yearEnd?: string | Da
   if (c === 'US') return usRules(k);
   if (c === 'CA') return caRules(k);
   if (c === 'NZ') return nzRules(k);
+  if (c === 'IE') return ieRules(k);
   return genericRules(c, k);
 }
 
@@ -983,7 +1084,7 @@ function yearEndOf(yearEnd?: string | Date): string {
 
 /**
  * The dated figures for a country's organisations (GB: Charity Commission, OSCR, CCNI and HMRC; AU: ACNC and ATO;
- * IN: Income Tax Department and CBIC; US: IRS; CA: CRA; NZ: Charities Services, Companies Office, Inland Revenue), for a financial year ending on `yearEnd` (default today). One row per figure
+ * IN: Income Tax Department and CBIC; US: IRS; CA: CRA; NZ: Charities Services, Companies Office, Inland Revenue; IE: Revenue), for a financial year ending on `yearEnd` (default today). One row per figure
  * id; empty for other countries.
  */
 export function orgReportingThresholds(country: string, yearEnd?: string | Date): OrgFigure[] {

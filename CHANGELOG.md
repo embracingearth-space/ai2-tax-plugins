@@ -117,6 +117,10 @@ These four countries left out a published employee deduction "because it was not
   - types `NZ_REGISTERED_CHARITY` (`exempt_if_conditions`: registered charities are automatically exempt), `NZ_INCORPORATED_SOCIETY` and `NZ_CLUB` (`check_locally`: an Inland Revenue exemption, e.g. amateur sport, or the $1,000 not-for-profit deduction and an IR9);
   - Charities Services annual return within 6 months, Tier 4 cash reporting under $140,000 of operating payments, Tier 3 under $5 million, review over $550,000 and audit over $1.1 million; Incorporated Societies Act 2022 filing (re-registration closed 5 April 2026), the small-society and Tier 4 limits;
   - donee status (one-third tax credit on donations of $5 or more) as `'donor_deduction'`, information only; `'gst'` with the $60,000 threshold. Budget 2026 proposals ($10,000 threshold, $100,000 donation cap) are named in notes as not yet law. NZ rows are due for review on 31 March 2027.
+- Ireland (IE), from revenue.ie:
+  - types `IE_REGISTERED_CHARITY` and `IE_SPORTS_BODY` (`exempt_if_conditions`: Revenue's charitable and section 235 sports exemptions, audited accounts over €250,000 income) and `IE_CLUB` (`mutuality`: members' club surplus not taxed, non-member surplus taxed);
+  - the Charitable Donation Scheme as the new `donationRelief.scheme` `'charitable_donation_scheme'`: the charity claims the donor's tax back (€250 minimum, 31% specified rate, donor certificate, four years) — a claim like Gift Aid's, so not `'donor_deduction'`, but not Gift Aid either;
+  - `'vat'` with the €42,500 services / €85,000 goods thresholds. The Charities Regulator's own filing rules are not modelled: its site could not be read. IE rows are due for review on 31 January 2027.
 
 ### Added — GST/VAT for every country, US states and Canadian provinces (rate ledger)
 

@@ -451,7 +451,7 @@ formatGiftAidDate(new Date(2026, 3, 5)); // '05/04/26'
 giftAidClaimValue(100);                  // 25
 ```
 
-- **Types.** GB has six types, AU has three (`AU_INCORPORATED_ASSOCIATION`, `AU_ACNC_CHARITY`, `AU_CLUB`), IN has four (`IN_PUBLIC_TRUST`, `IN_SOCIETY`, `IN_SECTION8_COMPANY`, `IN_CLUB`), US has four (`US_501C3`, `US_501C7`, `US_501C4`, `US_CLUB`), CA has three (`CA_REGISTERED_CHARITY`, `CA_NPO`, `CA_RCAAA`), NZ has three (`NZ_REGISTERED_CHARITY`, `NZ_INCORPORATED_SOCIETY`, `NZ_CLUB`), and every other country gets the generic `CLUB` and `CHARITY`. Each type carries `registeredWith` and `group: 'organisation'`.
+- **Types.** GB has six types, AU has three (`AU_INCORPORATED_ASSOCIATION`, `AU_ACNC_CHARITY`, `AU_CLUB`), IN has four (`IN_PUBLIC_TRUST`, `IN_SOCIETY`, `IN_SECTION8_COMPANY`, `IN_CLUB`), US has four (`US_501C3`, `US_501C7`, `US_501C4`, `US_CLUB`), CA has three (`CA_REGISTERED_CHARITY`, `CA_NPO`, `CA_RCAAA`), NZ has three (`NZ_REGISTERED_CHARITY`, `NZ_INCORPORATED_SOCIETY`, `NZ_CLUB`), IE has three (`IE_REGISTERED_CHARITY`, `IE_SPORTS_BODY`, `IE_CLUB`), and every other country gets the generic `CLUB` and `CHARITY`. Each type carries `registeredWith` and `group: 'organisation'`.
 - **Income tax.** The `status` is one of `exempt`, `exempt_if_conditions`, `mutuality`, `taxable` or `check_locally`.
   - GB charities, CIOs, charitable companies and CASCs are `exempt_if_conditions`: charities use the money for charitable purposes, and CASCs stay within £50,000 of trading turnover and £30,000 of rental income.
   - GB clubs and PTAs are `mutuality`: Corporation Tax applies to non-member trading and investment income, not to dealings with members.
@@ -459,7 +459,7 @@ giftAidClaimValue(100);                  // 25
   - AU associations and clubs are `check_locally`: they self-assess under Division 50, or they are taxable.
   - Everything else is `check_locally`.
 - **Income tax forecast.** `incomeTaxForecast` is true only for `mutuality` and `taxable`.
-- **Reports.** `reports` uses the vocabulary `receipts_payments` (every type), `gift_aid_schedule` (GB charities and CASCs), `vat` (GB), `gst_bas` (AU) and `gst` (a GST return that is not a BAS: IN, CA, NZ). No type lists an income tax return export.
+- **Reports.** `reports` uses the vocabulary `receipts_payments` (every type), `gift_aid_schedule` (GB charities and CASCs), `vat` (GB, IE), `gst_bas` (AU) and `gst` (a GST return that is not a BAS: IN, CA, NZ). No type lists an income tax return export.
 - **Accounts.** `accounts` says whether receipts and payments accounts are an allowed statutory format.
   - A charitable company must prepare accruals accounts at any size, so it is false there.
   - A non-company charity or CIO can use them up to the Charity Commission limit for the year end. It is £500,000 for years ending on or after 30 September 2026 and £250,000 before. OSCR (Scotland) and CCNI (Northern Ireland) stay at £250,000.

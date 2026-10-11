@@ -50,6 +50,11 @@
  * `pageLastUpdated` is null there. NZ's Budget 2026 changes are proposals,
  * not law: they are named in notes, never used as figures.
  *
+ * IE rows are revenue.ie pages ("Published" date) and Tax and Duty Manuals
+ * ("last reviewed/updated" month, so null). charitiesregulator.ie sits
+ * behind a bot check and was not read: the Charities Regulator's own
+ * filing rules (annual report, accounts) are not modelled.
+ *
  * Nothing here is a number the app may use without its row: a test holds
  * every figure to an https source, a read date and a review date, and the
  * freshness test fails the build once a review date passes. 2fin
@@ -72,6 +77,8 @@ const US_REVIEW_BY = '2027-01-31';
 const CA_REVIEW_BY = '2027-01-31';
 /** NZ rows are re-read before the 2027-28 income year (1 April 2027), when the Budget 2026 proposals would start. */
 const NZ_REVIEW_BY = '2027-03-31';
+/** IE rows are re-read after the Finance Act that follows Budget 2027 (in force 1 January 2027). */
+const IE_REVIEW_BY = '2027-01-31';
 
 /** The day the new Charity Commission thresholds start: financial years ENDING on or after it. */
 export const GB_CC_THRESHOLDS_FROM_YEAR_END = '2026-09-30';
@@ -199,15 +206,28 @@ export const ORG_URLS = {
     'https://is-register.companiesoffice.govt.nz/help-centre/meeting-your-annual-filing-requirements/filing-annual-financial-statements-and-annual-returns/',
   nzIsLargeSocieties:
     'https://is-register.companiesoffice.govt.nz/help-centre/meeting-your-annual-filing-requirements/financial-reporting-standards-for-large-societies/',
+  // Ireland — Revenue (charitiesregulator.ie refused automated reading behind a bot check, so nothing here rests on it)
+  ieCharitableExemption: 'https://www.revenue.ie/en/companies-and-charities/charities-and-sports-bodies/charitable-tax-exemption/index.aspx',
+  ieCharityConditions:
+    'https://www.revenue.ie/en/companies-and-charities/charities-and-sports-bodies/charitable-tax-exemption/conditions-retaining-charitable-tax-exemption.aspx',
+  ieCdsOverview: 'https://www.revenue.ie/en/companies-and-charities/charities-and-sports-bodies/charitable-donation-scheme/index.aspx',
+  ieCdsClaiming: 'https://www.revenue.ie/en/companies-and-charities/charities-and-sports-bodies/charitable-donation-scheme/claiming-tax-relief-on-donations.aspx',
+  ieSportsBodyConditions:
+    'https://www.revenue.ie/en/companies-and-charities/charities-and-sports-bodies/sports-bodies-tax-exemption/conditions-retaining-tax-exemption.aspx',
+  ieMutualTrading: 'https://www.revenue.ie/en/tax-professionals/tdm/income-tax-capital-gains-tax-corporation-tax/part-36/36-00-05.pdf',
+  ieSportsExemptionManual: 'https://www.revenue.ie/en/tax-professionals/tdm/income-tax-capital-gains-tax-corporation-tax/part-07/07-03-08.pdf',
+  ieVatThresholds: 'https://www.revenue.ie/en/vat/vat-registration/who-should-register-for-vat/vat-thresholds.aspx',
+  /** The regulator's address for the app to link to; not a source (its pages sit behind a bot check). */
+  ieCharitiesRegulator: 'https://www.charitiesregulator.ie',
 } as const;
 
 const U = ORG_URLS;
 
 /** The countries with their own organisation rules. */
-export type OrgCountry = 'GB' | 'AU' | 'IN' | 'US' | 'CA' | 'NZ';
+export type OrgCountry = 'GB' | 'AU' | 'IN' | 'US' | 'CA' | 'NZ' | 'IE';
 
 /** The currencies their figures are in (ISO 4217). */
-export type OrgCurrency = 'GBP' | 'AUD' | 'INR' | 'USD' | 'CAD' | 'NZD';
+export type OrgCurrency = 'GBP' | 'AUD' | 'INR' | 'USD' | 'CAD' | 'NZD' | 'EUR';
 
 export interface OrgSource {
   /** The key in ORG_RULE_SOURCES. */
@@ -229,7 +249,8 @@ export interface OrgSource {
     | 'CRA'
     | 'Inland Revenue (NZ)'
     | 'Charities Services (NZ)'
-    | 'Companies Office (NZ)';
+    | 'Companies Office (NZ)'
+    | 'Revenue (Ireland)';
   sourceUrl: string;
   /** The page's own "last updated" date (YYYY-MM-DD), or null where it shows none. */
   pageLastUpdated: string | null;
@@ -1022,19 +1043,90 @@ const NZ_SOURCES = {
   ),
 } satisfies Record<string, SourceRow>;
 
+const ie = (sourceUrl: string, pageLastUpdated: string | null, claim: string): SourceRow => ({
+  country: 'IE',
+  claim,
+  authority: 'Revenue (Ireland)',
+  sourceUrl,
+  pageLastUpdated,
+  readOn: R,
+  reviewBy: IE_REVIEW_BY,
+});
+
+const IE_SOURCES = {
+  ieCharitableExemption: ie(
+    U.ieCharitableExemption,
+    '2025-06-25',
+    '"You can apply for charitable tax exemption if you are a charity registered with the Charities Regulator." It may cover Income ' +
+      'Tax, Corporation Tax, Capital Gains Tax, DIRT, Capital Acquisitions Tax, Dividend Withholding Tax, Professional Services ' +
+      'Withholding Tax and Stamp Duty; PAYE still applies to employees and there is no general VAT exemption.',
+  ),
+  ieCharityConditions: ie(
+    U.ieCharityConditions,
+    '2026-08-05',
+    'To keep the exemption a charity must "remain tax compliant", "maintain its registered charity status with the Charities ' +
+      'Regulator", "use all income for its main charitable purpose only", "keep proper records and accounts" and "keep audited ' +
+      'accounts if your annual income is over €250,000"; trading needs approval, and its profits can only be used for the main ' +
+      'charitable purpose; prior approval to accumulate funds for more than five years.',
+  ),
+  ieCdsOverview: ie(
+    U.ieCdsOverview,
+    '2026-06-03',
+    '"If an individual donates €250 or more to an approved body, the body can claim a refund of tax paid on that donation"; a company ' +
+      'donating €250 or more in a year claims a deduction itself. "There is a four year time limit for making a claim under this scheme."',
+  ),
+  ieCdsClaiming: ie(
+    U.ieCdsClaiming,
+    '2026-06-03',
+    '"The specified rate is currently 31%": a €1,000 donation is grossed up to €1,449.27 and "The refund amount that can be claimed by ' +
+      'the approved body is €449.27"; the refund cannot exceed the tax the donor paid for the year; the donor authorises the claim with ' +
+      'an Enduring Certificate (five years) or an Annual Certificate (one year).',
+  ),
+  ieSportsBody: ie(
+    U.ieSportsBodyConditions,
+    '2026-08-10',
+    'An exempt sports body must stay tax compliant, use "all income to promote the athletic or amateur game or sport", keep proper ' +
+      'records and accounts and "audited accounts (if your annual income is over €250,000)", and get permission for constitution ' +
+      'changes; Revenue may withdraw the exemption back to the date it was granted.',
+  ),
+  ieSportsExemption: ie(
+    U.ieSportsExemptionManual,
+    null,
+    'Tax and Duty Manual Part 07-03-08 (last updated March 2026), section 235 TCA 1997: bodies "established for the sole purpose of the ' +
+      'promotion of athletic or amateur games or sports" can apply for exemption from income tax or corporation tax "for so much of ' +
+      'their income as is applied for the purpose of promoting the game or sport"; from the date Revenue approves it (Finance Act ' +
+      '2025), with a GS Number; no renewal, but the conditions must keep being met.',
+  ),
+  ieMutualTrading: ie(
+    U.ieMutualTrading,
+    null,
+    'Tax and Duty Manual Part 36-00-05 (last reviewed June 2025): a members\' club for social or recreational objects "is not carrying ' +
+      'on a trade with its members, even if the club is incorporated", and is not taxed on surplus from members; "where goods and ' +
+      'services are provided for a consideration to non-members, any surplus arising will be taxable" (green fees to non-members).',
+  ),
+  ieVatThresholds: ie(
+    U.ieVatThresholds,
+    '2026-05-06',
+    'VAT registration is obligatory when annual turnover in a calendar year "exceeds the VAT thresholds": "€42,500, in the case of ' +
+      'persons supplying services only" and "€85,000, for persons supplying goods"; "If your turnover is less than a threshold limit, ' +
+      'you may elect to register for VAT."',
+  ),
+} satisfies Record<string, SourceRow>;
+
 export type GbOrgSourceKey = keyof typeof GB_SOURCES;
 export type AuOrgSourceKey = keyof typeof AU_SOURCES;
 export type InOrgSourceKey = keyof typeof IN_SOURCES;
 export type UsOrgSourceKey = keyof typeof US_SOURCES;
 export type CaOrgSourceKey = keyof typeof CA_SOURCES;
 export type NzOrgSourceKey = keyof typeof NZ_SOURCES;
-export type OrgSourceKey = GbOrgSourceKey | AuOrgSourceKey | InOrgSourceKey | UsOrgSourceKey | CaOrgSourceKey | NzOrgSourceKey;
+export type IeOrgSourceKey = keyof typeof IE_SOURCES;
+export type OrgSourceKey = GbOrgSourceKey | AuOrgSourceKey | InOrgSourceKey | UsOrgSourceKey | CaOrgSourceKey | NzOrgSourceKey | IeOrgSourceKey;
 
 const withIds = <K extends string>(rows: Record<K, SourceRow>): Record<K, OrgSource> =>
   Object.fromEntries(Object.entries<SourceRow>(rows).map(([id, r]) => [id, { id, ...r }])) as Record<K, OrgSource>;
 
 /** Every rule source, by key. Keys do not overlap between countries. */
-export const ORG_RULE_SOURCES: Record<OrgSourceKey, OrgSource> = { ...withIds(GB_SOURCES), ...withIds(AU_SOURCES), ...withIds(IN_SOURCES), ...withIds(US_SOURCES), ...withIds(CA_SOURCES), ...withIds(NZ_SOURCES) };
+export const ORG_RULE_SOURCES: Record<OrgSourceKey, OrgSource> = { ...withIds(GB_SOURCES), ...withIds(AU_SOURCES), ...withIds(IN_SOURCES), ...withIds(US_SOURCES), ...withIds(CA_SOURCES), ...withIds(NZ_SOURCES), ...withIds(IE_SOURCES) };
 
 // ─── Figures ────────────────────────────────────────────────────────────────
 
@@ -1075,6 +1167,7 @@ const US_EXEMPT = ['US_501C3', 'US_501C7', 'US_501C4'];
 const CA_ALL = ['CA_REGISTERED_CHARITY', 'CA_NPO', 'CA_RCAAA'];
 const NZ_ALL = ['NZ_REGISTERED_CHARITY', 'NZ_INCORPORATED_SOCIETY', 'NZ_CLUB'];
 const NZ_TAXABLE_NFPS = ['NZ_INCORPORATED_SOCIETY', 'NZ_CLUB'];
+const IE_ALL = ['IE_REGISTERED_CHARITY', 'IE_SPORTS_BODY', 'IE_CLUB'];
 
 const CC = 'Charity Commission (England and Wales)';
 const NEW = GB_CC_THRESHOLDS_FROM_YEAR_END;
@@ -1247,4 +1340,11 @@ export const ORG_FIGURES: readonly OrgFigure[] = [
   fig({ id: 'NZ.ird.donationTaxCreditShare', country: 'NZ', label: 'Donation tax credit for individual donors: share of eligible donations', value: 1 / 3, taxYear: 'current', currency: null, test: 'is', regulator: IRNZ, appliesTo: ['NZ_REGISTERED_CHARITY'], yearsEndingFrom: null, yearsEndingBefore: null, source: 'nzDonationTaxCredits', note: 'Information only: one third of eligible donations to an approved donee organisation, up to the donor\'s taxable income. Budget 2026 proposes capping eligible donations at $100,000 from 1 April 2027 (not yet law).' }),
   fig({ id: 'NZ.ird.donationMinimum', country: 'NZ', label: 'Donation tax credit: each donation of at least', value: 5, taxYear: 'current', currency: 'NZD', test: 'at_least', regulator: IRNZ, appliesTo: ['NZ_REGISTERED_CHARITY'], yearsEndingFrom: null, yearsEndingBefore: null, source: 'nzDonationTaxCredits', note: 'Donations of $5 or more, with a receipt showing all the required information.' }),
   fig({ id: 'NZ.ird.gstRegistrationAtLeast', country: 'NZ', label: 'GST registration: turnover in 12 months of at least', value: 60000, taxYear: 'current', currency: 'NZD', test: 'at_least', regulator: IRNZ, appliesTo: NZ_ALL, yearsEndingFrom: null, yearsEndingBefore: null, source: 'nzGstRegistration', note: 'Register when turnover was at least $60,000 in the last 12 months or is expected to be in the next 12.' }),
+  // ─── IE — Revenue ───
+  fig({ id: 'IE.revenue.cdsDonationAtLeast', country: 'IE', label: 'Charitable Donation Scheme: an individual\'s donations in the year of at least', value: 250, taxYear: 'current', currency: 'EUR', test: 'at_least', regulator: 'Revenue (Ireland)', appliesTo: ['IE_REGISTERED_CHARITY'], yearsEndingFrom: null, yearsEndingBefore: null, source: 'ieCdsOverview', note: 'The charity can claim a refund of the tax paid on an individual\'s donations of €250 or more, with the donor\'s certificate.' }),
+  fig({ id: 'IE.revenue.cdsSpecifiedRate', country: 'IE', label: 'Charitable Donation Scheme: specified rate the donation is grossed up at', value: 0.31, taxYear: 'current', currency: null, test: 'is', regulator: 'Revenue (Ireland)', appliesTo: ['IE_REGISTERED_CHARITY'], yearsEndingFrom: null, yearsEndingBefore: null, source: 'ieCdsClaiming', note: 'The donation is 69% of the grossed-up amount: €1,000 grosses up to €1,449.27, a €449.27 refund (31/69 of the donation), capped at the tax the donor paid that year.' }),
+  fig({ id: 'IE.revenue.cdsClaimWindowYears', country: 'IE', label: 'Charitable Donation Scheme claim window (years)', value: 4, taxYear: 'current', currency: null, test: 'is', regulator: 'Revenue (Ireland)', appliesTo: ['IE_REGISTERED_CHARITY'], yearsEndingFrom: null, yearsEndingBefore: null, source: 'ieCdsOverview', note: 'A four year time limit for making a claim.' }),
+  fig({ id: 'IE.revenue.auditedAccountsIncomeOver', country: 'IE', label: 'Audited accounts required to keep the exemption: annual income over', value: 250000, taxYear: 'current', currency: 'EUR', test: 'over', regulator: 'Revenue (Ireland)', appliesTo: ['IE_REGISTERED_CHARITY', 'IE_SPORTS_BODY'], yearsEndingFrom: null, yearsEndingBefore: null, source: 'ieCharityConditions', note: 'A charity or exempt sports body with annual income over €250,000 keeps audited accounts (a condition of its Revenue exemption).' }),
+  fig({ id: 'IE.revenue.vatServicesOver', country: 'IE', label: 'VAT registration, supplying services only: turnover in a calendar year over', value: 42500, taxYear: 'from 1 January 2025', currency: 'EUR', test: 'over', regulator: 'Revenue (Ireland)', appliesTo: IE_ALL, yearsEndingFrom: null, yearsEndingBefore: null, source: 'ieVatThresholds', note: 'Obligatory above €42,500 for services (€85,000 for goods); voluntary below.' }),
+  fig({ id: 'IE.revenue.vatGoodsOver', country: 'IE', label: 'VAT registration, supplying goods: turnover in a calendar year over', value: 85000, taxYear: 'from 1 January 2025', currency: 'EUR', test: 'over', regulator: 'Revenue (Ireland)', appliesTo: IE_ALL, yearsEndingFrom: null, yearsEndingBefore: null, source: 'ieVatThresholds', note: 'Also for goods and services where 90% or more of turnover is from goods.' }),
 ];
