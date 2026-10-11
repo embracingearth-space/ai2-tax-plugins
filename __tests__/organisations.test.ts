@@ -40,7 +40,9 @@ const AU_CODES = ['AU_INCORPORATED_ASSOCIATION', 'AU_ACNC_CHARITY', 'AU_CLUB'];
 const IN_NPO_CODES = ['IN_PUBLIC_TRUST', 'IN_SOCIETY', 'IN_SECTION8_COMPANY'];
 const IN_CODES = [...IN_NPO_CODES, 'IN_CLUB'];
 /** Every country with its own types, and its codes. */
-const COUNTRY_CODES: Record<string, string[]> = { GB: GB_CODES, AU: AU_CODES, IN: IN_CODES };
+const US_EXEMPT_CODES = ['US_501C3', 'US_501C7', 'US_501C4'];
+const US_CODES = [...US_EXEMPT_CODES, 'US_CLUB'];
+const COUNTRY_CODES: Record<string, string[]> = { GB: GB_CODES, AU: AU_CODES, IN: IN_CODES, US: US_CODES };
 const ALL: Array<[string, string]> = [
   ...Object.entries(COUNTRY_CODES).flatMap(([country, codes]) => codes.map((c): [string, string] => [country, c])),
   ['FR', 'CLUB'],
@@ -327,7 +329,7 @@ describe('orgReportingThresholds', () => {
 });
 
 /** The currency every money figure of a country is in. */
-const CURRENCY: Record<string, string> = { GB: 'GBP', AU: 'AUD', IN: 'INR' };
+const CURRENCY: Record<string, string> = { GB: 'GBP', AU: 'AUD', IN: 'INR', US: 'USD' };
 
 describe('every country: figures in its own currency, sources in its own country', () => {
   it.each(Object.keys(COUNTRY_CODES))('%s', (c) => {
@@ -426,6 +428,72 @@ describe('India (IN) — Income-tax Act, 2025, from tax year 2026-27', () => {
       expect({ id: s.id, readOn: s.readOn, reviewBy: s.reviewBy }).toEqual({ id: s.id, readOn: '2026-10-11', reviewBy: '2027-03-31' });
     }
     for (const code of IN_CODES) expect(rules('IN', code).sources.length).toBeGreaterThan(3);
+  });
+});
+
+describe('United States (US) — federal (IRS)', () => {
+  it('types: 501(c)(3), 501(c)(7), 501(c)(4) and others, a club not recognised as exempt', () => {
+    expect(orgTypesFor('US').map((t) => [t.code, t.label, t.kind])).toEqual([
+      ['US_501C3', 'Charity (501(c)(3) public charity)', 'charity'],
+      ['US_501C7', 'Social club (501(c)(7))', 'club'],
+      ['US_501C4', 'Social welfare or other nonprofit (501(c)(4) and others)', 'association'],
+      ['US_CLUB', 'Club or group not recognised as exempt', 'community'],
+    ]);
+  });
+
+  it('statuses: 501(c)(3) and (c)(4) exempt if conditions; a social club on mutuality; an unrecognised club check locally', () => {
+    expect(rules('US', 'US_501C3').incomeTax.status).toBe('exempt_if_conditions');
+    expect(rules('US', 'US_501C4').incomeTax.status).toBe('exempt_if_conditions');
+    expect(rules('US', 'US_501C7').incomeTax.status).toBe('mutuality');
+    expect(rules('US', 'US_CLUB').incomeTax.status).toBe('check_locally');
+    for (const code of US_CODES) expect(rules('US', code).incomeTaxForecast).toBe(false);
+    for (const code of US_EXEMPT_CODES) {
+      const note = rules('US', code).incomeTax.note;
+      expect(note).toContain('Form 990-N');
+      expect(note).toContain('990-T');
+    }
+    expect(rules('US', 'US_501C7').incomeTax.note).toContain('35%');
+    expect(rules('US', 'US_501C4').incomeTax.note).toContain('Form 8976');
+  });
+
+  it('donor deduction only for 501(c)(3), information only; written acknowledgment at $250', () => {
+    const d = rules('US', 'US_501C3').donationRelief!;
+    expect(d).toMatchObject({ scheme: 'donor_deduction', declarationRequired: false });
+    expect(d.note).toContain('$250');
+    for (const code of ['US_501C7', 'US_501C4', 'US_CLUB']) expect(rules('US', code).donationRelief).toBeNull();
+    expect(rules('US', 'US_501C4').accounts.note).toContain('generally not deductible');
+  });
+
+  it('reports: receipts and payments only (no federal VAT/GST, no return export); regulators: IRS, plus the states for a charity', () => {
+    for (const code of US_CODES) expect(rules('US', code).reports).toEqual(['receipts_payments']);
+    expect(rules('US', 'US_501C3').regulators.map((r) => r.name)).toEqual(['IRS (exempt organizations)', 'State charity regulator']);
+    expect(rules('US', 'US_501C7').regulators.map((r) => r.name)).toEqual(['IRS (exempt organizations)']);
+    expect(rules('US', 'US_CLUB').regulators).toEqual([]);
+  });
+
+  it('figures: Form 990-N / 990-EZ thresholds, due month, revocation, 990-T, social club limits, $250 acknowledgment', () => {
+    expect(orgReportingThresholds('US').map((f) => [f.id, f.value, f.test, f.currency])).toEqual([
+      ['US.irs.form990nGrossReceiptsUpTo', 50000, 'or_less', 'USD'],
+      ['US.irs.form990ezGrossReceiptsUnder', 200000, 'under', 'USD'],
+      ['US.irs.form990ezTotalAssetsUnder', 500000, 'under', 'USD'],
+      ['US.irs.returnDueMonthAfterYearEnd', 5, 'is', null],
+      ['US.irs.automaticRevocationYears', 3, 'is', null],
+      ['US.irs.form990tUnrelatedIncomeAtLeast', 1000, 'at_least', 'USD'],
+      ['US.irs.socialClubNonmemberShareUpTo', 0.35, 'or_less', null],
+      ['US.irs.socialClubNonmemberFacilitiesShareUpTo', 0.15, 'or_less', null],
+      ['US.irs.writtenAcknowledgmentAtLeast', 250, 'at_least', 'USD'],
+    ]);
+  });
+
+  it('sources: every US row an irs.gov page, read today, reviewed before the 2027 filing season', () => {
+    const rows = Object.values(ORG_RULE_SOURCES).filter((s) => s.country === 'US');
+    expect(rows.length).toBeGreaterThan(10);
+    for (const s of rows) {
+      expect(s.authority).toBe('IRS');
+      expect(s.sourceUrl).toMatch(/^https:\/\/www\.irs\.gov\//);
+      expect({ id: s.id, readOn: s.readOn, reviewBy: s.reviewBy }).toEqual({ id: s.id, readOn: '2026-10-11', reviewBy: '2027-01-31' });
+    }
+    for (const code of US_CODES) expect(rules('US', code).sources.length).toBeGreaterThan(3);
   });
 });
 

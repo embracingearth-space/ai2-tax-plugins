@@ -451,7 +451,7 @@ formatGiftAidDate(new Date(2026, 3, 5)); // '05/04/26'
 giftAidClaimValue(100);                  // 25
 ```
 
-- **Types.** GB has six types, AU has three (`AU_INCORPORATED_ASSOCIATION`, `AU_ACNC_CHARITY`, `AU_CLUB`), IN has four (`IN_PUBLIC_TRUST`, `IN_SOCIETY`, `IN_SECTION8_COMPANY`, `IN_CLUB`), and every other country gets the generic `CLUB` and `CHARITY`. Each type carries `registeredWith` and `group: 'organisation'`.
+- **Types.** GB has six types, AU has three (`AU_INCORPORATED_ASSOCIATION`, `AU_ACNC_CHARITY`, `AU_CLUB`), IN has four (`IN_PUBLIC_TRUST`, `IN_SOCIETY`, `IN_SECTION8_COMPANY`, `IN_CLUB`), US has four (`US_501C3`, `US_501C7`, `US_501C4`, `US_CLUB`), and every other country gets the generic `CLUB` and `CHARITY`. Each type carries `registeredWith` and `group: 'organisation'`.
 - **Income tax.** The `status` is one of `exempt`, `exempt_if_conditions`, `mutuality`, `taxable` or `check_locally`.
   - GB charities, CIOs, charitable companies and CASCs are `exempt_if_conditions`: charities use the money for charitable purposes, and CASCs stay within £50,000 of trading turnover and £30,000 of rental income.
   - GB clubs and PTAs are `mutuality`: Corporation Tax applies to non-member trading and investment income, not to dealings with members.

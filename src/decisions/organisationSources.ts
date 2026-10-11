@@ -39,6 +39,10 @@
  * "Last reviewed and updated on" is site-wide, so `pageLastUpdated` is null
  * for them. The Form 112 FAQ (a PDF) records its Last-Modified header.
  *
+ * US rows are IRS pages, each with its own "Page Last Reviewed or Updated"
+ * date; federal only. State charity registration and state tax are named
+ * in the notes, not modelled.
+ *
  * Nothing here is a number the app may use without its row: a test holds
  * every figure to an https source, a read date and a review date, and the
  * freshness test fails the build once a review date passes. 2fin
@@ -55,6 +59,8 @@ const GB_REVIEW_BY = '2027-04-05';
 const AU_REVIEW_BY = '2027-06-30';
 /** IN rows are re-read before tax year 2027-28 starts (1 April 2027), after the Finance Act 2027. */
 const IN_REVIEW_BY = '2027-03-31';
+/** US rows are re-read before the 2027 filing season (IRS pages are revised for each calendar tax year). */
+const US_REVIEW_BY = '2027-01-31';
 
 /** The day the new Charity Commission thresholds start: financial years ENDING on or after it. */
 export const GB_CC_THRESHOLDS_FROM_YEAR_END = '2026-09-30';
@@ -131,15 +137,30 @@ export const ORG_URLS = {
   inCgstS22Registration: 'https://taxinformation.cbic.gov.in/content/html/tax_repository/gst/acts/2017_CGST_act/active/chapter6/section22_v1.00.html',
   inGstRwaCircular: 'https://cbic-gst.gov.in/pdf/circular-cgst-109n.pdf',
   inScSecunderabadClub: 'https://api.sci.gov.in/supremecourt/2011/38510/38510_2011_12_1501_46128_Judgement_17-Aug-2023.pdf',
+  // United States — IRS
+  us990Series: 'https://www.irs.gov/charities-non-profits/form-990-series-which-forms-do-exempt-organizations-file-filing-phase-in',
+  usWhoMustFile: 'https://www.irs.gov/charities-non-profits/annual-exempt-organization-return-who-must-file',
+  us990DueDate: 'https://www.irs.gov/charities-non-profits/annual-exempt-organization-return-due-date',
+  usAutomaticRevocation: 'https://www.irs.gov/charities-non-profits/automatic-revocation-of-exemption',
+  us501c3Requirements: 'https://www.irs.gov/charities-non-profits/charitable-organizations/exemption-requirements-501c3-organizations',
+  usApplying: 'https://www.irs.gov/charities-non-profits/applying-for-tax-exempt-status',
+  usForm1024Instructions: 'https://www.irs.gov/pub/irs-pdf/i1024.pdf',
+  usSocialClubs: 'https://www.irs.gov/charities-non-profits/other-non-profits/social-clubs',
+  usSocialWelfare: 'https://www.irs.gov/charities-non-profits/other-non-profits/social-welfare-organizations',
+  us501c4Donations: 'https://www.irs.gov/charities-non-profits/other-non-profits/donations-to-section-501c4-organizations',
+  usDeductibleRecipients: 'https://www.irs.gov/charities-non-profits/exempt-organizations-general-issues-charitable-contributions',
+  usWrittenAcknowledgments: 'https://www.irs.gov/charities-non-profits/charitable-organizations/charitable-contributions-written-acknowledgments',
+  usUbit: 'https://www.irs.gov/charities-non-profits/unrelated-business-income-tax',
+  usStateSolicitation: 'https://www.irs.gov/charities-non-profits/charitable-organizations/charitable-solicitation-state-requirements',
 } as const;
 
 const U = ORG_URLS;
 
 /** The countries with their own organisation rules. */
-export type OrgCountry = 'GB' | 'AU' | 'IN';
+export type OrgCountry = 'GB' | 'AU' | 'IN' | 'US';
 
 /** The currencies their figures are in (ISO 4217). */
-export type OrgCurrency = 'GBP' | 'AUD' | 'INR';
+export type OrgCurrency = 'GBP' | 'AUD' | 'INR' | 'USD';
 
 export interface OrgSource {
   /** The key in ORG_RULE_SOURCES. */
@@ -156,7 +177,8 @@ export interface OrgSource {
     | 'ACNC'
     | 'Income Tax Department (India)'
     | 'CBIC (India)'
-    | 'Supreme Court of India';
+    | 'Supreme Court of India'
+    | 'IRS';
   sourceUrl: string;
   /** The page's own "last updated" date (YYYY-MM-DD), or null where it shows none. */
   pageLastUpdated: string | null;
@@ -184,6 +206,15 @@ const au = (authority: OrgSource['authority'], sourceUrl: string, pageLastUpdate
   pageLastUpdated,
   readOn: R,
   reviewBy: AU_REVIEW_BY,
+});
+const us = (sourceUrl: string, pageLastUpdated: string | null, claim: string): SourceRow => ({
+  country: 'US',
+  claim,
+  authority: 'IRS',
+  sourceUrl,
+  pageLastUpdated,
+  readOn: R,
+  reviewBy: US_REVIEW_BY,
 });
 const inr = (authority: OrgSource['authority'], sourceUrl: string, pageLastUpdated: string | null, claim: string): SourceRow => ({
   country: 'IN',
@@ -623,16 +654,116 @@ const IN_SOURCES = {
   ),
 } satisfies Record<string, SourceRow>;
 
+const US_SOURCES = {
+  us990Series: us(
+    U.us990Series,
+    '2026-06-28',
+    'Form 990-N: "Gross receipts normally ≤ $50,000"; Form 990-EZ: "Gross receipts < $200,000, and Total assets < $500,000"; Form 990: ' +
+      '"Gross receipts ≥ $200,000, or Total assets ≥ $500,000"; Form 990-PF for a private foundation regardless of financial status. ' +
+      'An organization eligible for the 990-N may file a full return instead.',
+  ),
+  usWhoMustFile: us(
+    U.usWhoMustFile,
+    '2026-06-27',
+    'Every organization exempt under section 501(a) "must file an annual information return", except among others a church or ' +
+      'convention or association of churches; one that "normally has annual gross receipts of $50,000 or less" may file the Form ' +
+      '990-N electronic notice instead.',
+  ),
+  us990DueDate: us(
+    U.us990DueDate,
+    '2026-06-28',
+    'Form 990, 990-EZ or 990-PF "must be filed by the 15th day of the 5th month after the end of your organization\'s accounting ' +
+      'period" (May 15 for a calendar year). The 990-N cannot be extended.',
+  ),
+  usAutomaticRevocation: us(
+    U.usAutomaticRevocation,
+    '2026-06-28',
+    '"Organizations that do not file for three consecutive years automatically lose their tax-exempt status" (section 6033(j)), ' +
+      'as of the original due date of the third return or notice.',
+  ),
+  us501c3Requirements: us(
+    U.us501c3Requirements,
+    '2026-06-28',
+    'A 501(c)(3) organization must be "organized and operated exclusively for exempt purposes set forth in section 501(c)(3)"; ' +
+      '"none of its earnings may inure to any private shareholder or individual"; it may not attempt to influence legislation as a ' +
+      'substantial part of its activities or take part in any political campaign. Organizations described in 501(c)(3) (except ' +
+      'testing for public safety) "are eligible to receive tax-deductible contributions in accordance with Code section 170".',
+  ),
+  usApplying: us(
+    U.usApplying,
+    '2026-07-21',
+    'Applications for recognition: Form 1023 or 1023-EZ for 501(c)(3); Form 1024-A for 501(c)(4) and Form 8976 (notice of intent ' +
+      'to operate under section 501(c)(4)); Form 1024 for other 501(c) organizations. "Form 1023 applications for recognition of ' +
+      'exemption must be submitted electronically online at Pay.gov."',
+  ),
+  usForm1024Optional: us(
+    U.usForm1024Instructions,
+    null,
+    'Instructions for Form 1024 (Rev. January 2022): "Certain organizations aren\'t required to apply for tax-exempt status; however, ' +
+      'they may wish to file Form 1024 to receive a determination letter of IRS recognition of their section 501(c) status".',
+  ),
+  usSocialClubs: us(
+    U.usSocialClubs,
+    '2026-06-28',
+    'A social club "may receive up to 35 percent of its gross receipts from nonmember sources", investment income included, and ' +
+      '"no more than 15 percent of gross receipts may be derived from nonmember use of club facilities and services". Clubs are ' +
+      '"generally taxed on income from non-members who are not bona fide guests of members" and "on income from investments"; Form ' +
+      '990-T for unrelated business income of $1,000 or more.',
+  ),
+  usSocialWelfare: us(
+    U.usSocialWelfare,
+    '2026-06-28',
+    'A 501(c)(4) organization must be "operated exclusively to promote social welfare" and not organized for profit. "Section 506 ' +
+      'requires an organization to notify the IRS of its intent to operate as a Section 501(c)(4) organization." Political ' +
+      'campaign activity may not be its primary activity.',
+  ),
+  us501c4Donations: us(
+    U.us501c4Donations,
+    '2026-06-28',
+    'Contributions to civic leagues or other 501(c)(4) organizations "generally are not deductible as charitable contributions for ' +
+      'federal income tax purposes"; donations to volunteer fire companies (for exclusively public purposes) and to certain war ' +
+      'veterans organizations are.',
+  ),
+  usDeductibleRecipients: us(
+    U.usDeductibleRecipients,
+    '2026-10-09',
+    '"Only certain categories of exempt organizations are eligible to receive tax-deductible charitable contributions": most ' +
+      '501(c)(3) organizations, certain 501(c)(8), (10) and (13) organizations, volunteer fire departments, certain veterans ' +
+      'organizations, and a state or its subdivisions for exclusively public purposes.',
+  ),
+  usWrittenAcknowledgments: us(
+    U.usWrittenAcknowledgments,
+    '2026-06-28',
+    'A donor needs a written acknowledgment from the charity to substantiate a "charitable contribution of $250 or more": the ' +
+      'organization\'s name, the cash amount, a description (not the value) of a non-cash gift, and any goods or services given in ' +
+      'return with a good-faith estimate of their value.',
+  ),
+  usUbit: us(
+    U.usUbit,
+    '2026-06-27',
+    '"An exempt organization that has $1,000 or more of gross income from an unrelated business must file" Form 990-T. Unrelated ' +
+      'business income is from "a trade or business, regularly carried on, that is not substantially related" to the exempt purpose; ' +
+      'special rules for 501(c)(7) clubs.',
+  ),
+  usStateSolicitation: us(
+    U.usStateSolicitation,
+    '2026-06-28',
+    '"Many states have laws regulating the solicitation of funds for charitable purposes"; they generally require a charity to ' +
+      'register with a state agency before soliciting, with exemptions for some categories.',
+  ),
+} satisfies Record<string, SourceRow>;
+
 export type GbOrgSourceKey = keyof typeof GB_SOURCES;
 export type AuOrgSourceKey = keyof typeof AU_SOURCES;
 export type InOrgSourceKey = keyof typeof IN_SOURCES;
-export type OrgSourceKey = GbOrgSourceKey | AuOrgSourceKey | InOrgSourceKey;
+export type UsOrgSourceKey = keyof typeof US_SOURCES;
+export type OrgSourceKey = GbOrgSourceKey | AuOrgSourceKey | InOrgSourceKey | UsOrgSourceKey;
 
 const withIds = <K extends string>(rows: Record<K, SourceRow>): Record<K, OrgSource> =>
   Object.fromEntries(Object.entries<SourceRow>(rows).map(([id, r]) => [id, { id, ...r }])) as Record<K, OrgSource>;
 
 /** Every rule source, by key. Keys do not overlap between countries. */
-export const ORG_RULE_SOURCES: Record<OrgSourceKey, OrgSource> = { ...withIds(GB_SOURCES), ...withIds(AU_SOURCES), ...withIds(IN_SOURCES) };
+export const ORG_RULE_SOURCES: Record<OrgSourceKey, OrgSource> = { ...withIds(GB_SOURCES), ...withIds(AU_SOURCES), ...withIds(IN_SOURCES), ...withIds(US_SOURCES) };
 
 // ─── Figures ────────────────────────────────────────────────────────────────
 
@@ -669,6 +800,7 @@ const GB_ALL = ['GB_CLUB', 'GB_PTA', 'GB_CASC', ...GB_CHARITIES];
 const AU_ALL = ['AU_INCORPORATED_ASSOCIATION', 'AU_ACNC_CHARITY', 'AU_CLUB'];
 const IN_NPOS = ['IN_PUBLIC_TRUST', 'IN_SOCIETY', 'IN_SECTION8_COMPANY'];
 const IN_ALL = [...IN_NPOS, 'IN_CLUB'];
+const US_EXEMPT = ['US_501C3', 'US_501C7', 'US_501C4'];
 
 const CC = 'Charity Commission (England and Wales)';
 const NEW = GB_CC_THRESHOLDS_FROM_YEAR_END;
@@ -805,4 +937,14 @@ export const ORG_FIGURES: readonly OrgFigure[] = [
   fig({ id: 'IN.gst.registrationOver', country: 'IN', label: 'GST registration: aggregate turnover in a financial year over', value: 2000000, taxYear: 'current', currency: 'INR', test: 'over', regulator: 'CBIC (India)', appliesTo: IN_ALL, yearsEndingFrom: null, yearsEndingBefore: null, source: 'inGstRegistration', note: 'Twenty lakh rupees (CGST Act section 22(1)), for a supplier of services. A State may have it raised to forty lakh for a supplier of goods only.' }),
   fig({ id: 'IN.gst.registrationSpecialCategoryOver', country: 'IN', label: 'GST registration from a special category State: aggregate turnover over', value: 1000000, taxYear: 'current', currency: 'INR', test: 'over', regulator: 'CBIC (India)', appliesTo: IN_ALL, yearsEndingFrom: null, yearsEndingBefore: null, source: 'inGstRegistration', note: 'Ten lakh rupees for supplies from Arunachal Pradesh, Assam, Himachal Pradesh, Meghalaya, Sikkim or Uttarakhand; the Government may raise it to up to twenty lakh on the State\'s request.' }),
   fig({ id: 'IN.gst.rwaMemberContributionExemptUpTo', country: 'IN', label: 'RWA: member contribution exempt from GST up to (per member, per month)', value: 7500, taxYear: 'from 25 January 2018 (Circular 109/28/2019-GST)', currency: 'INR', test: 'or_less', regulator: 'CBIC (India)', appliesTo: ['IN_SOCIETY', 'IN_CLUB'], yearsEndingFrom: null, yearsEndingBefore: null, source: 'inGstRwa', note: 'A resident welfare association\'s charges to its own members for common use are exempt up to Rs. 7,500 a member a month; with aggregate turnover of Rs. 20 lakh or less it need not register at all.' }),
+  // ─── US — IRS ───
+  fig({ id: 'US.irs.form990nGrossReceiptsUpTo', country: 'US', label: 'Form 990-N (e-Postcard) allowed: gross receipts normally up to', value: 50000, taxYear: 'current', currency: 'USD', test: 'or_less', regulator: 'IRS', appliesTo: US_EXEMPT, yearsEndingFrom: null, yearsEndingBefore: null, source: 'us990Series', note: 'Gross receipts normally $50,000 or less: the Form 990-N electronic notice (a full return is allowed instead). Not for a private foundation.' }),
+  fig({ id: 'US.irs.form990ezGrossReceiptsUnder', country: 'US', label: 'Form 990-EZ allowed: gross receipts under', value: 200000, taxYear: 'current', currency: 'USD', test: 'under', regulator: 'IRS', appliesTo: US_EXEMPT, yearsEndingFrom: null, yearsEndingBefore: null, source: 'us990Series', note: 'Gross receipts under $200,000 AND total assets under $500,000: Form 990-EZ; otherwise Form 990.' }),
+  fig({ id: 'US.irs.form990ezTotalAssetsUnder', country: 'US', label: 'Form 990-EZ allowed: total assets under', value: 500000, taxYear: 'current', currency: 'USD', test: 'under', regulator: 'IRS', appliesTo: US_EXEMPT, yearsEndingFrom: null, yearsEndingBefore: null, source: 'us990Series', note: 'Total assets of $500,000 or more (or gross receipts of $200,000 or more): Form 990.' }),
+  fig({ id: 'US.irs.returnDueMonthAfterYearEnd', country: 'US', label: 'Form 990 / 990-EZ due: the 15th day of this month after the year end', value: 5, taxYear: 'current', currency: null, test: 'is', regulator: 'IRS', appliesTo: US_EXEMPT, yearsEndingFrom: null, yearsEndingBefore: null, source: 'us990DueDate', note: 'The 15th day of the 5th month after the accounting period ends (May 15 for a calendar year).' }),
+  fig({ id: 'US.irs.automaticRevocationYears', country: 'US', label: 'Exemption automatically revoked after this many consecutive years without a return or notice', value: 3, taxYear: 'current', currency: null, test: 'is', regulator: 'IRS', appliesTo: US_EXEMPT, yearsEndingFrom: null, yearsEndingBefore: null, source: 'usAutomaticRevocation', note: 'Three consecutive years with no Form 990-series return or 990-N notice: exemption is lost from the third due date (section 6033(j)).' }),
+  fig({ id: 'US.irs.form990tUnrelatedIncomeAtLeast', country: 'US', label: 'Form 990-T required: gross unrelated business income of at least', value: 1000, taxYear: 'current', currency: 'USD', test: 'at_least', regulator: 'IRS', appliesTo: US_EXEMPT, yearsEndingFrom: null, yearsEndingBefore: null, source: 'usUbit', note: '$1,000 or more of gross income from an unrelated trade or business regularly carried on: file Form 990-T.' }),
+  fig({ id: 'US.irs.socialClubNonmemberShareUpTo', country: 'US', label: 'Social club: gross receipts from nonmember sources (investment income included) up to', value: 0.35, taxYear: 'current', currency: null, test: 'or_less', regulator: 'IRS', appliesTo: ['US_501C7'], yearsEndingFrom: null, yearsEndingBefore: null, source: 'usSocialClubs', note: 'Up to 35% of gross receipts from nonmember sources, of which no more than 15% from nonmember use of club facilities and services.' }),
+  fig({ id: 'US.irs.socialClubNonmemberFacilitiesShareUpTo', country: 'US', label: 'Social club: gross receipts from nonmember use of facilities and services up to', value: 0.15, taxYear: 'current', currency: null, test: 'or_less', regulator: 'IRS', appliesTo: ['US_501C7'], yearsEndingFrom: null, yearsEndingBefore: null, source: 'usSocialClubs', note: 'Within the 35%: no more than 15% of gross receipts from nonmembers using the club\'s facilities and services. Over the safe harbor, the facts must show the club is organized substantially for exempt purposes.' }),
+  fig({ id: 'US.irs.writtenAcknowledgmentAtLeast', country: 'US', label: 'Donor needs a written acknowledgment from the charity: single contribution of at least', value: 250, taxYear: 'current', currency: 'USD', test: 'at_least', regulator: 'IRS', appliesTo: ['US_501C3'], yearsEndingFrom: null, yearsEndingBefore: null, source: 'usWrittenAcknowledgments', note: 'For a contribution of $250 or more the donor needs the charity\'s written acknowledgment: its name, the amount, a description of non-cash gifts, and any goods or services given in return with their estimated value.' }),
 ];

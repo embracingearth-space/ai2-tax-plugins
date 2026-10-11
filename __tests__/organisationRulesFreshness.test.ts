@@ -36,18 +36,32 @@ describe('the gate itself (fixed dates)', () => {
     expect(orgRulesPastReview('2026-10-11')).toEqual([]);
   });
 
-  it('would fail on 1 April 2027 for every IN row (tax year 2027-28), and not yet for GB or AU', () => {
-    const due = orgRulesPastReview('2027-04-01');
-    expect(new Set(due.map((i) => i.country))).toEqual(new Set(['IN']));
-    expect(due.length).toBe(orgRulesInventory().filter((i) => i.country === 'IN').length);
-    expect(due.map((i) => i.series)).toEqual(expect.arrayContaining(['ORG.IN.source.inEightyFivePercent', 'ORG.IN.gst.registrationOver']));
+  // Each country is re-read before its own next tax year: US (2027 filing season), IN (tax year 2027-28 from 1 April),
+  // GB (6 April), AU (1 July). The day after its review date every one of its rows is due, and no row of a later country.
+  const REVIEW_BY: Array<[string, string, string]> = [
+    ['US', '2027-01-31', '2027-02-01'],
+    ['IN', '2027-03-31', '2027-04-01'],
+    ['GB', '2027-04-05', '2027-04-06'],
+    ['AU', '2027-06-30', '2027-07-01'],
+  ];
+  it.each(REVIEW_BY)('%s rows are due the day after %s, together with every earlier country', (country, reviewBy, dayAfter) => {
+    const earlier = REVIEW_BY.filter(([, r]) => r <= reviewBy).map(([c]) => c);
+    const due = orgRulesPastReview(dayAfter);
+    expect(new Set(due.map((i) => i.country))).toEqual(new Set(earlier));
+    expect(due.filter((i) => i.country === country).length).toBe(orgRulesInventory().filter((i) => i.country === country).length);
+    expect(orgRulesPastReview(reviewBy).filter((i) => i.country === country)).toEqual([]);
+  });
+
+  it('every row of a country has that country\'s review date', () => {
+    const byCountry = Object.fromEntries(REVIEW_BY.map(([c, r]) => [c, r]));
+    for (const i of orgRulesInventory()) expect({ series: i.series, reviewBy: i.reviewBy }).toEqual({ series: i.series, reviewBy: byCountry[i.country] });
   });
 
   it('would fail on 6 April 2027 for every GB row, and not yet for AU', () => {
     const due = orgRulesPastReview('2027-04-06');
     expect(due.length).toBeGreaterThan(0);
-    expect(new Set(due.map((i) => i.country))).toEqual(new Set(['GB', 'IN']));
-    expect(due.map((i) => i.series)).toEqual(expect.arrayContaining(['ORG.GB.source.giftAidRate', 'ORG.GB.cc.receiptsAndPaymentsUpTo@2026-09-30']));
+    expect(due.some((i) => i.country === 'AU')).toBe(false);
+    expect(due.map((i) => i.series)).toEqual(expect.arrayContaining(['ORG.GB.source.giftAidRate', 'ORG.GB.cc.receiptsAndPaymentsUpTo@2026-09-30', 'ORG.IN.source.inEightyFivePercent', 'ORG.US.irs.form990nGrossReceiptsUpTo']));
   });
 
   it('would fail on 1 July 2027 for AU too', () => {

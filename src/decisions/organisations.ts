@@ -30,6 +30,8 @@
  *                        files that is not a BAS: IN (GSTR-3B). Added because
  *                        'gst_bas' names Australia's activity statement and
  *                        'vat' is not GST; any of these orgs may be registered.
+ * US types list only 'receipts_payments': there is no federal VAT/GST, and the
+ * Form 990 series is an information return the notes describe, not an export.
  * No income-tax-return export is listed for any org type.
  *
  * `incomeTaxForecast` is true only where a forecast on the books' surplus
@@ -158,8 +160,15 @@ const IN_TYPES: OrgType[] = [
   t('IN_CLUB', 'Club or association (including a resident welfare association)', 'IN', 'club', 'Not registered, or as a society'),
 ];
 
+const US_TYPES: OrgType[] = [
+  t('US_501C3', 'Charity (501(c)(3) public charity)', 'US', 'charity', 'IRS (recognised under 501(c)(3)), and the states where it solicits'),
+  t('US_501C7', 'Social club (501(c)(7))', 'US', 'club', 'IRS (Form 1024)'),
+  t('US_501C4', 'Social welfare or other nonprofit (501(c)(4) and others)', 'US', 'association', 'IRS (Form 8976 notice for 501(c)(4))'),
+  t('US_CLUB', 'Club or group not recognised as exempt', 'US', 'community', 'Not registered'),
+];
+
 /** The countries with their own types; every other country gets the generic ones. */
-const COUNTRY_TYPES: Record<string, OrgType[]> = { GB: GB_TYPES, AU: AU_TYPES, IN: IN_TYPES };
+const COUNTRY_TYPES: Record<string, OrgType[]> = { GB: GB_TYPES, AU: AU_TYPES, IN: IN_TYPES, US: US_TYPES };
 
 const GENERIC_CODES = ['CLUB', 'CHARITY'] as const;
 const genericTypes = (country: string): OrgType[] => [
@@ -255,6 +264,20 @@ const REGULATORS = {
       'Both are applied for to the Principal Commissioner or Commissioner and are separate: registration gives the organisation its ' +
       'exemption, approval lets donors deduct. Registration lasts 3 tax years (provisional) or 5 (10 for a small organisation); a ' +
       'registration under section 12AB(1) or 10(23C), or an approval under section 80G(5), of the 1961 Act counts while it is valid (section 355).',
+  },
+  irs: {
+    name: 'IRS (exempt organizations)',
+    covers: 'Recognition of exemption and the annual Form 990-series return or notice',
+    url: ORG_URLS.usApplying,
+    note:
+      'Form 990-N, 990-EZ or 990 by gross receipts and assets (see orgReportingThresholds), due the 15th day of the 5th month after ' +
+      'the year end; three years without one and exemption is revoked automatically.',
+  },
+  usStates: {
+    name: 'State charity regulator',
+    covers: 'Charitable solicitation registration, state by state',
+    url: ORG_URLS.usStateSolicitation,
+    note: 'Many states require a charity to register before soliciting donations from their residents; the rules differ by state and are not modelled here.',
   },
 } satisfies Record<string, OrgRegulator>;
 
@@ -614,6 +637,111 @@ function inRules(code: string): OrgRules | null {
   }
 }
 
+const US_RETURN_NOTE =
+  'Annual return (federal, an information return): Form 990-N if gross receipts are normally $50,000 or less, Form 990-EZ under ' +
+  '$200,000 with assets under $500,000, otherwise Form 990; due the 15th day of the 5th month after the year end. Three years ' +
+  'without one and exemption is revoked automatically. Unrelated business income of $1,000 or more (gross) is reported on Form ' +
+  '990-T and taxed.';
+
+const US_ACCOUNTS: OrgAccounts = {
+  receiptsAndPaymentsAllowed: true,
+  note: 'No federal accounts format; the Form 990-series return reports the figures. State law (and a state audit rule for larger charities) may set one — not modelled.',
+};
+
+const US_RETURN_SOURCES: OrgSourceKey[] = ['usWhoMustFile', 'us990Series', 'us990DueDate', 'usAutomaticRevocation', 'usUbit'];
+
+function usRules(code: string): OrgRules | null {
+  const base = { country: 'US', code };
+  switch (code) {
+    case 'US_501C3':
+      return {
+        ...base,
+        incomeTax: {
+          status: 'exempt_if_conditions',
+          note:
+            'Exempt from federal income tax once recognised under 501(c)(3) (Form 1023 or 1023-EZ), while organized and operated ' +
+            'exclusively for its exempt purposes, with no earnings inuring to any private person, no substantial lobbying and no ' +
+            `political campaign activity. ${US_RETURN_NOTE} A private foundation files Form 990-PF instead. State tax and state ` +
+            'charity registration are separate.',
+        },
+        donationRelief: {
+          scheme: 'donor_deduction',
+          declarationRequired: false,
+          note:
+            'Information only: donors may deduct gifts to most 501(c)(3) organizations (Code section 170). For a single contribution ' +
+            'of $250 or more the donor needs a written acknowledgment from the charity — its name, the amount, a description of a ' +
+            'non-cash gift, and any goods or services given in return with a good-faith estimate of their value.',
+        },
+        reports: ['receipts_payments'],
+        incomeTaxForecast: false,
+        accounts: US_ACCOUNTS,
+        regulators: reg('irs', 'usStates'),
+        sources: src('us501c3Requirements', 'usApplying', ...US_RETURN_SOURCES, 'usDeductibleRecipients', 'usWrittenAcknowledgments', 'usStateSolicitation'),
+      };
+    case 'US_501C7':
+      return {
+        ...base,
+        incomeTax: {
+          status: 'mutuality',
+          note:
+            'A 501(c)(7) social club is not taxed on what members pay for its facilities, but is generally taxed on income from ' +
+            'non-members who are not bona fide guests of members and on investment income. It stays exempt while no more than 35% ' +
+            'of gross receipts come from nonmember sources (investment income included) and no more than 15% from nonmember use of ' +
+            'its facilities and services. It applies for recognition on Form 1024 (the instructions say certain organizations ' +
+            `are not required to apply). ${US_RETURN_NOTE} Gifts to it are not deductible ` +
+            'as charitable contributions.',
+        },
+        donationRelief: null,
+        reports: ['receipts_payments'],
+        incomeTaxForecast: false,
+        accounts: US_ACCOUNTS,
+        regulators: reg('irs'),
+        sources: src('usSocialClubs', 'usForm1024Optional', 'usApplying', ...US_RETURN_SOURCES, 'usDeductibleRecipients'),
+      };
+    case 'US_501C4':
+      return {
+        ...base,
+        incomeTax: {
+          status: 'exempt_if_conditions',
+          note:
+            'A 501(c)(4) social welfare organization is exempt while operated exclusively to promote social welfare and not for ' +
+            'profit; political campaign activity may not be its primary activity. It notifies the IRS of its intent to operate under ' +
+            '501(c)(4) on Form 8976 (section 506) and may apply for recognition on Form 1024-A. Other 501(c) types apply on Form 1024 where ' +
+            `required. ${US_RETURN_NOTE}`,
+        },
+        donationRelief: null,
+        reports: ['receipts_payments'],
+        incomeTaxForecast: false,
+        accounts: {
+          ...US_ACCOUNTS,
+          note: `${US_ACCOUNTS.note} Gifts to a 501(c)(4) are generally not deductible as charitable contributions (volunteer fire companies and certain veterans organizations excepted).`,
+        },
+        regulators: reg('irs'),
+        sources: src('usSocialWelfare', 'usApplying', 'usForm1024Optional', ...US_RETURN_SOURCES, 'us501c4Donations', 'usDeductibleRecipients'),
+      };
+    case 'US_CLUB':
+      return {
+        ...base,
+        incomeTax: {
+          status: 'check_locally',
+          note:
+            'A club or group is exempt from federal income tax only if it fits a section 501(c) category and meets its conditions. ' +
+            'Certain organizations are not required to apply for recognition: a social club within the 35% / 15% nonmember limits ' +
+            'should check whether it is a 501(c)(7) — if so, choose "Social club (501(c)(7))". A charity must be recognised under 501(c)(3) for gifts to it to ' +
+            'be deductible. Otherwise its income is taxable; how depends on its form and state law. Check with a tax adviser.',
+        },
+        donationRelief: null,
+        reports: ['receipts_payments'],
+        incomeTaxForecast: false,
+        accounts: { receiptsAndPaymentsAllowed: true, note: 'No federal accounts format for an unincorporated club or group: its own rules decide.' },
+        regulators: [],
+        sources: src('usForm1024Optional', 'usSocialClubs', 'us501c3Requirements', 'usDeductibleRecipients'),
+      };
+    default:
+      return null;
+  }
+}
+
 function genericRules(country: string, code: string): OrgRules | null {
   if (!(GENERIC_CODES as readonly string[]).includes(code)) return null;
   return {
@@ -644,6 +772,7 @@ export function orgRulesFor(country: string, code: string, yearEnd?: string | Da
   if (c === 'GB') return gbRules(k, yearEndOf(yearEnd));
   if (c === 'AU') return auRules(k);
   if (c === 'IN') return inRules(k);
+  if (c === 'US') return usRules(k);
   return genericRules(c, k);
 }
 
@@ -656,7 +785,7 @@ function yearEndOf(yearEnd?: string | Date): string {
 
 /**
  * The dated figures for a country's organisations (GB: Charity Commission, OSCR, CCNI and HMRC; AU: ACNC and ATO;
- * IN: Income Tax Department and CBIC), for a financial year ending on `yearEnd` (default today). One row per figure
+ * IN: Income Tax Department and CBIC; US: IRS), for a financial year ending on `yearEnd` (default today). One row per figure
  * id; empty for other countries.
  */
 export function orgReportingThresholds(country: string, yearEnd?: string | Date): OrgFigure[] {
