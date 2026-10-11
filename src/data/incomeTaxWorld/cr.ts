@@ -21,6 +21,11 @@ export const CR_INCOME_TAX: CountryIncomeTaxData = {
     'Single resident employee with one employer, no children or spouse credit, paid the same salary every month; the aguinaldo is not part of the input.',
     'CCSS (health and IVM) and Banco Popular worker social-security contributions are not included and are not deductible from the salary-tax base.',
   ],
+  incomeBasis: {
+    default: 'employment',
+    selfEmployed: 'differs',
+    selfEmployedNote: 'This is the salary-tax scale; self-employed income uses a separate scale that is taxed from a much lower threshold, so the tax is higher.',
+  },
   years: [
     {
       taxYear: '2026',

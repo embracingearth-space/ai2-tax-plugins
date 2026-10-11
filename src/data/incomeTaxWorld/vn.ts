@@ -22,6 +22,11 @@ export const VN_INCOME_TAX: CountryIncomeTaxData = {
     'Single tax-resident individual, no dependants, wage/salary income only; tax period = calendar year.',
     'Compulsory social, health and unemployment insurance contributions are not included as a charge. They are deductible, but their 2025–2026 wage ceilings (and the health/unemployment rates) were not confirmed, so taxable income ignores them and tax may be overstated.',
   ],
+  incomeBasis: {
+    default: 'any',
+    selfEmployed: 'differs',
+    selfEmployedNote: 'Household businesses are taxed on revenue rather than income, with a revenue exemption threshold, so the figure does not apply to them.',
+  },
   years: [
     {
       taxYear: '2026',

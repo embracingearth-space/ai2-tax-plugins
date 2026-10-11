@@ -2,6 +2,16 @@
 
 ## 2.2.0 — Unreleased
 
+### Fixed — the income-tax estimator says what income it was computed for
+
+The estimator takes one gross figure and no income type, so countries that apply an employee-only item quietly handed salaried figures to freelancers. India gave a freelancer on ₹14.1L the ₹75,000 salary standard deduction, ₹83,460 instead of ₹95,160, and the answer carried no assumptions at all: the "salaried" scope lived in the scheme `note`, which never reaches a result. An audit of all 57 countries found employment-only items applied in 35 of them.
+
+- Every scheme now declares an `incomeBasis` (`IncomeBasis`): whether the default figure applies employee-only items, and whether self-employed income is the same, modelled, or different. Every result now leads its `assumptions` with that, and carries `incomeBasis: 'employment' | 'self-employed' | 'any'`. The six hand-written schemes that returned no assumptions now do.
+- New option `incomeType: 'employment' | 'self-employed'`, read by every country. India (no standard deduction) and the UK (Class 4 instead of employee Class 1 National Insurance) compute self-employed profit; countries where it is materially the same answer it; the rest refuse it with a RangeError naming what differs, rather than return the employment figure. Quebec's workers' deduction and Yukon's Canada employment amount are dropped for self-employed income.
+- US and Canada say "Federal tax only" when no state or province is selected. The US Additional Medicare Tax (0.9%) has its own line instead of hiding inside "Medicare (1.45%)". The UK National Insurance line is now named for its class.
+- Australia: LITO now reduces income tax only and never the Medicare levy. It is non-refundable, and the ATO says excess non-refundable offsets are "not offset against other liabilities"; the engine's comments had claimed the opposite. In practice this changes only years without low-income thresholds. 2024-25 gets its own thresholds ($27,222 / $34,027, ATO 2025 M1 instructions), and a year with none on file (2027-28) says so instead of claiming the reduction is included. Finland's default age range follows the year (18–64 from 2026).
+- New `resolveIncomeTaxYear(country, typed)`, used by every year lookup: '2026-27' now finds India's '2026-27 (AY 2027-28)', '2026/27' and '2026 to 2027' find the UK's, 'YA 2027' finds Singapore's '2026 (YA 2027)', and where the authority names a year by its end (Pakistan, South Africa, New Zealand) '2027' finds 2026-27. Never by substring, never a guessed start year elsewhere, and a match must be unique.
+
 ### Added — organisations: clubs, PTAs and charities (GB, AU, generic)
 
 - `orgTypesFor(country)` returns the org types for a country, each with `registeredWith` and `group: 'organisation'`:

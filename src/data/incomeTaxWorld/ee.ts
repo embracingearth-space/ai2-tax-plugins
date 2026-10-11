@@ -21,6 +21,11 @@ export const EE_INCOME_TAX: CountryIncomeTaxData = {
     'Employee unemployment insurance (1.6%) and the II-pillar funded pension contribution are social contributions and are not included. Whether they reduce the income-tax base was not confirmed from an official source, so they are not deducted and the tax may be slightly overstated.',
     'No municipal income tax is set locally; no security tax applies to wages (EMTA).',
   ],
+  incomeBasis: {
+    default: 'any',
+    selfEmployed: 'differs',
+    selfEmployedNote: 'A sole proprietor (FIE) also pays 33% social tax on profit and can deduct it, so their income tax is lower.',
+  },
   years: [
     {
       taxYear: '2026',

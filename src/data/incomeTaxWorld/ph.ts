@@ -42,6 +42,11 @@ export const PH_INCOME_TAX: CountryIncomeTaxData = {
     'Gross is assumed to be regular compensation only — no 13th-month pay or other benefits (those are excluded up to PHP 90,000 a year and would lower the tax).',
     'Social contributions (SSS, PhilHealth, Pag-IBIG) are not included as charges. The employee SSS share (5% of the Monthly Salary Credit, PHP 5,000–35,000 a month) is excluded from taxable income; the PhilHealth and Pag-IBIG employee shares were not confirmed on an official page and are not excluded, so tax may be slightly overstated.',
   ],
+  incomeBasis: {
+    default: 'employment',
+    selfEmployed: 'differs',
+    selfEmployedNote: 'A self-employed person can choose an 8% tax on gross receipts above ₱250,000, or the graduated rates with a 40% optional standard deduction plus percentage tax.',
+  },
   years: [
     {
       taxYear: '2026',

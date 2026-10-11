@@ -41,6 +41,11 @@ export const TH_INCOME_TAX: CountryIncomeTaxData = {
     'Only the 50% expense deduction (max THB 100,000) and the THB 60,000 personal allowance are applied.',
     'Social Security Fund contributions are not included as a charge. They are deductible as paid, but the employee contribution rate was not confirmed on an official page, so taxable income ignores them and tax may be slightly overstated.',
   ],
+  incomeBasis: {
+    default: 'employment',
+    selfEmployed: 'differs',
+    selfEmployedNote: 'The employment expense deduction (50%, capped) applies here; professional and business income use different deemed-expense rates (30% to 60%), so the tax differs.',
+  },
   years: [
     {
       taxYear: '2026',

@@ -68,6 +68,11 @@ export const SG_INCOME_TAX: CountryIncomeTaxData = {
     'CPF contributions are not included as a charge; the compulsory employee CPF share (CPF Table 1, up to the monthly Ordinary Wage ceiling) is deducted as CPF Relief. Payroll rounding of CPF is ignored.',
     'Income earned in calendar year N is assessed in Year of Assessment N+1.',
   ],
+  incomeBasis: {
+    default: 'employment',
+    selfEmployed: 'differs',
+    selfEmployedNote: 'CPF relief at the employee rate applies here; a self-employed person gets relief only for MediSave contributions, so the tax is higher.',
+  },
   optionsSupported: ['age'],
   years: [
     {

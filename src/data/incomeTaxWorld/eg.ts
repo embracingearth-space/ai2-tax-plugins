@@ -71,6 +71,11 @@ export const EG_INCOME_TAX: CountryIncomeTaxData = {
     'Social insurance contributions (Law 148/2019) are not included as charges; the employee shares (9% pensions + 1% sickness, up to the maximum insurable wage) are deducted in computing net salary. The commonly quoted 11% total was not found in the law.',
     'Net income is rounded down to the nearest EGP 10 before the scale is applied.',
   ],
+  incomeBasis: {
+    default: 'employment',
+    selfEmployed: 'differs',
+    selfEmployedNote: 'Employee social insurance and the personal exemption in the salary chapter apply here; a self-employed person gets neither and may use the turnover regime.',
+  },
   years: [
     year('2026', '2026-01-01', 16700),
     year('2025', '2025-01-01', 14500),

@@ -55,6 +55,11 @@ export const MY_INCOME_TAX: CountryIncomeTaxData = {
     'EPF, SOCSO and EIS contributions are social contributions and are not included as charges; their employee shares (11%, 0.5%, 0.2% to RM6,000/month) are deducted only as the capped tax reliefs (RM4,000 and RM350).',
     'SOCSO is collected by stepped schedule; the nominal 0.5% rate is used for the relief, which reaches its RM350 cap at about RM50,000 of wages.',
   ],
+  incomeBasis: {
+    default: 'employment',
+    selfEmployed: 'differs',
+    selfEmployedNote: 'EPF and SOCSO/EIS relief apply to employees; above about RM100,000 a self-employed person’s tax is noticeably different.',
+  },
   years: [
     {
       taxYear: '2026',

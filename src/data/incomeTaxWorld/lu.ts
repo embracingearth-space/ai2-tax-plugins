@@ -82,6 +82,11 @@ export const LU_INCOME_TAX: CountryIncomeTaxData = {
     'CIS and CI-CO2 are applied as non-refundable reductions of the tax; in payroll they are paid out even when no tax is due.',
     "The fonds pour l'emploi surcharge is charged on the tariff tax before the CIS / CI-CO2 credits; the official rounding of the tariff is not applied.",
   ],
+  incomeBasis: {
+    default: 'employment',
+    selfEmployed: 'differs',
+    selfEmployedNote: 'Employee contributions and the employee tax credit apply here; a self-employed person pays both shares of social contributions and gets the self-employed credit instead, usually paying less tax.',
+  },
   years: [
     {
       taxYear: '2026',

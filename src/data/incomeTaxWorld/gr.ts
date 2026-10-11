@@ -36,6 +36,11 @@ export const GR_INCOME_TAX: CountryIncomeTaxData = {
     'Employee e-EFKA social contributions (13.37%, capped at 12 × the monthly insurable-earnings ceiling) are deducted from taxable income but not included in the tax shown. Their deductibility follows the standard KFE rule and was not re-confirmed on a fetched official page.',
     'The art. 16 reduction of 20 EUR per 1,000 EUR above 12,000 EUR is applied pro rata.',
   ],
+  incomeBasis: {
+    default: 'employment',
+    selfEmployed: 'differs',
+    selfEmployedNote: 'Employee e-EFKA contributions and the €777 wage-income tax reduction apply here; a self-employed person pays fixed EFKA contributions and gets no reduction, usually paying more.',
+  },
   years: [
     {
       taxYear: '2026',

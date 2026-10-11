@@ -54,6 +54,11 @@ export const NO_INCOME_TAX: CountryIncomeTaxData = {
     'Minstefradrag (46% of wages, capped) rather than actual expenses; the trial work deduction (skatteloven § 6-86) is not applied.',
     'Trygdeavgift (national insurance contribution) is a social contribution and is not included.',
   ],
+  incomeBasis: {
+    default: 'employment',
+    selfEmployed: 'differs',
+    selfEmployedNote: 'The minimum deduction (minstefradrag) applies to wages; a self-employed person deducts actual expenses instead and pays a higher national insurance rate.',
+  },
   years: [
     year(
       '2026',

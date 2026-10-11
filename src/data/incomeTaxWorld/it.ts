@@ -66,6 +66,11 @@ export const IT_INCOME_TAX: CountryIncomeTaxData = {
     'Excludes the addizionale regionale (1.23%–3.33%) and addizionale comunale (0%–0.9%): they vary by residence and the figure is therefore NOT the full IRPEF burden.',
     'Excludes the cuneo-fiscale somma non imponibile (a tax-free cash sum for reddito complessivo up to 20,000) and the trattamento integrativo (up to 1,200): both are paid as cash, not deducted from tax, so tax shown below 20,000 is not reduced by them.',
   ],
+  incomeBasis: {
+    default: 'employment',
+    selfEmployed: 'differs',
+    selfEmployedNote: 'Employee INPS and the employment-income deductions apply here; a self-employed person pays Gestione Separata (about 26%) and gets a smaller deduction, or uses the 15% flat regime (forfettario).',
+  },
   years: [
     {
       taxYear: '2026',

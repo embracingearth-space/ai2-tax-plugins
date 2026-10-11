@@ -46,6 +46,11 @@ export const NL_INCOME_TAX: CountryIncomeTaxData = {
     'Employee pension-fund contributions are not deducted and the nominal health-insurance premium is not included; the Zvw income-related contribution and the werknemersverzekeringen are paid by the employer and are not included.',
     'Only the algemene heffingskorting and arbeidskorting; credits are not refunded below nil.',
   ],
+  incomeBasis: {
+    default: 'any',
+    selfEmployed: 'differs',
+    selfEmployedNote: 'A self-employed person also gets the self-employed deduction (zelfstandigenaftrek) and the SME profit exemption, so their tax is noticeably lower.',
+  },
   years: [
     {
       taxYear: '2026',

@@ -119,5 +119,10 @@ export const KR_INCOME_TAX: CountryIncomeTaxData = {
     'Because the insurance premium deduction is claimed, the ₩130,000 standard tax credit does not apply.',
     'Local income tax at the standard 10% of national income tax (no local ±50% variation).',
   ],
+  incomeBasis: {
+    default: 'employment',
+    selfEmployed: 'differs',
+    selfEmployedNote: 'The earned-income deduction, the earned-income tax credit and employee insurance premiums apply here; a self-employed person gets none of them, so the tax is much higher before business expenses.',
+  },
   years: [y2026, y2025],
 };

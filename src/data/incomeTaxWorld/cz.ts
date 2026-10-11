@@ -24,6 +24,11 @@ export const CZ_INCOME_TAX: CountryIncomeTaxData = {
     'Employee social insurance (6.5% pension + 0.6% sickness) and health insurance (4.5%) are not included; the tax base is gross pay.',
     'Only the basic taxpayer credit (sleva na poplatníka); no other credits or deductions.',
   ],
+  incomeBasis: {
+    default: 'any',
+    selfEmployed: 'same',
+    selfEmployedNote: 'Social contributions are not deductible for employees or the self-employed. If you use flat-rate expenses (paušální výdaje), pass the profit after them.',
+  },
   years: [
     {
       taxYear: '2026',

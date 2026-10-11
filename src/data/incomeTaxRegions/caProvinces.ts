@@ -108,11 +108,14 @@ function basicPersonalAmount(y: ProvinceYear, netIncome: number): number {
 function provincialTax(name: string, y: ProvinceYear, ctx: RegionalTaxContext, q: MoneyRounding) {
   const gross = ctx.gross;
   // No federal deductions are modelled, so net income = taxable income = gross.
-  const workers = y.workersDeduction ? Math.min(gross * y.workersDeduction.rate, y.workersDeduction.max) : 0;
+  // The workers' deduction and the Canada employment amount are for EMPLOYMENT
+  // income only, so a caller who said the income is self-employed gets neither.
+  const employed = ctx.options.incomeType !== 'self-employed';
+  const workers = employed && y.workersDeduction ? Math.min(gross * y.workersDeduction.rate, y.workersDeduction.max) : 0;
   const taxable = nonNegative(gross - workers);
   const basic = progressive(taxable, y.bands);
   let credits = y.creditRate * basicPersonalAmount(y, gross);
-  if (y.canadaEmploymentAmount) credits += y.creditRate * Math.min(gross, y.canadaEmploymentAmount);
+  if (employed && y.canadaEmploymentAmount) credits += y.creditRate * Math.min(gross, y.canadaEmploymentAmount);
   const afterCredits = nonNegative(basic - credits);
   const surtax = (y.surtax ?? []).reduce((s, t) => s + t.rate * nonNegative(afterCredits - t.threshold), 0);
   let tax = afterCredits + surtax;

@@ -225,7 +225,7 @@ describe('Scotland — Scottish bands replace the rUK bands, never added to them
     expect(sct.taxable).toBe(ruk.taxable);
     expect(sct.incomeTax).toBe(8982);
     expect(ruk.incomeTax).toBe(7486);
-    expect(line(sct, 'National Insurance')).toBe(line(ruk, 'National Insurance'));
+    expect(line(sct, 'National Insurance (Class 1, employee)')).toBe(line(ruk, 'National Insurance (Class 1, employee)'));
     expect(sct.region).toMatchObject({ code: 'SCT', name: 'Scotland', taxYear: '2026-27', verified: true });
   });
 

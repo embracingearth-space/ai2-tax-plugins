@@ -67,6 +67,7 @@ describe('data-built schemes — provenance on every year', () => {
 describe('the factory refuses a record that would ship without provenance', () => {
   const base: CountryIncomeTaxData = {
     code: 'ZZ', country: 'Zedland', currency: 'EUR', locale: 'en', timeZone: 'UTC', file: 'x', note: 'n', assumptions: ['a'],
+    incomeBasis: { default: 'employment', selfEmployed: 'differs', selfEmployedNote: 'Self-employed income is taxed differently.' },
     years: [{ taxYear: '2026', effectiveFrom: '2026-01-01', bands: [{ upTo: null, rate: 0.1 }], source: 'https://example.gov/z', authorityName: 'Z', citationDate: '2026-10-06', verified: true }],
   };
   const withYear = (patch: Partial<CountryIncomeTaxData['years'][number]>): CountryIncomeTaxData => ({ ...base, years: [{ ...base.years[0]!, ...patch }] });

@@ -99,6 +99,11 @@ export const DK_INCOME_TAX: CountryIncomeTaxData = {
     'The employment allowance (beskæftigelsesfradrag) and job allowance (jobfradrag) are computed on pay after AM-bidrag.',
     'The tax ceiling (skatteloft) is not applied; for 2025 at the average municipal rate it would reduce top-bracket tax by about 0.008 percentage points.',
   ],
+  incomeBasis: {
+    default: 'any',
+    selfEmployed: 'same',
+    selfEmployedNote: 'The labour-market contribution (AM-bidrag) and the employment deductions apply to self-employed earned income as well.',
+  },
   optionsSupported: ['localTaxRate', 'churchTaxRate'],
   defaultLocalTaxRate: (label) => AVERAGE_MUNICIPAL[label] ?? AVERAGE_MUNICIPAL['2026']!,
   years: [

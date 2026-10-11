@@ -26,6 +26,11 @@ export const IL_INCOME_TAX: CountryIncomeTaxData = {
     'Social contributions are not included: Bituach Leumi (National Insurance) and health insurance contributions are not income tax.',
     'The extra 2% surtax on capital income does not apply to wages.',
   ],
+  incomeBasis: {
+    default: 'any',
+    selfEmployed: 'differs',
+    selfEmployedNote: 'A self-employed person can deduct part of their National Insurance contributions, so their tax is somewhat lower.',
+  },
   years: [
     {
       taxYear: '2026',

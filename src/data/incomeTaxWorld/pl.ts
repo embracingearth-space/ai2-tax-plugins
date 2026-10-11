@@ -51,6 +51,11 @@ export const PL_INCOME_TAX: CountryIncomeTaxData = {
     'The 9% health contribution (składka zdrowotna) is not included and not deducted from the tax.',
     'No youth relief (ulga dla młodych) or other reliefs; tax scale, not a flat or lump-sum regime.',
   ],
+  incomeBasis: {
+    default: 'employment',
+    selfEmployed: 'differs',
+    selfEmployedNote: 'Employee ZUS and the flat employee costs apply here; a self-employed person pays sole-trader ZUS and may choose the 19% linear tax or a lump-sum regime.',
+  },
   years: [
     {
       taxYear: '2026',

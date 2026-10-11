@@ -97,6 +97,11 @@ export const SE_INCOME_TAX: CountryIncomeTaxData = {
     'Burial fee (begravningsavgift), Church of Sweden fee and public service fee are not included; employer contributions are employer-side.',
     'Municipal tax is shown net of the jobbskatteavdrag and the reduction for earned income.',
   ],
+  incomeBasis: {
+    default: 'any',
+    selfEmployed: 'differs',
+    selfEmployedNote: 'A self-employed person also pays and deducts their own social charges (egenavgifter), so the figure differs.',
+  },
   optionsSupported: ['localTaxRate'],
   defaultLocalTaxRate: () => AVERAGE_MUNICIPAL_2026,
   years: [Y2026],

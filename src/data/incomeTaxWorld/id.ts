@@ -48,5 +48,10 @@ export const ID_INCOME_TAX: CountryIncomeTaxData = {
     'BPJS social contributions (JHT, JP, JKN health) are not included as a charge. The deductible employee JHT contribution (2%) is deducted; the deductible JP contribution (1%) is not, because its wage cap was not confirmed, so tax may be slightly overstated.',
     'The PPh 21 borne-by-government (DTP) incentive for listed sectors is not applied.',
   ],
+  incomeBasis: {
+    default: 'employment',
+    selfEmployed: 'differs',
+    selfEmployedNote: 'The occupational expense deduction (biaya jabatan) and the employee pension contribution apply here; a self-employed person may use deemed-profit rates or the 0.5% final MSME tax instead.',
+  },
   years: [year('2026'), year('2025')],
 };

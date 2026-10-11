@@ -33,5 +33,10 @@ export const SA_INCOME_TAX: CountryIncomeTaxData = {
     'Resident employee with wage income only; no business activity.',
     'Social contributions are not included: GOSI annuities and SANED unemployment insurance (Saudi nationals) are social insurance, not income tax.',
   ],
+  incomeBasis: {
+    default: 'any',
+    selfEmployed: 'differs',
+    selfEmployedNote: 'There is no personal income tax on wages; a non-Saudi individual in business pays 20% income tax on profit, and Saudi nationals pay zakat instead.',
+  },
   years: [year('2026', '2026-01-01'), year('2025', '2025-01-01')],
 };

@@ -33,6 +33,11 @@ export const LV_INCOME_TAX: CountryIncomeTaxData = {
     'The solidarity tax on earnings above the VSAOI ceiling is not included.',
     'Bands are annual; the employer withholds only 25.5% and the higher rates are settled in the annual declaration.',
   ],
+  incomeBasis: {
+    default: 'employment',
+    selfEmployed: 'differs',
+    selfEmployedNote: 'Employee social insurance (10.5%) is deducted here; a self-employed person pays about 31% social insurance (deductible), so the tax is lower.',
+  },
   years: [
     {
       taxYear: '2026',

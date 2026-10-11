@@ -54,6 +54,11 @@ export const IS_INCOME_TAX: CountryIncomeTaxData = {
     'Útsvar at 14.94%, the national average used for withholding, unless a local rate is passed; the actual rate varies by municipality and is settled at assessment.',
     'Broadcasting fee (útvarpsgjald) and the elderly-facilities levy are not included; employer social-security tax (tryggingagjald) is employer-side.',
   ],
+  incomeBasis: {
+    default: 'employment',
+    selfEmployed: 'differs',
+    selfEmployedNote: 'A self-employed person pays the social security tax and employer pension on a deemed wage, so the figure differs.',
+  },
   optionsSupported: ['localTaxRate'],
   defaultLocalTaxRate: () => AVERAGE_UTSVAR,
   years: [

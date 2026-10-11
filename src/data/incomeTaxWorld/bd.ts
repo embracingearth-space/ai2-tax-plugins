@@ -35,6 +35,11 @@ export const BD_INCOME_TAX: CountryIncomeTaxData = {
     'No investment tax rebate and no area-based minimum tax.',
     'No social contributions are deducted or added: there is no mandatory employee social-security contribution on private-sector wages (the Universal Pension Scheme is voluntary).',
   ],
+  incomeBasis: {
+    default: 'any',
+    selfEmployed: 'same',
+    selfEmployedNote: 'The salary exemption is not applied, so this suits self-employed income and overstates the tax on a salary.',
+  },
   years: [
     {
       taxYear: '2026-27',

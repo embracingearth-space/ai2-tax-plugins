@@ -76,6 +76,11 @@ export const CH_INCOME_TAX: CountryIncomeTaxData = {
     'Employee AHV/IV/EO (5.3%) and ALV (1.1% up to CHF 148,200) social contributions are deducted from taxable income but not included in the tax; pillar 2 (BVG) and NBU contributions depend on the employer plan and are not deducted.',
     'Only the minimum CHF 2,000 flat professional-expense deduction is applied (the maximum is CHF 4,000), so tax may be slightly overstated; the insurance deduction is the CHF 1,800 for a single person with pillar 2 contributions.',
   ],
+  incomeBasis: {
+    default: 'employment',
+    selfEmployed: 'differs',
+    selfEmployedNote: 'Employee AHV/ALV contributions and the flat professional-expense deduction apply here; a self-employed person pays AHV of about 10%, no ALV and deducts actual expenses, which can lower the federal tax by 5–8% at higher incomes.',
+  },
   years: [
     {
       taxYear: '2026',

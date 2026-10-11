@@ -32,5 +32,10 @@ export const AE_INCOME_TAX: CountryIncomeTaxData = {
     'Resident employee; wages are not a taxable Business for a natural person (Cabinet Decision 49/2023 art. 2(2)(a)).',
     'Social contributions are not included: the GPSSA pension contribution (11% for UAE nationals) and the fixed ILOE unemployment-insurance premium are not income tax.',
   ],
+  incomeBasis: {
+    default: 'any',
+    selfEmployed: 'differs',
+    selfEmployedNote: 'There is no personal income tax on wages; a self-employed person’s business may owe 9% corporate tax on profit above AED 375,000 once turnover exceeds AED 1 million.',
+  },
   years: [year('2026', '2026-01-01'), year('2025', '2025-01-01')],
 };

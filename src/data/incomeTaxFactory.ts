@@ -56,6 +56,7 @@
  * top of `years`.
  */
 import type {
+  IncomeBasis,
   IncomeTaxBand,
   IncomeLineItem,
   IncomeTaxScheme,
@@ -161,6 +162,13 @@ export interface CountryIncomeTaxData {
   note: string;
   /** Standing assumptions, true of every year (filing status, what is excluded). */
   assumptions: string[];
+  /**
+   * What kind of income the figure is for, and how self-employed income fares
+   * (see IncomeBasis in incomeTax.ts). Required: every result leads with it.
+   */
+  incomeBasis: IncomeBasis;
+  /** The authority names years by the year they end (see IncomeTaxScheme.endYearNaming). */
+  endYearNaming?: boolean;
   /** Optional regional caveat, e.g. 'Mainland Portugal — Azores and Madeira differ'. */
   region?: string;
   optionsSupported?: readonly (keyof IncomeTaxOptions)[];
@@ -348,6 +356,8 @@ export function buildIncomeTaxScheme(d: CountryIncomeTaxData): IncomeTaxScheme {
     ...(d.defaultLocalTaxRate ? { defaultLocalTaxRate: d.defaultLocalTaxRate } : {}),
     ...(d.regions ? { regions: d.regions } : {}),
     note: d.note,
+    incomeBasis: d.incomeBasis,
+    ...(d.endYearNaming ? { endYearNaming: true } : {}),
     ...(d.region ? { region: d.region } : {}),
     source: newest.source,
     authorityName: newest.authorityName,
