@@ -124,6 +124,45 @@ export interface IncomeTaxResult {
   citationDate: string;
   /** Present when a sub-national region was selected (options.region). */
   region?: IncomeTaxRegionResult;
+  /**
+   * What kind of income the figure was computed for: 'employment' (salary or
+   * wages — employee-only items applied), 'self-employed' (the scheme's
+   * self-employed computation, options.incomeType), or 'any' (nothing in the
+   * computation depends on the income type). The first assumption says the same
+   * in words.
+   */
+  incomeBasis: 'employment' | 'self-employed' | 'any';
+}
+
+/**
+ * WHAT KIND OF INCOME A SCHEME'S FIGURE IS FOR.
+ *
+ * Callers pass one gross number and no income type, so a scheme that applies
+ * an employee-only item — India's ₹75,000 standard deduction, UK Class 1
+ * National Insurance, US FICA, Japan's employment-income deduction — quietly
+ * hands a salaried figure to a freelancer. That is how a freelancer on ₹14.1L
+ * was told ₹83,460 instead of ₹95,160, with nothing in the answer saying a
+ * salary had been assumed (the scheme's `note` said so, but notes never reach
+ * the result). Every scheme therefore states its basis, and calcIncomeTax
+ * leads every result's assumptions with it.
+ */
+export interface IncomeBasis {
+  /** 'employment' when any employee-only deduction, credit or contribution is
+   *  applied; 'any' when nothing in the computation depends on income type. */
+  default: 'employment' | 'any';
+  /**
+   * How self-employed income fares:
+   *  - 'same': no material difference (under ~5% of the tax), so the figure
+   *    stands for self-employed profit too — the note says what differs at all;
+   *  - 'modelled': the scheme's hooks compute it when options.incomeType is
+   *    'self-employed' — the note says what that computation applies instead;
+   *  - 'differs': not modelled, so that request is REFUSED (RangeError) rather
+   *    than answered with the employment figure — the note says what differs and
+   *    which way.
+   */
+  selfEmployed: 'same' | 'modelled' | 'differs';
+  /** One or two sentences a user can act on. */
+  selfEmployedNote: string;
 }
 
 /** The sub-national part of a result: which region, which year, and its provenance. */
@@ -284,6 +323,14 @@ export interface IncomeTaxOptions {
    * in GB). An unknown code is a RangeError, never a silent national answer.
    */
   region?: string;
+  /**
+   * Employment income (the default) or self-employed profit. Read by every
+   * country, whatever `optionsSupported` says, because dropping it silently
+   * would hand a salaried figure to a freelancer — the failure IncomeBasis
+   * exists to stop. A country whose incomeBasis.selfEmployed is 'differs'
+   * refuses 'self-employed' with a RangeError.
+   */
+  incomeType?: 'employment' | 'self-employed';
 }
 
 /** Context passed to a country's offsets() — credits applied to the computed tax. */
@@ -345,6 +392,15 @@ export interface IncomeTaxScheme {
   regions?: Readonly<Record<string, IncomeTaxRegion>>;
   /** The file a person edits to append the next year (rate watch names it). */
   file?: string;
+  /** What kind of income the figure is for — see IncomeBasis. */
+  incomeBasis: IncomeBasis;
+  /**
+   * The authority names a tax year by the year it ENDS (Pakistan's "Tax Year
+   * 2027", South Africa's "2027 year of assessment", New Zealand's "2027 tax
+   * year" are all the 2026-27 label here), so a bare end year is accepted for
+   * that label. Never inferred: in most countries a bare year is the START.
+   */
+  endYearNaming?: boolean;
   /** Authoritative source for this schedule. */
   source: string;
   authorityName: string;
@@ -522,8 +578,10 @@ const NO_OPTIONS: Readonly<IncomeTaxOptions> = Object.freeze({});
  * holds a value meant for Finland.
  */
 function resolveOptions(c: IncomeTaxScheme, options?: IncomeTaxOptions | null): Readonly<IncomeTaxOptions> {
-  if (!options || !c.optionsSupported?.length) return NO_OPTIONS;
-  const out: IncomeTaxOptions = {};
+  // incomeType first and for every scheme: it must never be dropped unread.
+  const incomeType = resolveIncomeType(c, options?.incomeType);
+  if (!options || !c.optionsSupported?.length) return incomeType ? Object.freeze({ incomeType }) : NO_OPTIONS;
+  const out: IncomeTaxOptions = incomeType ? { incomeType } : {};
   const rate = (key: 'localTaxRate' | 'churchTaxRate') => {
     const v = options[key];
     if (v === undefined || v === null) return;
@@ -545,6 +603,123 @@ function resolveOptions(c: IncomeTaxScheme, options?: IncomeTaxOptions | null): 
     out.region = normaliseRegion(c, options.region);
   }
   return Object.freeze(out);
+}
+
+/**
+ * Validate options.incomeType against what the scheme can answer. A
+ * 'self-employed' request to a scheme that only computes employment income is
+ * a RangeError naming what differs — returning the employment figure instead
+ * is exactly the silent substitution this option exists to prevent.
+ */
+function resolveIncomeType(c: IncomeTaxScheme, raw: unknown): IncomeTaxOptions['incomeType'] {
+  if (raw === undefined || raw === null) return undefined;
+  if (raw !== 'employment' && raw !== 'self-employed') {
+    throw new RangeError(`incomeType must be 'employment' or 'self-employed', got ${String(raw)}`);
+  }
+  if (raw === 'self-employed' && c.incomeBasis.selfEmployed === 'differs') {
+    throw new RangeError(`Self-employed income is not modelled for ${c.country} — this estimate is for ${c.incomeBasis.default === 'employment' ? 'employment income' : 'income in general'}. ${c.incomeBasis.selfEmployedNote}`);
+  }
+  return raw;
+}
+
+/** The basis a computation actually used, for the result and its first assumption. */
+function incomeBasisFor(c: IncomeTaxScheme, opts: Readonly<IncomeTaxOptions>): IncomeTaxResult['incomeBasis'] {
+  if (opts.incomeType === 'self-employed' && c.incomeBasis.selfEmployed === 'modelled') return 'self-employed';
+  return c.incomeBasis.default;
+}
+
+/** The first assumption of every result: what income the figure is for. */
+function incomeBasisLine(c: IncomeTaxScheme, basis: IncomeTaxResult['incomeBasis'], opts: Readonly<IncomeTaxOptions>): string {
+  const b = c.incomeBasis;
+  if (basis === 'self-employed') return `Computed as self-employed profit (after business expenses). ${b.selfEmployedNote}`;
+  const head = basis === 'employment'
+    ? 'Computed as employment income (salary or wages).'
+    : 'Computed on gross income; nothing in it depends on whether the income is wages or self-employed profit.';
+  if (opts.incomeType === 'self-employed') return `${head} Self-employed profit is taxed the same way here. ${b.selfEmployedNote}`;
+  if (b.selfEmployed === 'same') return `${head} Self-employed profit is taxed the same way here. ${b.selfEmployedNote}`;
+  if (b.selfEmployed === 'modelled') return `${head} For self-employed or freelance income pass incomeType "self-employed" — that figure differs: ${b.selfEmployedNote}`;
+  return `${head} For self-employed or freelance income the tax is different and is not computed here: ${b.selfEmployedNote}`;
+}
+
+// ─── Tax-year labels: what a person types → the label on file ────────────────
+
+/** A label's leading year token: '2026-27' of '2026-27 (AY 2027-28)', '2026' of '2026 (YA 2027)'. */
+const leadingYear = (label: string): string | null => /^\d{4}(?:-\d{2})?/.exec(label)?.[0] ?? null;
+/** The assessment-year part of a label: '2027-28' of '2026-27 (AY 2027-28)', '2027' of '2026 (YA 2027)'. */
+const assessmentYear = (label: string): string | null => /\((?:AY|YA)\s*([^)]+)\)/i.exec(label)?.[1]?.trim() ?? null;
+
+/**
+ * Normalise a typed year to '2026-27' / '2026' form, or null when it is not a
+ * year at all. Accepts '2026/27', '2026–27', '2026-2027', '2026 to 2027',
+ * 'Tax Year 2026-27', 'FY 2026-27', '2027 tax year', 'AY 2027-28', 'YA2027'.
+ * A span must be consecutive years ('2026-28' is null, not a guess).
+ */
+function normaliseYearInput(raw: string): { kind: 'year' | 'assessment'; value: string } | null {
+  let s = raw.trim().replace(/[‐-―/]/g, '-').replace(/\s+to\s+/gi, '-').replace(/\s*-\s*/g, '-').replace(/\s+/g, ' ');
+  let kind: 'year' | 'assessment' = 'year';
+  const assessmentPrefix = /^(?:AY|YA|assessment year|year of assessment)\s*/i;
+  const assessmentSuffix = /\s*(?:year of assessment|assessment year)$/i;
+  if (assessmentPrefix.test(s) || assessmentSuffix.test(s)) {
+    kind = 'assessment';
+    s = s.replace(assessmentPrefix, '').replace(assessmentSuffix, '');
+  } else {
+    s = s.replace(/^(?:tax year|income year|financial year|fiscal year|FY|TY)\s*/i, '').replace(/\s*(?:tax year|income year)$/i, '');
+  }
+  const span = /^(\d{4})-(\d{2}|\d{4})$/.exec(s);
+  if (span) {
+    const start = Number(span[1]);
+    const end = Number(span[2]);
+    const consecutive = span[2]!.length === 4 ? end === start + 1 : end === (start + 1) % 100;
+    if (!consecutive) return null;
+    return { kind, value: `${start}-${String((start + 1) % 100).padStart(2, '0')}` };
+  }
+  return /^\d{4}$/.test(s) ? { kind, value: s } : null;
+}
+
+/**
+ * The scheme's label for a typed tax year, or null. Exact label first; then
+ * the label whose LEADING year matches ('2026-27' finds '2026-27 (AY 2027-28)'),
+ * an assessment year matches the bracketed part ('YA 2027' finds
+ * '2026 (YA 2027)'), and — only where the authority itself names years by
+ * their end (endYearNaming) — a bare end year finds its label.
+ *
+ * Never a substring match: India's '2025-26 (AY 2026-27)' CONTAINS '2026-27'.
+ * Never a bare year to a span elsewhere: Pakistan's '2026' would otherwise
+ * serve 2026-27, which FBR calls Tax Year 2027. A match must be unique.
+ */
+function matchYearLabel(c: IncomeTaxScheme, input: string): string | null {
+  const labels = c.sets.map((s) => s.taxYearLabel);
+  if (labels.includes(input)) return input;
+  const n = normaliseYearInput(input);
+  if (!n) return null;
+  const unique = (found: string[]) => (found.length === 1 ? found[0]! : null);
+  if (n.kind === 'assessment') {
+    const byBracket = unique(labels.filter((l) => {
+      const ay = assessmentYear(l);
+      return ay !== null && normaliseYearInput(ay)?.value === n.value;
+    }));
+    if (byBracket) return byBracket;
+  } else {
+    const byLeading = unique(labels.filter((l) => leadingYear(l) === n.value));
+    if (byLeading) return byLeading;
+  }
+  if (c.endYearNaming && /^\d{4}$/.test(n.value)) {
+    const end = Number(n.value);
+    const span = `${end - 1}-${String(end % 100).padStart(2, '0')}`;
+    return unique(labels.filter((l) => leadingYear(l) === span));
+  }
+  return null;
+}
+
+/**
+ * The label on file for a tax year as a person or model would type it, or
+ * null when the country has no such year. calcIncomeTax and the other year
+ * lookups resolve through this, so '2026-27' reaches India's
+ * '2026-27 (AY 2027-28)' and '2026/27' reaches the UK's '2026-27'.
+ */
+export function resolveIncomeTaxYear(countryCode: string, input: string): string | null {
+  const c = getIncomeTaxScheme(countryCode);
+  return c && typeof input === 'string' ? matchYearLabel(c, input) : null;
 }
 
 /**
@@ -715,7 +890,16 @@ export const INCOME_TAX_SCHEMES: Record<string, IncomeTaxScheme> = {
       lito = Math.max(0, lito);
       return lito > 0 ? [{ name: 'Low Income Tax Offset', amount: lito }] : [];
     },
-    note: 'Includes the Medicare levy low-income reduction (nil to $28,011, shaded in at 10% of the excess to $35,013). Excludes HECS/HELP, the Medicare levy surcharge, the seniors and pensioners thresholds, family thresholds and other offsets.',
+    assumptions: ({ taxYearLabel }) =>
+      AU_MEDICARE_LOW_INCOME[taxYearLabel]
+        ? []
+        : [`The Medicare levy low-income reduction is not on file for ${taxYearLabel}, so the full 2% is charged — below about $35,000 the levy shown may be too high.`],
+    note: 'Includes the Medicare levy low-income reduction for the years its thresholds are on file (2025-26 and 2026-27: nil to $28,011, shaded in at 10% of the excess to $35,013). Excludes HECS/HELP, the Medicare levy surcharge, the seniors and pensioners thresholds, family thresholds and other offsets.',
+    incomeBasis: {
+      default: 'any',
+      selfEmployed: 'differs',
+      selfEmployedNote: 'A sole trader’s profit is taxed at the same rates with the same Medicare levy, but may also get the small business income tax offset (16% of the tax on that profit, up to $1,000), so their tax can be up to $1,000 lower.',
+    },
     source: 'https://www.ato.gov.au/tax-rates-and-codes/tax-rates-australian-residents',
     authorityName: 'Australian Taxation Office (ATO)',
     citationDate: '2026-08-20',
@@ -731,6 +915,13 @@ export const INCOME_TAX_SCHEMES: Record<string, IncomeTaxScheme> = {
     levies: () => [],
     offsets: () => [],
     note: 'Income tax only — the separate ACC earners’ levy is not included.',
+    incomeBasis: {
+      default: 'any',
+      selfEmployed: 'same',
+      selfEmployedNote: 'ACC levies and the independent earner tax credit are left out for everyone.',
+    },
+    // IRD names a year by its end: the "2027 tax year" is 1 April 2026 – 31 March 2027.
+    endYearNaming: true,
     source: 'https://www.ird.govt.nz/income-tax/income-tax-for-individuals/tax-codes-and-tax-rates-for-individuals',
     authorityName: 'Inland Revenue (IRD)',
     citationDate: '2026-08-20',
@@ -749,17 +940,28 @@ export const INCOME_TAX_SCHEMES: Record<string, IncomeTaxScheme> = {
       const taper = Math.max(0, q.floor((gross - 100000) / 2));
       return Math.max(0, 12570 - taper);
     },
-    levies: ({ gross, q }) => {
-      // Employee Class 1 National Insurance: 8% between the £12,570 primary
-      // threshold and the £50,270 upper earnings limit, 2% above (on gross).
-      const ni = Math.max(0, Math.min(gross, 50270) - 12570) * 0.08 + Math.max(0, gross - 50270) * 0.02;
-      return ni > 0 ? [{ name: 'National Insurance', amount: q.round(ni) }] : [];
+    levies: ({ gross, q, options }) => {
+      // Employee Class 1: 8% between the £12,570 primary threshold and the
+      // £50,270 upper earnings limit, 2% above (on gross). Self-employed Class 4:
+      // 6% between the same £12,570 / £50,270 profits limits, 2% above
+      // (gov.uk/self-employed-national-insurance-rates). Class 2 has not been
+      // compulsory since 2024-25, so it is not charged.
+      const selfEmployed = options.incomeType === 'self-employed';
+      const mainRate = selfEmployed ? 0.06 : 0.08;
+      const ni = Math.max(0, Math.min(gross, 50270) - 12570) * mainRate + Math.max(0, gross - 50270) * 0.02;
+      const name = selfEmployed ? 'National Insurance (Class 4)' : 'National Insurance (Class 1, employee)';
+      return ni > 0 ? [{ name, amount: q.round(ni) }] : [];
     },
     offsets: () => [],
     optionsSupported: ['region'],
     regions: { SCT: GB_SCOTLAND },
     note: 'England, Wales & Northern Ireland rates by default — pass region "SCT" for a Scottish taxpayer, whose non-savings, non-dividend income is taxed at the Scottish rates and bands instead (the personal allowance and National Insurance stay UK-wide). Personal allowance tapers above £100,000. Excludes student-loan repayments and the separate dividend/savings rates.',
     region: 'England, Wales & Northern Ireland unless Scotland is selected (options.region "SCT")',
+    incomeBasis: {
+      default: 'employment',
+      selfEmployed: 'modelled',
+      selfEmployedNote: 'Class 4 National Insurance (6% of profit between £12,570 and £50,270, 2% above) instead of employee Class 1 (8%/2%), so the total is lower; voluntary Class 2 is not included.',
+    },
     source: 'https://www.gov.uk/income-tax-rates',
     authorityName: 'HM Revenue & Customs (HMRC)',
     citationDate: '2026-08-20',
@@ -773,11 +975,13 @@ export const INCOME_TAX_SCHEMES: Record<string, IncomeTaxScheme> = {
       { effectiveFrom: '2026-04-01', taxYearLabel: '2026-27 (AY 2027-28)', bands: inNewRegimeSlabs },
       { effectiveFrom: '2025-04-01', taxYearLabel: '2025-26 (AY 2026-27)', bands: inNewRegimeSlabs },
     ],
-    // Standard deduction for salaried individuals / pensioners (new regime).
-    deduction: () => 75000,
-    // 4% Health & Education cess rides on top of the slab rate. (In the narrow
-    // ₹12L–~₹12.77L 87A marginal-relief band the effective rate is ~100% as the
-    // rebate withdraws; that edge isn't reflected in this headline figure.)
+    // Standard deduction (new regime): a deduction from SALARY or PENSION income
+    // only — s.16(ia) of the 1961 Act, s.19 of the Income-tax Act 2025. Freelance
+    // and business income gets none, which is what incomeType 'self-employed' is for.
+    deduction: ({ options }) => (options.incomeType === 'self-employed' ? 0 : 75000),
+    // 4% Health & Education cess rides on top of the slab rate. In the narrow
+    // band just above ₹12L where the 87A rebate withdraws, the marginal rate is
+    // ~100%; marginalRateFor differences full liability, so it shows that.
     offsets: ({ taxable, incomeTax, q }) => {
       // Section 87A rebate (new regime): up to ₹60,000, making taxable income up
       // to ₹12L effectively tax-free. Marginal relief just above ₹12L caps the
@@ -798,7 +1002,12 @@ export const INCOME_TAX_SCHEMES: Record<string, IncomeTaxScheme> = {
       if (cess > 0) items.push({ name: 'Health & Education cess (4%)', amount: cess });
       return items;
     },
-    note: 'New tax regime (the default), salaried — includes the ₹75,000 standard deduction, the Section 87A rebate (taxable income up to ₹12L is effectively tax-free) and 4% Health & Education cess. Excludes the old regime, capital-gains special rates and Chapter VI-A deductions.',
+    note: 'New tax regime (the default) — includes the ₹75,000 standard deduction for salary or pension income (none for self-employed income: pass incomeType "self-employed"), the Section 87A rebate (taxable income up to ₹12L is effectively tax-free) and 4% Health & Education cess. Excludes the old regime, capital-gains special rates and Chapter VI-A deductions.',
+    incomeBasis: {
+      default: 'employment',
+      selfEmployed: 'modelled',
+      selfEmployedNote: 'No standard deduction (the ₹75,000 is for salary and pension income only), so the tax is higher. Pass profit after expenses, or the presumptive profit (s.58 of the Income-tax Act 2025, formerly 44AD/44ADA): 50% of a profession’s gross receipts, or 6%/8% of business turnover.',
+    },
     source: 'https://www.incometax.gov.in/iec/foportal/help/individual/return-applicable-1',
     authorityName: 'Income Tax Department, India',
     citationDate: '2026-08-20',
@@ -815,18 +1024,30 @@ export const INCOME_TAX_SCHEMES: Record<string, IncomeTaxScheme> = {
     levies: ({ gross, q }) => {
       // Employee FICA: Social Security 6.2% to the $184,500 wage base; Medicare
       // 1.45% on all wages + 0.9% additional Medicare above $200,000 (single).
+      // The 0.9% is the separate Additional Medicare Tax (Form 8959), shown on
+      // its own line — folded into "Medicare (1.45%)" the label understated it.
       const socialSecurity = q.round(Math.min(gross, 184500) * 0.062);
-      const medicare = q.round(gross * 0.0145) + q.round(Math.max(0, gross - 200000) * 0.009);
+      const medicare = q.round(gross * 0.0145);
+      const additionalMedicare = q.round(Math.max(0, gross - 200000) * 0.009);
       const items: IncomeLineItem[] = [];
       if (socialSecurity > 0) items.push({ name: 'Social Security (6.2%)', amount: socialSecurity });
       if (medicare > 0) items.push({ name: 'Medicare (1.45%)', amount: medicare });
+      if (additionalMedicare > 0) items.push({ name: 'Additional Medicare Tax (0.9%)', amount: additionalMedicare });
       return items;
     },
+    assumptions: ({ options }) => (options.region
+      ? []
+      : ['Federal tax only: no state was selected, so state income tax is not included (nil in Texas or Florida, up to about 13% in California).']),
     offsets: () => [],
     optionsSupported: ['region'],
     regions: US_STATES,
     note: 'FEDERAL income tax + FICA (Social Security & Medicare), single filer, 2026, taking the standard deduction. State income tax is added only when a state is selected (options.region, e.g. "CA", "NY", "TX"); without one this EXCLUDES state tax — nil in Texas, Florida, Washington and others, up to ~13% in California. Local (city, county, school-district) income taxes are never included. Assumes no other deductions or credits. Married-filing-jointly brackets and deduction differ.',
     region: 'Federal only unless a state is selected (options.region) — state income tax is then added; local/city income taxes are never included',
+    incomeBasis: {
+      default: 'employment',
+      selfEmployed: 'differs',
+      selfEmployedNote: 'A self-employed person pays self-employment tax instead of employee FICA (15.3% of 92.35% of net profit up to the Social Security wage base, half of it deductible) and may claim the 20% qualified business income deduction.',
+    },
     source: 'https://www.irs.gov/newsroom/irs-releases-tax-inflation-adjustments-for-tax-year-2026-including-amendments-from-the-one-big-beautiful-bill',
     authorityName: 'Internal Revenue Service (IRS)',
     citationDate: '2026-08-20',
@@ -852,6 +1073,14 @@ export const INCOME_TAX_SCHEMES: Record<string, IncomeTaxScheme> = {
       return credit > 0 ? [{ name: 'Basic personal amount credit', amount: credit }] : [];
     },
     levies: () => [],
+    assumptions: ({ options }) => (options.region
+      ? []
+      : ['Federal tax only: no province or territory was selected, so provincial or territorial tax is not included and this is not your full tax.']),
+    incomeBasis: {
+      default: 'any',
+      selfEmployed: 'same',
+      selfEmployedNote: 'CPP contributions and EI premiums, and the deductions and credits they bring, are left out for everyone; a self-employed person pays both halves of CPP.',
+    },
     optionsSupported: ['region'],
     regions: CA_PROVINCES,
     note: 'FEDERAL income tax by default — provincial or territorial income tax is added only when a province or territory is selected (options.region, e.g. "ON", "QC"); without one this is not your full tax or take-home. Includes the federal brackets and the basic personal amount credit (reduced above the 29% bracket), and for a Quebec resident the refundable Quebec abatement. Excludes CPP/QPP contributions, EI premiums, the Canada employment amount and every other credit.',
@@ -905,6 +1134,11 @@ export const INCOME_TAX_SCHEMES: Record<string, IncomeTaxScheme> = {
       finnishWageTax(gross, finnishYearFor(taxYearLabel), options, 'exact').assumptions,
     note: 'Resident wage earner in mainland Finland: state income tax, municipal tax, church tax for parish members, the health-insurance contributions, YLE tax and the employee pension and unemployment contributions, less the earned-income tax credit — computed in the order the Finnish Tax Administration sets tax cards, and checked against its published examples. Municipal tax defaults to the national average; pass a municipality for its own rate. Excludes Åland, children, commuting and other deductions, and pension or benefit income.',
     region: 'Mainland Finland — Åland is not modelled',
+    incomeBasis: {
+      default: 'employment',
+      selfEmployed: 'differs',
+      selfEmployedNote: 'A self-employed person pays YEL pension contributions on their confirmed YEL income (about 24%) instead of the employee pension and unemployment contributions, and gets no employee cost-of-earning deduction.',
+    },
     source: 'https://www.vero.fi/syventavat-vero-ohjeet/paatokset/47363/verohallinnon-paatos-ennakonpidatysprosenttien-laskentaperusteista-palkkatuloa-varten-ja-ennakonkannossa-maarattavan-ennakkoveron-laskentaperusteista-vuodelle-2026/',
     authorityName: 'Finnish Tax Administration (Verohallinto)',
     citationDate: '2026-09-29',
@@ -954,6 +1188,7 @@ for (const scheme of Object.values(INCOME_TAX_SCHEMES)) {
   }
   if (scheme.localTaxRates) Object.freeze(scheme.localTaxRates);
   if (scheme.optionsSupported) Object.freeze(scheme.optionsSupported);
+  Object.freeze(scheme.incomeBasis);
   for (const region of Object.values(scheme.regions ?? {})) {
     for (const set of region.sets) {
       set.bands.forEach(Object.freeze);
@@ -1012,7 +1247,11 @@ export function localToday(timeZone: string): string {
  */
 function resolveIncomeSet(scheme: IncomeTaxScheme, taxYear?: string): IncomeBracketSet | undefined {
   const asOf = new Date(`${localToday(scheme.timeZone)}T00:00:00Z`);
-  return resolveEffectiveDated(scheme.sets, { taxYear, asOf }, (s) => s.taxYearLabel);
+  // An explicit year resolves through the label matcher first (it accepts the
+  // forms people type); a year it cannot place stays a miss, never a fallback.
+  const label = taxYear ? matchYearLabel(scheme, taxYear) : undefined;
+  if (taxYear && !label) return undefined;
+  return resolveEffectiveDated(scheme.sets, { taxYear: label ?? undefined, asOf }, (s) => s.taxYearLabel);
 }
 
 /** Selectable tax years for a country (newest-first), with the current one flagged. */
@@ -1095,9 +1334,12 @@ export function calcIncomeTax(
     }
   }
 
+  const basis = incomeBasisFor(c, opts);
   const stated = c.assumptions?.({ gross: g, taxYearLabel: set.taxYearLabel, effectiveFrom: set.effectiveFrom, q: wholeUnits, options: opts }) ?? [];
   const regionStated = regional ? [regional.region.note, ...(regional.region.assumptions ?? []), ...(regional.set.assumptions ?? [])] : [];
-  const assumptions = [...stated, ...regionStated, ...caveats];
+  // The income basis always leads: it is the one assumption that changes which
+  // figure applies to the reader at all.
+  const assumptions = [incomeBasisLine(c, basis, opts), ...stated, ...regionStated, ...caveats];
 
   return {
     code: c.code, country: c.country, currency: c.currency, locale: c.locale,
@@ -1105,12 +1347,13 @@ export function calcIncomeTax(
     gross: g, taxable, incomeTax, levies, offsets, totalTax, takeHome: g - totalTax,
     marginalRate: g > 0 ? marginalRateFor(c, set, g, opts) : 0,
     averageRate: g > 0 ? totalTax / g : 0,
-    ...(c.assumptions || assumptions.length ? { assumptions } : {}),
+    assumptions,
     verified: prov.verified && current && (region ? region.verified : true),
     source: prov.source,
     authorityName: prov.authorityName,
     citationDate: prov.citationDate,
     ...(region ? { region } : {}),
+    incomeBasis: basis,
   };
 }
 

@@ -39,6 +39,11 @@ export const AT_INCOME_TAX: CountryIncomeTaxData = {
     'All gross pay is taxed on the progressive tariff; the separate 6% taxation of 13th/14th salaries (sonstige Bezüge) is not modelled, which overstates the tax of an employee paid 14 salaries.',
     'Credits are non-refundable here: the SV-Rückerstattung (negative tax) is not included.',
   ],
+  incomeBasis: {
+    default: 'employment',
+    selfEmployed: 'differs',
+    selfEmployedNote: 'Employee social insurance (ASVG), the Werbungskostenpauschale and the Verkehrsabsetzbetrag apply to employees; a self-employed person pays GSVG contributions (about 27%, deductible) and gets the 15% profit allowance (Gewinnfreibetrag), usually paying noticeably less income tax.',
+  },
   years: [
     {
       taxYear: '2026',

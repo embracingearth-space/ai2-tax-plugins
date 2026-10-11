@@ -31,6 +31,11 @@ export const NG_INCOME_TAX: CountryIncomeTaxData = {
     'Social contributions (pension, NHF, NHIS) are not included as charges. The National Housing Fund contribution (2.5% of gross) is deducted. The employee pension contribution (commonly 8%) was not confirmed on an official page and is not deducted, so tax may be overstated for an employee in the contributory pension scheme.',
     'The exemption for earners at or below the national minimum wage is not applied (the threshold was not recorded in the research).',
   ],
+  incomeBasis: {
+    default: 'any',
+    selfEmployed: 'same',
+    selfEmployedNote: 'The same table applies to self-employed income. The 2.5% National Housing Fund deduction applied here is compulsory for public-sector employees and the self-employed but optional for private-sector employees, whose tax is slightly higher without it.',
+  },
   years: [
     {
       taxYear: '2026',

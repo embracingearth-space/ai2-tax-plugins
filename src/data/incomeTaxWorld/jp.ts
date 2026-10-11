@@ -118,5 +118,10 @@ export const JP_INCOME_TAX: CountryIncomeTaxData = {
     'Inhabitant tax (住民税, about 10% of a separately computed base, charged the following year) is NOT included.',
     'The employment income deduction uses the NTA formula; the statutory table used below ¥6.6m rounds slightly differently.',
   ],
+  incomeBasis: {
+    default: 'employment',
+    selfEmployed: 'differs',
+    selfEmployedNote: 'The employment income deduction and employee social insurance apply here; a self-employed person gets the blue-return deduction instead and pays National Health Insurance and National Pension, usually paying much more income tax.',
+  },
   years: [y2026, y2025],
 };

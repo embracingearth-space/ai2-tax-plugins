@@ -51,6 +51,11 @@ export const BR_INCOME_TAX: CountryIncomeTaxData = {
     'INSS employee social-security contributions are not included as a charge.',
     'The minimum tax on high incomes (IRPFM, Lei 15.270/2025) for income above BRL 600,000 is not modelled.',
   ],
+  incomeBasis: {
+    default: 'employment',
+    selfEmployed: 'differs',
+    selfEmployedNote: 'The INSS deduction here uses the employee table; a self-employed person contributes to INSS at 20% (or 11% under the simplified plan), so the deduction and the tax differ.',
+  },
   years: [
     {
       taxYear: '2026',

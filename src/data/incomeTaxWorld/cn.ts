@@ -30,6 +30,11 @@ export const CN_INCOME_TAX: CountryIncomeTaxData = {
     'Employee social insurance (pension, medical, unemployment) and housing provident fund contributions are not included as a charge. They are deductible from taxable income, but their employee rates were not confirmed from an official page, so taxable income ignores them and tax may be overstated.',
     'Contribution bases are set by city; the named default locality is Beijing (monthly base ceiling CNY 36,348 from July 2026, CNY 35,811 for the 2025 contribution year). These ceilings are not applied because the rates are unconfirmed.',
   ],
+  incomeBasis: {
+    default: 'any',
+    selfEmployed: 'differs',
+    selfEmployedNote: 'Freelance service fees are taxed after a 20% expense reduction, and sole proprietors use the 5–35% business-income schedule, so their tax differs.',
+  },
   years: [
     {
       taxYear: '2026',

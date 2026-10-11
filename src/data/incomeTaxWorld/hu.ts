@@ -22,6 +22,11 @@ export const HU_INCOME_TAX: CountryIncomeTaxData = {
     'Single, no children, aged 25 or over, not a qualifying mother, not severely disabled, not newly married.',
     'The 18.5% employee social security contribution (társadalombiztosítási járulék) is not included and is not deducted from the tax base.',
   ],
+  incomeBasis: {
+    default: 'any',
+    selfEmployed: 'differs',
+    selfEmployedNote: 'Many self-employed people use the flat-rate regime (átalányadó) with a cost ratio and a tax-free part, paying much less.',
+  },
   years: [
     {
       taxYear: '2026',

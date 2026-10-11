@@ -35,6 +35,11 @@ export const AR_INCOME_TAX: CountryIncomeTaxData = {
     'Uses the annual "liquidación anual y final" scale and deductions; monthly withholding during the year uses semester tables and can differ.',
     'Personal social-security contributions (11% pension, 3% obra social, 3% INSSJP) are not included as charges and are NOT deducted, because their 2025/2026 contribution ceiling was not verified; taxable income therefore ignores them and the tax is overstated for most employees.',
   ],
+  incomeBasis: {
+    default: 'employment',
+    selfEmployed: 'differs',
+    selfEmployedNote: 'Employees get the enlarged special deduction (4.8 times the non-taxable minimum plus a one-twelfth top-up) applied here; a self-employed person gets only the basic special deduction, or uses the monotributo regime, so their tax is usually higher.',
+  },
   years: [
     {
       taxYear: '2026',

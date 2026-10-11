@@ -45,6 +45,11 @@ export const PT_INCOME_TAX: CountryIncomeTaxData = {
     'The mínimo de existência is not applied, so the tax of low earners is overstated.',
     'No deductions from the tax (despesas gerais familiares up to €250, health, education, housing) are applied, as they depend on the taxpayer\'s invoices.',
   ],
+  incomeBasis: {
+    default: 'employment',
+    selfEmployed: 'differs',
+    selfEmployedNote: 'The specific deduction for employment income (category A) applies here; self-employed income (category B) uses the simplified regime’s coefficients instead.',
+  },
   years: [
     {
       taxYear: '2026',

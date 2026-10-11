@@ -39,6 +39,11 @@ export const KE_INCOME_TAX: CountryIncomeTaxData = {
     'Single resident individual, PAYE employment income only, no insurance premiums, mortgage or voluntary pension; tax year = calendar year.',
     'SHIF, the Affordable Housing Levy and NSSF are contributions, not income tax, and are not included as charges. SHIF (2.75%, min KES 300/month) and the employee Affordable Housing Levy (1.5%) are deducted in computing taxable income (ITA s.15(2)(ac),(ae)).',
   ],
+  incomeBasis: {
+    default: 'employment',
+    selfEmployed: 'differs',
+    selfEmployedNote: 'Employee NSSF contributions are deducted here; a self-employed person does not get that deduction, so the tax is higher.',
+  },
   years: [
     {
       taxYear: '2026',

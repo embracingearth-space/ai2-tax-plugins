@@ -33,6 +33,13 @@ export const ZA_INCOME_TAX: CountryIncomeTaxData = {
     'Resident individual under 65 unless an age is given; employment income only, no retirement-fund contributions or medical scheme credits.',
     'UIF (Unemployment Insurance Fund, employee 1%) is a social contribution and is not included; it is not deductible for income tax.',
   ],
+  incomeBasis: {
+    default: 'any',
+    selfEmployed: 'same',
+    selfEmployedNote: 'The same tables and rebates apply to self-employed profit.',
+  },
+  // SARS names a year by its end: 2026-27 is the "2027 year of assessment".
+  endYearNaming: true,
   optionsSupported: ['age'],
   years: [
     {

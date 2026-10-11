@@ -22,6 +22,13 @@ export const PK_INCOME_TAX: CountryIncomeTaxData = {
     'Social contributions are not included: the EOBI employee contribution is not income tax.',
     'Provincial professional tax (a fixed levy in some provinces) is not included.',
   ],
+  incomeBasis: {
+    default: 'employment',
+    selfEmployed: 'differs',
+    selfEmployedNote: 'This is the salaried rate table; non-salaried individuals and business income use a separate, much higher table, so their tax can be several times this figure.',
+  },
+  // FBR names a year by its end: 2026-27 is "Tax Year 2027".
+  endYearNaming: true,
   years: [
     {
       taxYear: '2026-27',

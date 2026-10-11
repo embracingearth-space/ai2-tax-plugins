@@ -36,7 +36,7 @@ describe('income-tax take-home anchors', () => {
     const r = calcIncomeTax('GB', 60000, '2025-26')!;
     expect(r.taxable).toBe(47430);
     expect(r.incomeTax).toBe(11432);
-    expect(r.levies.find((l) => l.name === 'National Insurance')?.amount).toBe(3211);
+    expect(r.levies.find((l) => l.name === 'National Insurance (Class 1, employee)')?.amount).toBe(3211);
     expect(r.takeHome).toBe(45357);
   });
 

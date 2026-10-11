@@ -31,6 +31,11 @@ export const SI_INCOME_TAX: CountryIncomeTaxData = {
     'The flat monthly mandatory health contribution (OZP) is neither included nor deducted.',
     'The low-income increase of the general allowance is applied to gross employment income.',
   ],
+  incomeBasis: {
+    default: 'employment',
+    selfEmployed: 'differs',
+    selfEmployedNote: 'Employee contributions (23.1%) apply here; a sole trader using normed expenses (80% deemed costs, 20% final tax) pays much less.',
+  },
   years: [
     {
       taxYear: '2026',

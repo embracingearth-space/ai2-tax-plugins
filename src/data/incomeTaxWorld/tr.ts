@@ -27,6 +27,11 @@ export const TR_INCOME_TAX: CountryIncomeTaxData = {
     'Stamp duty (damga vergisi) on wages is not included.',
     'The minimum-wage exemption is computed on an annual basis as the tariff tax on 12 × the monthly gross minimum wage net of premiums; month-by-month payroll may differ slightly.',
   ],
+  incomeBasis: {
+    default: 'employment',
+    selfEmployed: 'differs',
+    selfEmployedNote: 'The wage tariff, the minimum-wage exemption and employee social security apply here; self-employed income uses the non-wage tariff without the exemption, so the tax is much higher.',
+  },
   years: [
     {
       taxYear: '2026',

@@ -36,6 +36,11 @@ export const SK_INCOME_TAX: CountryIncomeTaxData = {
     'Employee social insurance (sickness 1.4%, old-age 4%, disability 3%, unemployment 1%, capped at 12 × the monthly maximum assessment base) and health insurance are deducted from the tax base but not included in the tax shown. Their deductibility follows standard Slovak rules and was not confirmed on a fetched official page.',
     'Health insurance is treated as uncapped.',
   ],
+  incomeBasis: {
+    default: 'employment',
+    selfEmployed: 'differs',
+    selfEmployedNote: 'Employee social and health insurance apply here; a self-employed person may use 60% flat-rate expenses and the 15% rate for low turnover, paying much less.',
+  },
   years: [
     {
       taxYear: '2026',

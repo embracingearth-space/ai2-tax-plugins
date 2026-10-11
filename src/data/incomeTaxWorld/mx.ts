@@ -77,6 +77,11 @@ export const MX_INCOME_TAX: CountryIncomeTaxData = {
     'Subsidio para el empleo annualised as twelve monthly amounts, granted only when gross ÷ 12 does not exceed the monthly limit; it cannot exceed the tax.',
     'IMSS and retirement (RCV) employee social-security contributions are not included and are not deducted.',
   ],
+  incomeBasis: {
+    default: 'employment',
+    selfEmployed: 'differs',
+    selfEmployedNote: 'The employment subsidy (subsidio para el empleo) applied here is for employees only; a self-employed person gets no subsidy and may use the simplified RESICO regime instead.',
+  },
   years: [
     {
       taxYear: '2026',

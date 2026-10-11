@@ -35,6 +35,11 @@ export const CL_INCOME_TAX: CountryIncomeTaxData = {
     'Employee social-security contributions (AFP 10% + commission, health 7%, seguro de cesantía 0.6%) are deducted from taxable income as the law requires, up to their monthly UF ceilings, but are not included as charges.',
     'Monthly withholding uses each month\'s UTM, so the sum of monthly tax can differ slightly from this annualised scale.',
   ],
+  incomeBasis: {
+    default: 'employment',
+    selfEmployed: 'differs',
+    selfEmployedNote: 'Employee pension (AFP), health and unemployment-insurance contributions are deducted here; a self-employed person billing fees gets 30% presumed expenses instead and pays contributions through the annual return.',
+  },
   years: [
     {
       taxYear: '2026',

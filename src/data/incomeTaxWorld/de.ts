@@ -88,6 +88,11 @@ export const DE_INCOME_TAX: CountryIncomeTaxData = {
     'Employee social-security contributions (pension, unemployment, health, long-term care) are not included as charges.',
     'Church tax is 0 unless options.churchTaxRate is given (8% in Bavaria and Baden-Württemberg, 9% in the other Länder, as a share of income tax).',
   ],
+  incomeBasis: {
+    default: 'employment',
+    selfEmployed: 'differs',
+    selfEmployedNote: 'The €1,230 employee lump sum (Arbeitnehmer-Pauschbetrag) applies to employees only; a self-employed person deducts actual business expenses and their own insurance contributions instead.',
+  },
   optionsSupported: ['churchTaxRate'],
   years: [
     {

@@ -35,6 +35,11 @@ export const IE_INCOME_TAX: CountryIncomeTaxData = {
     'Only the Single Person and Employee (PAYE) tax credits; no pension contributions or benefit-in-kind.',
     'PRSI (Class A employee social insurance) is not included — it is a social-insurance contribution, not income tax.',
   ],
+  incomeBasis: {
+    default: 'employment',
+    selfEmployed: 'same',
+    selfEmployedNote: 'The €2,000 employee tax credit applies here; a self-employed person gets the €2,000 earned income tax credit instead. Above €100,000, self-employed income pays an extra 3% USC, which is not included.',
+  },
   years: [
     {
       taxYear: '2026',

@@ -64,6 +64,11 @@ export const FR_INCOME_TAX: CountryIncomeTaxData = {
     'Employee health (maladie) and unemployment (chômage) contributions are taken as nil, so none is deducted; this could not be confirmed on urssaf.fr. Cadre APEC, prévoyance and mutuelle contributions are not deducted.',
     'Social-security contributions, CSG and CRDS are not included as charges in the tax figure.',
   ],
+  incomeBasis: {
+    default: 'employment',
+    selfEmployed: 'differs',
+    selfEmployedNote: 'Employee contributions and the 10% professional-expense deduction apply here; a self-employed person uses the micro regime (a 34% allowance for non-commercial profits) or actual expenses, usually paying noticeably less.',
+  },
   years: [
     {
       taxYear: '2025',

@@ -56,6 +56,11 @@ export const CO_INCOME_TAX: CountryIncomeTaxData = {
     'Employee social-security contributions (pension 4%, Fondo de Solidaridad Pensional 1–2% from 4 SMMLV, health 4%, on a monthly base capped at 25 SMMLV) are not subtracted from taxable income (their employee rates are unverified, so taxable income ignores them) and are not included as charges.',
     'Only the 25% labour exemption is claimed; no other exempt income or deductions.',
   ],
+  incomeBasis: {
+    default: 'any',
+    selfEmployed: 'same',
+    selfEmployedNote: 'Independent workers without two or more employees get the same 25% exempt-income deduction.',
+  },
   years: [
     {
       taxYear: '2026',

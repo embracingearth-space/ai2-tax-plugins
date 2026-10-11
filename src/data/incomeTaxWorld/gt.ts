@@ -38,6 +38,11 @@ export const GT_INCOME_TAX: CountryIncomeTaxData = {
     'IGSS employee social-security contributions (4.83% of salary, no ceiling assumed) are deducted from taxable income as the law allows, but are not added as a charge.',
     'The optional IVA-invoice deduction (up to Q12,000) is not assumed.',
   ],
+  incomeBasis: {
+    default: 'employment',
+    selfEmployed: 'differs',
+    selfEmployedNote: 'The Q48,000 deduction and the IGSS employee contribution apply to employees; a self-employed person pays 5%/7% of gross income or 25% of profit instead, usually more.',
+  },
   years: [
     {
       taxYear: '2026',

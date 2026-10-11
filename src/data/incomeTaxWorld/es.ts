@@ -215,6 +215,11 @@ export const ES_INCOME_TAX: CountryIncomeTaxData = {
     'Without an autonomous community selected the figure is the STATE half of IRPF only; the regional half (roughly as large again) is not included.',
     'The DA 61 deduction is applied to the state cuota; with a community selected, any part the state cuota cannot absorb reduces the regional cuota.',
   ],
+  incomeBasis: {
+    default: 'employment',
+    selfEmployed: 'differs',
+    selfEmployedNote: 'Employee social security, the reduction for work income and the €2,000 general-expense deduction apply to employees; a self-employed person pays the RETA quota and deducts business expenses instead, usually paying less.',
+  },
   regions: ES_REGIONS,
   years: [
     year('2026', BOE_IRPF, 'Deducción por obtención de rendimientos del trabajo (DA 61, RDL 5/2026)'),

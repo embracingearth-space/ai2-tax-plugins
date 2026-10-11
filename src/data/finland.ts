@@ -452,7 +452,7 @@ export function finnishWageTax(
       : `Municipal tax at ${pct(municipalRate)}.`,
     churchRate > 0 ? `Church tax at ${pct(churchRate)} (parish member).` : 'Not a member of a parish, so no church tax.',
     age == null
-      ? 'Assumes an employee aged 18–52 with wages only, no children and no other deductions.'
+      ? `Assumes an employee aged 18–${year.pension.elevated ? year.pension.elevated.fromAge - 1 : 64} with wages only, no children and no other deductions.`
       : `Age ${age} at the end of ${year.taxYear}; contributions that start or stop on a birthday are applied for the whole year. Wages only, no children and no other deductions.`,
   ];
 

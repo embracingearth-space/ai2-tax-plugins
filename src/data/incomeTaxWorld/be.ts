@@ -34,6 +34,11 @@ export const BE_INCOME_TAX: CountryIncomeTaxData = {
     'Regional surcharges (opcentiemen / centimes additionnels) and the communal surcharge (aanvullende gemeentebelasting / taxe communale) are NOT included; together they usually add several percent of income.',
     'The flat-rate professional-expenses deduction (forfait frais professionnels) is not applied because its parameters were not confirmed, so tax is overstated.',
   ],
+  incomeBasis: {
+    default: 'employment',
+    selfEmployed: 'differs',
+    selfEmployedNote: 'Employee social security (13.07%) is deducted here; a self-employed person pays social contributions of about 20.5% (deductible), so the tax is lower.',
+  },
   years: [
     {
       taxYear: '2026 (AY 2027)',

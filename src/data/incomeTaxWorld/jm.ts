@@ -28,6 +28,11 @@ export const JM_INCOME_TAX: CountryIncomeTaxData = {
     'Employee NIS (3% of emoluments up to J$5,000,000) is deducted to reach statutory income as the law requires, but NIS, NHT (2%) and Education Tax (2.25%) are social or payroll contributions and are not included as charges.',
     'The 0% band is the effective annual threshold (weighted because the threshold changes on 1 April); it is not deducted again.',
   ],
+  incomeBasis: {
+    default: 'employment',
+    selfEmployed: 'differs',
+    selfEmployedNote: 'Employee NIS (3%) is deducted here; a self-employed person pays NIS at 6%, so the figure differs.',
+  },
   years: [
     {
       taxYear: '2026',
