@@ -28,11 +28,14 @@
  *   'gst_bas'            every AU type (any of them may be GST registered)
  * No income-tax-return export is listed for any org type.
  *
- * `incomeTaxForecast` is true only where the engine knows some income is
- * taxed: 'mutuality' (GB clubs and PTAs — Corporation Tax on non-member and
- * investment income) and 'taxable'. It is false for 'exempt' and
- * 'exempt_if_conditions', and for 'check_locally', where the org itself must
- * first establish whether it is exempt. 2fin
+ * `incomeTaxForecast` is true only where a forecast on the books' surplus
+ * would be the right figure: 'taxable'. It is false for 'mutuality' (GB clubs
+ * and PTAs), where only non-member and investment income is taxed and the
+ * books cannot tell member money from visitor money, so a forecast on the
+ * whole surplus would overstate the tax; the note explains the rule instead.
+ * It is false for 'exempt' and 'exempt_if_conditions', and for
+ * 'check_locally', where the org itself must first establish whether it is
+ * exempt. 2fin
  */
 
 import { toYmd } from '../data/rateLedger';
@@ -282,7 +285,7 @@ function gbRules(code: string, yearEnd: string): OrgRules | null {
         },
         donationRelief: null,
         reports: ['receipts_payments', 'vat'],
-        incomeTaxForecast: true,
+        incomeTaxForecast: false,
         accounts: { receiptsAndPaymentsAllowed: true, note: 'No statutory accounts format for an unincorporated club: its own rules decide. Receipts and payments accounts are the usual choice.' },
         regulators: [],
         sources: src('clubsCorporationTax', 'membersClubSurplus', 'registerUnincorporatedAssociation', 'dormantForCorporationTax', 'vatRegistration'),
@@ -301,7 +304,7 @@ function gbRules(code: string, yearEnd: string): OrgRules | null {
         },
         donationRelief: null,
         reports: ['receipts_payments', 'vat'],
-        incomeTaxForecast: true,
+        incomeTaxForecast: false,
         accounts: { receiptsAndPaymentsAllowed: true, note: 'No statutory accounts format while the PTA is not a charity: its own rules decide.' },
         regulators: [],
         sources: src('clubsCorporationTax', 'membersClubSurplus', 'registerUnincorporatedAssociation', 'dormantForCorporationTax', 'charityRegistration', 'vatRegistration'),
