@@ -12,6 +12,18 @@ The estimator takes one gross figure and no income type, so countries that apply
 - Australia: LITO now reduces income tax only and never the Medicare levy. It is non-refundable, and the ATO says excess non-refundable offsets are "not offset against other liabilities"; the engine's comments had claimed the opposite. In practice this changes only years without low-income thresholds. 2024-25 gets its own thresholds ($27,222 / $34,027, ATO 2025 M1 instructions), and a year with none on file (2027-28) says so instead of claiming the reduction is included. Finland's default age range follows the year (18–64 from 2026).
 - New `resolveIncomeTaxYear(country, typed)`, used by every year lookup: '2026-27' now finds India's '2026-27 (AY 2027-28)', '2026/27' and '2026 to 2027' find the UK's, 'YA 2027' finds Singapore's '2026 (YA 2027)', and where the authority names a year by its end (Pakistan, South Africa, New Zealand) '2027' finds 2026-27. Never by substring, never a guessed start year elsewhere, and a match must be unique.
 
+### Fixed — CN, VN, NG, TH and PH deduct the employee's compulsory contributions
+
+These five countries taxed the employee on income their law lets them deduct, so `calcIncomeTax` overstated the tax: CN by about 2× at CNY 100,000 (1,480; now 735), VN by 37% at VND 400m (15.4m; now 11.2m), NG by 11% at N2m, TH by about 10% and PH by about 11% at PHP 400,000. The assumptions called this "may be" or "slightly" overstated. Each figure below was read on 11 October 2026 on an official page cited in the country file.
+
+- **CN**: the special deductions of IIT Law art. 6 for Beijing, the named default: social insurance 10.5% (pension 8%, medical 2%, unemployment 0.5%) on Beijing's monthly base limits for each July–June contribution year, with the base floor applied, plus the housing provident fund at 5%, the legal minimum. The assumptions give the tax at 12%, the maximum: CNY 525 on 100,000 in 2026.
+- **VN**: social 8% and health 1.5% insurance up to VND 46.8m a month (50.6m from July 2026), and unemployment insurance 1% up to 20 × the Region I minimum wage.
+- **NG**: the 8% Pension Reform Act contribution (NTA 2025 s.30(2)(a)(iii); PITA Sixth Schedule). The 2.5% National Housing Fund contribution is **no longer deducted by default**: since the Business Facilitation (Miscellaneous Provisions) Act 2023 it is voluntary for private-sector employees. The assumptions quantify both the NHF case and an employer outside the pension scheme.
+- **TH**: the Social Security Fund contribution, deducted as paid: 5% of wages up to THB 15,000 a month for 2025 and 17,500 from 1 January 2026 (Ministerial Regulation, Royal Gazette 12 Dec 2025). That is at most 9,000 for 2025 and 10,500 for 2026.
+- **PH**: the PhilHealth (2.5% of basic salary, PHP 10,000–100,000 a month) and Pag-IBIG (2% of up to PHP 10,000 a month) employee shares, alongside SSS (NIRC s.32(B)(7)(f)).
+- CN, VN and NG now apply employee-only contributions, so their `incomeBasis.default` is `'employment'` (was `'any'`); CN and VN refuse `incomeType: 'self-employed'` as before. NG now models self-employed profit (`selfEmployed: 'modelled'`): the pension is voluntary for the self-employed, so it is dropped, and the compulsory 2.5% NHF contribution is deducted instead. That gives the same figure the self-employed path returned before this change.
+- Each country's tests assert that its assumptions carry no unquantified hedge, and recompute every "what if" figure the text quotes.
+
 ### Added — organisations: clubs, PTAs and charities (GB, AU, generic)
 
 - `orgTypesFor(country)` returns the org types for a country, each with `registeredWith` and `group: 'organisation'`:
