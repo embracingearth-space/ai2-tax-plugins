@@ -20,6 +20,7 @@ import {
   ORG_FIGURES,
   ORG_REPORTS,
   ORG_RULE_SOURCES,
+  ORG_URLS,
   type OrgRules,
 } from '../src';
 
@@ -36,9 +37,18 @@ const figure = (country: string, id: string, yearEnd?: string) => {
 
 const GB_CODES = ['GB_CLUB', 'GB_PTA', 'GB_CASC', 'GB_CHARITY', 'GB_CIO', 'GB_CHARITABLE_COMPANY'];
 const AU_CODES = ['AU_INCORPORATED_ASSOCIATION', 'AU_ACNC_CHARITY', 'AU_CLUB'];
+const IN_NPO_CODES = ['IN_PUBLIC_TRUST', 'IN_SOCIETY', 'IN_SECTION8_COMPANY'];
+const IN_CODES = [...IN_NPO_CODES, 'IN_CLUB'];
+/** Every country with its own types, and its codes. */
+const US_EXEMPT_CODES = ['US_501C3', 'US_501C7', 'US_501C4'];
+const US_CODES = [...US_EXEMPT_CODES, 'US_CLUB'];
+const CA_CODES = ['CA_REGISTERED_CHARITY', 'CA_NPO', 'CA_RCAAA'];
+const NZ_CODES = ['NZ_REGISTERED_CHARITY', 'NZ_INCORPORATED_SOCIETY', 'NZ_CLUB'];
+const IE_CODES = ['IE_REGISTERED_CHARITY', 'IE_SPORTS_BODY', 'IE_CLUB'];
+const SG_CODES = ['SG_REGISTERED_CHARITY', 'SG_IPC', 'SG_CLUB'];
+const COUNTRY_CODES: Record<string, string[]> = { GB: GB_CODES, AU: AU_CODES, IN: IN_CODES, US: US_CODES, CA: CA_CODES, NZ: NZ_CODES, IE: IE_CODES, SG: SG_CODES };
 const ALL: Array<[string, string]> = [
-  ...GB_CODES.map((c): [string, string] => ['GB', c]),
-  ...AU_CODES.map((c): [string, string] => ['AU', c]),
+  ...Object.entries(COUNTRY_CODES).flatMap(([country, codes]) => codes.map((c): [string, string] => [country, c])),
   ['FR', 'CLUB'],
   ['FR', 'CHARITY'],
 ];
@@ -83,7 +93,11 @@ describe('orgTypesFor', () => {
   });
 
   it('every type has rules', () => {
-    for (const c of ['GB', 'AU', 'US']) for (const ty of orgTypesFor(c)) expect(orgRulesFor(c, ty.code)).not.toBeNull();
+    for (const c of [...Object.keys(COUNTRY_CODES), 'FR']) for (const ty of orgTypesFor(c)) expect(orgRulesFor(c, ty.code)).not.toBeNull();
+  });
+
+  it('each country with its own types offers exactly its codes, in order', () => {
+    for (const [c, codes] of Object.entries(COUNTRY_CODES)) expect(orgTypesFor(c).map((t) => t.code)).toEqual(codes);
   });
 });
 
@@ -306,7 +320,7 @@ describe('orgReportingThresholds', () => {
   });
 
   it('every figure: law, finite, https source matching its source row, read and review dates, codes that exist', () => {
-    const codes = new Set([...orgTypesFor('GB'), ...orgTypesFor('AU')].map((x) => x.code));
+    const codes = new Set(Object.keys(COUNTRY_CODES).flatMap((c) => orgTypesFor(c)).map((x) => x.code));
     for (const f of ORG_FIGURES) {
       const s = ORG_RULE_SOURCES[f.source];
       expect({ id: f.id, kind: f.kind, finite: Number.isFinite(f.value) }).toEqual({ id: f.id, kind: 'law', finite: true });
@@ -314,6 +328,442 @@ describe('orgReportingThresholds', () => {
       expect(f.sourceUrl).toMatch(/^https:\/\//);
       expect(s.country).toBe(f.country);
       for (const c of f.appliesTo) expect({ id: f.id, code: c, known: codes.has(c) }).toEqual({ id: f.id, code: c, known: true });
+    }
+  });
+});
+
+/** The currency every money figure of a country is in. */
+const CURRENCY: Record<string, string> = { GB: 'GBP', AU: 'AUD', IN: 'INR', US: 'USD', CA: 'CAD', NZ: 'NZD', IE: 'EUR', SG: 'SGD' };
+
+describe('every country: figures in its own currency, sources in its own country', () => {
+  it.each(Object.keys(COUNTRY_CODES))('%s', (c) => {
+    const figs = orgReportingThresholds(c, '2026-12-31');
+    expect(figs.length).toBeGreaterThan(0);
+    for (const f of figs) {
+      expect(f.country).toBe(c);
+      if (f.currency !== null) expect({ id: f.id, currency: f.currency }).toEqual({ id: f.id, currency: CURRENCY[c] });
+      expect(ORG_RULE_SOURCES[f.source].country).toBe(c);
+    }
+  });
+});
+
+describe('India (IN) — Income-tax Act, 2025, from tax year 2026-27', () => {
+  it('types: public trust, society, section 8 company, club or association (RWAs included)', () => {
+    expect(orgTypesFor('IN').map((t) => [t.code, t.label, t.kind])).toEqual([
+      ['IN_PUBLIC_TRUST', 'Public charitable trust', 'charity'],
+      ['IN_SOCIETY', 'Registered society', 'association'],
+      ['IN_SECTION8_COMPANY', 'Section 8 company', 'charity'],
+      ['IN_CLUB', 'Club or association (including a resident welfare association)', 'club'],
+    ]);
+  });
+
+  it('statuses: exempt only if registered under section 332 and 85% applied; clubs on mutuality; no forecast', () => {
+    for (const code of IN_NPO_CODES) {
+      const r = rules('IN', code);
+      expect(r.incomeTax.status).toBe('exempt_if_conditions');
+      expect(r.incomeTax.note).toContain('section 332');
+      expect(r.incomeTax.note).toContain('85%');
+      expect(r.incomeTax.note).toContain('Form 112');
+      expect(r.incomeTax.note).toContain('Foreign Contribution (Regulation) Act, 2010');
+      expect(r.incomeTaxForecast).toBe(false);
+    }
+    const club = rules('IN', 'IN_CLUB');
+    expect(club.incomeTax.status).toBe('mutuality');
+    expect(club.incomeTax.note).toContain('interest on bank deposits are taxable');
+    expect(club.incomeTaxForecast).toBe(false);
+  });
+
+  it('the 2025 Act is cited, not the 1961 sections it replaced', () => {
+    const urls = rules('IN', 'IN_PUBLIC_TRUST').sources.map((s) => s.sourceUrl);
+    expect(urls).toEqual(expect.arrayContaining([ORG_URLS.inAct2025Commencement, ORG_URLS.inS332Registration, ORG_URLS.inS336TaxableRegularIncome, ORG_URLS.inForm112Faqs]));
+    expect(ORG_RULE_SOURCES.inAct2025InForce.claim).toContain('1st April, 2026');
+    expect(ORG_RULE_SOURCES.inForm112.claim).toContain('Form 10B and 10BB');
+  });
+
+  it('donor deduction (section 133 / 354) is information only for the NPOs; none for clubs', () => {
+    for (const code of IN_NPO_CODES) {
+      const d = rules('IN', code).donationRelief!;
+      expect(d).toMatchObject({ scheme: 'donor_deduction', declarationRequired: false });
+      expect(d.ratePerPound).toBeUndefined();
+      expect(d.claimWindowYears).toBeUndefined();
+      expect(d.note).toContain('section 354');
+      expect(d.note).toContain('certificate');
+    }
+    expect(rules('IN', 'IN_CLUB').donationRelief).toBeNull();
+  });
+
+  it('reports: receipts and payments and GST for every type; regulators: the Income Tax Department for the NPOs', () => {
+    for (const code of IN_CODES) expect(rules('IN', code).reports).toEqual(['receipts_payments', 'gst']);
+    for (const code of IN_NPO_CODES) expect(rules('IN', code).regulators.map((r) => r.name)).toEqual(['Income Tax Department (India)']);
+    expect(rules('IN', 'IN_CLUB').regulators).toEqual([]);
+  });
+
+  it('accounts: a section 8 company keeps accrual books (Companies Act s 128); trusts, societies and clubs may use receipts and payments', () => {
+    const co = rules('IN', 'IN_SECTION8_COMPANY');
+    expect(co.accounts.receiptsAndPaymentsAllowed).toBe(false);
+    expect(co.accounts.note).toContain('accrual basis');
+    expect(co.sources.map((s) => s.id)).toContain('inCompanyAccruals');
+    for (const code of ['IN_PUBLIC_TRUST', 'IN_SOCIETY', 'IN_CLUB']) expect(rules('IN', code).accounts.receiptsAndPaymentsAllowed).toBe(true);
+    expect(rules('IN', 'IN_CLUB').accounts.note).toContain('Rs. 7,500');
+  });
+
+  it('figures: 85%, 30%, 5 years, donor 50% / 10% / Rs 2,000 cash, Form 112 small NPO, GST Rs 20 lakh / 10 lakh, RWA Rs 7,500', () => {
+    expect(orgReportingThresholds('IN').map((f) => [f.id, f.value, f.test, f.currency])).toEqual([
+      ['IN.ita.applicationShareAtLeast', 0.85, 'at_least', null],
+      ['IN.ita.specifiedIncomeRate', 0.3, 'is', null],
+      ['IN.ita.accumulationMaxYears', 5, 'or_less', null],
+      ['IN.ita.donorDeductionShare', 0.5, 'is', null],
+      ['IN.ita.donorDeductionIncomeCap', 0.1, 'or_less', null],
+      ['IN.ita.donationCashUpTo', 2000, 'or_less', 'INR'],
+      ['IN.ita.smallNpoRegularIncomeUpTo', 50000000, 'or_less', 'INR'],
+      ['IN.ita.smallNpoForeignContributionUpTo', 1000000, 'or_less', 'INR'],
+      ['IN.gst.registrationOver', 2000000, 'over', 'INR'],
+      ['IN.gst.registrationSpecialCategoryOver', 1000000, 'over', 'INR'],
+      ['IN.gst.rwaMemberContributionExemptUpTo', 7500, 'or_less', 'INR'],
+    ]);
+    expect(figure('IN', 'IN.gst.rwaMemberContributionExemptUpTo').appliesTo).toEqual(['IN_SOCIETY', 'IN_CLUB']);
+  });
+
+  it('sources: every IN row from an Indian government page or the Supreme Court, read today, reviewed before tax year 2027-28', () => {
+    const rows = Object.values(ORG_RULE_SOURCES).filter((s) => s.country === 'IN');
+    expect(rows.length).toBeGreaterThan(15);
+    for (const s of rows) {
+      expect(s.sourceUrl).toMatch(/^https:\/\/(www\.incometaxindia\.gov\.in|taxinformation\.cbic\.gov\.in|cbic-gst\.gov\.in|api\.sci\.gov\.in)\//);
+      expect({ id: s.id, readOn: s.readOn, reviewBy: s.reviewBy }).toEqual({ id: s.id, readOn: '2026-10-11', reviewBy: '2027-03-31' });
+    }
+    for (const code of IN_CODES) expect(rules('IN', code).sources.length).toBeGreaterThan(3);
+  });
+});
+
+describe('United States (US) — federal (IRS)', () => {
+  it('types: 501(c)(3), 501(c)(7), 501(c)(4) and others, a club not recognised as exempt', () => {
+    expect(orgTypesFor('US').map((t) => [t.code, t.label, t.kind])).toEqual([
+      ['US_501C3', 'Charity (501(c)(3) public charity)', 'charity'],
+      ['US_501C7', 'Social club (501(c)(7))', 'club'],
+      ['US_501C4', 'Social welfare or other nonprofit (501(c)(4) and others)', 'association'],
+      ['US_CLUB', 'Club or group not recognised as exempt', 'community'],
+    ]);
+  });
+
+  it('statuses: 501(c)(3) and (c)(4) exempt if conditions; a social club on mutuality; an unrecognised club check locally', () => {
+    expect(rules('US', 'US_501C3').incomeTax.status).toBe('exempt_if_conditions');
+    expect(rules('US', 'US_501C4').incomeTax.status).toBe('exempt_if_conditions');
+    expect(rules('US', 'US_501C7').incomeTax.status).toBe('mutuality');
+    expect(rules('US', 'US_CLUB').incomeTax.status).toBe('check_locally');
+    for (const code of US_CODES) expect(rules('US', code).incomeTaxForecast).toBe(false);
+    for (const code of US_EXEMPT_CODES) {
+      const note = rules('US', code).incomeTax.note;
+      expect(note).toContain('Form 990-N');
+      expect(note).toContain('990-T');
+    }
+    expect(rules('US', 'US_501C7').incomeTax.note).toContain('35%');
+    expect(rules('US', 'US_501C4').incomeTax.note).toContain('Form 8976');
+  });
+
+  it('donor deduction only for 501(c)(3), information only; written acknowledgment at $250', () => {
+    const d = rules('US', 'US_501C3').donationRelief!;
+    expect(d).toMatchObject({ scheme: 'donor_deduction', declarationRequired: false });
+    expect(d.note).toContain('$250');
+    for (const code of ['US_501C7', 'US_501C4', 'US_CLUB']) expect(rules('US', code).donationRelief).toBeNull();
+    expect(rules('US', 'US_501C4').accounts.note).toContain('generally not deductible');
+  });
+
+  it('reports: receipts and payments only (no federal VAT/GST, no return export); regulators: IRS, plus the states for a charity', () => {
+    for (const code of US_CODES) expect(rules('US', code).reports).toEqual(['receipts_payments']);
+    expect(rules('US', 'US_501C3').regulators.map((r) => r.name)).toEqual(['IRS (exempt organizations)', 'State charity regulator']);
+    expect(rules('US', 'US_501C7').regulators.map((r) => r.name)).toEqual(['IRS (exempt organizations)']);
+    expect(rules('US', 'US_CLUB').regulators).toEqual([]);
+  });
+
+  it('figures: Form 990-N / 990-EZ thresholds, due month, revocation, 990-T, social club limits, $250 acknowledgment', () => {
+    expect(orgReportingThresholds('US').map((f) => [f.id, f.value, f.test, f.currency])).toEqual([
+      ['US.irs.form990nGrossReceiptsUpTo', 50000, 'or_less', 'USD'],
+      ['US.irs.form990ezGrossReceiptsUnder', 200000, 'under', 'USD'],
+      ['US.irs.form990ezTotalAssetsUnder', 500000, 'under', 'USD'],
+      ['US.irs.returnDueMonthAfterYearEnd', 5, 'is', null],
+      ['US.irs.automaticRevocationYears', 3, 'is', null],
+      ['US.irs.form990tUnrelatedIncomeAtLeast', 1000, 'at_least', 'USD'],
+      ['US.irs.socialClubNonmemberShareUpTo', 0.35, 'or_less', null],
+      ['US.irs.socialClubNonmemberFacilitiesShareUpTo', 0.15, 'or_less', null],
+      ['US.irs.writtenAcknowledgmentAtLeast', 250, 'at_least', 'USD'],
+    ]);
+  });
+
+  it('sources: every US row an irs.gov page, read today, reviewed before the 2027 filing season', () => {
+    const rows = Object.values(ORG_RULE_SOURCES).filter((s) => s.country === 'US');
+    expect(rows.length).toBeGreaterThan(10);
+    for (const s of rows) {
+      expect(s.authority).toBe('IRS');
+      expect(s.sourceUrl).toMatch(/^https:\/\/www\.irs\.gov\//);
+      expect({ id: s.id, readOn: s.readOn, reviewBy: s.reviewBy }).toEqual({ id: s.id, readOn: '2026-10-11', reviewBy: '2027-01-31' });
+    }
+    for (const code of US_CODES) expect(rules('US', code).sources.length).toBeGreaterThan(3);
+  });
+});
+
+describe('Canada (CA) — CRA', () => {
+  it('types: registered charity, non-profit organisation, national RCAAA', () => {
+    expect(orgTypesFor('CA').map((t) => [t.code, t.label, t.kind, t.registeredWith])).toEqual([
+      ['CA_REGISTERED_CHARITY', 'Registered charity', 'charity', 'CRA'],
+      ['CA_NPO', 'Non-profit organisation (club, association or society)', 'community', 'Not registered with the CRA'],
+      ['CA_RCAAA', 'Registered Canadian amateur athletic association (national)', 'club', 'CRA'],
+    ]);
+  });
+
+  it('statuses: all exempt if conditions; notes name the return each files', () => {
+    for (const code of CA_CODES) {
+      expect(rules('CA', code).incomeTax.status).toBe('exempt_if_conditions');
+      expect(rules('CA', code).incomeTaxForecast).toBe(false);
+    }
+    expect(rules('CA', 'CA_REGISTERED_CHARITY').incomeTax.note).toContain('T3010');
+    expect(rules('CA', 'CA_REGISTERED_CHARITY').incomeTax.note).toContain('disbursement quota');
+    expect(rules('CA', 'CA_NPO').incomeTax.note).toContain('T1044');
+    expect(rules('CA', 'CA_NPO').incomeTax.note).toContain('149(5)');
+    expect(rules('CA', 'CA_RCAAA').incomeTax.note).toContain('T2052');
+    expect(rules('CA', 'CA_RCAAA').incomeTax.note).toContain('choose "Non-profit organisation"');
+  });
+
+  it('official donation receipts for the charity and the RCAAA only; information only', () => {
+    for (const code of ['CA_REGISTERED_CHARITY', 'CA_RCAAA']) {
+      expect(rules('CA', code).donationRelief).toMatchObject({ scheme: 'donor_deduction', declarationRequired: false });
+      expect(rules('CA', code).donationRelief!.note).toContain('official donation receipts');
+    }
+    expect(rules('CA', 'CA_NPO').donationRelief).toBeNull();
+  });
+
+  it('reports: receipts and payments and GST/HST; regulator: the CRA for the registered types', () => {
+    for (const code of CA_CODES) expect(rules('CA', code).reports).toEqual(['receipts_payments', 'gst']);
+    expect(rules('CA', 'CA_REGISTERED_CHARITY').regulators.map((r) => r.name)).toEqual(['CRA (Canada Revenue Agency)']);
+    expect(rules('CA', 'CA_RCAAA').regulators.map((r) => r.name)).toEqual(['CRA (Canada Revenue Agency)']);
+    expect(rules('CA', 'CA_NPO').regulators).toEqual([]);
+  });
+
+  it('figures: T3010 / T1044 / T2052 six months, disbursement quota, T1044 tests, GST/HST small supplier', () => {
+    expect(orgReportingThresholds('CA').map((f) => [f.id, f.value, f.test, f.currency])).toEqual([
+      ['CA.cra.t3010DueMonths', 6, 'or_less', null],
+      ['CA.cra.dqThresholdOver', 100000, 'over', 'CAD'],
+      ['CA.cra.dqRate', 0.035, 'is', null],
+      ['CA.cra.dqRateOverMillion', 0.05, 'is', null],
+      ['CA.cra.dqHigherRateOver', 1000000, 'over', 'CAD'],
+      ['CA.cra.t1044PropertyIncomeOver', 10000, 'over', 'CAD'],
+      ['CA.cra.t1044TotalAssetsOver', 200000, 'over', 'CAD'],
+      ['CA.cra.t1044DueMonths', 6, 'or_less', null],
+      ['CA.cra.t2052DueMonths', 6, 'or_less', null],
+      ['CA.cra.gstSmallSupplierTaxableSuppliesUpTo', 50000, 'or_less', 'CAD'],
+      ['CA.cra.gstCharityGrossRevenueUpTo', 250000, 'or_less', 'CAD'],
+    ]);
+  });
+
+  it('sources: every CA row a canada.ca CRA page, read today, reviewed by 31 January 2027', () => {
+    const rows = Object.values(ORG_RULE_SOURCES).filter((s) => s.country === 'CA');
+    expect(rows.length).toBeGreaterThan(8);
+    for (const s of rows) {
+      expect(s.authority).toBe('CRA');
+      expect(s.sourceUrl).toMatch(/^https:\/\/www\.canada\.ca\/en\/revenue-agency\//);
+      expect({ id: s.id, readOn: s.readOn, reviewBy: s.reviewBy }).toEqual({ id: s.id, readOn: '2026-10-11', reviewBy: '2027-01-31' });
+    }
+    for (const code of CA_CODES) expect(rules('CA', code).sources.length).toBeGreaterThan(2);
+  });
+});
+
+describe('New Zealand (NZ) — Charities Services, Companies Office, Inland Revenue', () => {
+  it('types: registered charity, incorporated society, unincorporated club', () => {
+    expect(orgTypesFor('NZ').map((t) => [t.code, t.label, t.kind])).toEqual([
+      ['NZ_REGISTERED_CHARITY', 'Registered charity (Charities Services)', 'charity'],
+      ['NZ_INCORPORATED_SOCIETY', 'Incorporated society (not a registered charity)', 'association'],
+      ['NZ_CLUB', 'Club or group (unincorporated)', 'community'],
+    ]);
+  });
+
+  it('statuses: a registered charity exempt if conditions; societies and clubs check locally (exemption or the $1,000 deduction)', () => {
+    expect(rules('NZ', 'NZ_REGISTERED_CHARITY').incomeTax.status).toBe('exempt_if_conditions');
+    for (const code of ['NZ_INCORPORATED_SOCIETY', 'NZ_CLUB']) {
+      const r = rules('NZ', code);
+      expect(r.incomeTax.status).toBe('check_locally');
+      expect(r.incomeTax.note).toContain('$1,000');
+      expect(r.incomeTax.note).toContain('not yet law');
+      expect(r.incomeTax.note).toContain('amateur game or sport');
+    }
+    expect(rules('NZ', 'NZ_INCORPORATED_SOCIETY').incomeTax.note).toContain('company rate');
+    expect(rules('NZ', 'NZ_CLUB').incomeTax.note).toContain('individual rates');
+    for (const code of NZ_CODES) expect(rules('NZ', code).incomeTaxForecast).toBe(false);
+  });
+
+  it('donee status for the charity only, information only; the Budget 2026 cap is named as a proposal', () => {
+    const d = rules('NZ', 'NZ_REGISTERED_CHARITY').donationRelief!;
+    expect(d).toMatchObject({ scheme: 'donor_deduction', declarationRequired: false });
+    expect(d.note).toContain('one third');
+    expect(d.note).toContain('not yet law');
+    expect(rules('NZ', 'NZ_INCORPORATED_SOCIETY').donationRelief).toBeNull();
+    expect(rules('NZ', 'NZ_CLUB').donationRelief).toBeNull();
+  });
+
+  it('accounts: Tier 4 cash reporting under $140,000 of operating payments; the society note names the 2022 Act re-registration', () => {
+    expect(rules('NZ', 'NZ_REGISTERED_CHARITY').accounts).toMatchObject({ receiptsAndPaymentsAllowed: true, currency: 'NZD', thresholdId: 'NZ.cs.tier4OperatingPaymentsUnder' });
+    expect(rules('NZ', 'NZ_INCORPORATED_SOCIETY').accounts).toMatchObject({ receiptsAndPaymentsAllowed: true, currency: 'NZD', thresholdId: 'NZ.is.tier4OperatingPaymentsUnder' });
+    expect(rules('NZ', 'NZ_INCORPORATED_SOCIETY').accounts.note).toContain('5 April 2026');
+    for (const code of NZ_CODES) {
+      const id = rules('NZ', code).accounts.thresholdId;
+      if (id) expect(figure('NZ', id).value).toBe(140000);
+    }
+  });
+
+  it('reports and regulators', () => {
+    for (const code of NZ_CODES) expect(rules('NZ', code).reports).toEqual(['receipts_payments', 'gst']);
+    const names = (code: string) => rules('NZ', code).regulators.map((r) => r.name);
+    expect(names('NZ_REGISTERED_CHARITY')).toEqual(['Charities Services (Department of Internal Affairs)', 'Inland Revenue (NZ)']);
+    expect(names('NZ_INCORPORATED_SOCIETY')).toEqual(['Companies Office (Incorporated Societies Register)', 'Inland Revenue (NZ)']);
+    expect(names('NZ_CLUB')).toEqual(['Inland Revenue (NZ)']);
+  });
+
+  it('figures: Charities Services tiers and assurance, society filing and size, $1,000 deduction, one-third credit, $60,000 GST', () => {
+    expect(orgReportingThresholds('NZ').map((f) => [f.id, f.value, f.test, f.currency])).toEqual([
+      ['NZ.cs.annualReturnDueMonths', 6, 'or_less', null],
+      ['NZ.cs.tier4OperatingPaymentsUnder', 140000, 'under', 'NZD'],
+      ['NZ.cs.tier3OperatingPaymentsUnder', 5000000, 'under', 'NZD'],
+      ['NZ.cs.reviewOrAuditOver', 550000, 'over', 'NZD'],
+      ['NZ.cs.auditOver', 1100000, 'over', 'NZD'],
+      ['NZ.is.annualReturnDueMonths', 6, 'or_less', null],
+      ['NZ.is.smallSocietyOperatingPaymentsUnder', 50000, 'under', 'NZD'],
+      ['NZ.is.smallSocietyCurrentAssetsUnder', 50000, 'under', 'NZD'],
+      ['NZ.is.tier4OperatingPaymentsUnder', 140000, 'under', 'NZD'],
+      ['NZ.ird.nfpIncomeDeduction', 1000, 'is', 'NZD'],
+      ['NZ.ird.donationTaxCreditShare', 1 / 3, 'is', null],
+      ['NZ.ird.donationMinimum', 5, 'at_least', 'NZD'],
+      ['NZ.ird.gstRegistrationAtLeast', 60000, 'at_least', 'NZD'],
+    ]);
+  });
+
+  it('sources: every NZ row a New Zealand government page, read today, reviewed before the 2027-28 income year', () => {
+    const rows = Object.values(ORG_RULE_SOURCES).filter((s) => s.country === 'NZ');
+    expect(rows.length).toBeGreaterThan(12);
+    for (const s of rows) {
+      expect(s.sourceUrl).toMatch(/^https:\/\/(www\.ird\.govt\.nz|www\.taxpolicy\.ird\.govt\.nz|www\.charities\.govt\.nz|is-register\.companiesoffice\.govt\.nz)\//);
+      expect({ id: s.id, readOn: s.readOn, reviewBy: s.reviewBy }).toEqual({ id: s.id, readOn: '2026-10-11', reviewBy: '2027-03-31' });
+    }
+    for (const code of NZ_CODES) expect(rules('NZ', code).sources.length).toBeGreaterThan(4);
+  });
+});
+
+describe('Ireland (IE) — Revenue', () => {
+  it('types: registered charity, sports body with Revenue exemption, members\' club', () => {
+    expect(orgTypesFor('IE').map((t) => [t.code, t.kind])).toEqual([
+      ['IE_REGISTERED_CHARITY', 'charity'],
+      ['IE_SPORTS_BODY', 'club'],
+      ['IE_CLUB', 'club'],
+    ]);
+  });
+
+  it('statuses: charity and sports body exempt if conditions; a members\' club on mutuality', () => {
+    expect(rules('IE', 'IE_REGISTERED_CHARITY').incomeTax.status).toBe('exempt_if_conditions');
+    expect(rules('IE', 'IE_SPORTS_BODY').incomeTax.status).toBe('exempt_if_conditions');
+    expect(rules('IE', 'IE_CLUB').incomeTax.status).toBe('mutuality');
+    expect(rules('IE', 'IE_CLUB').incomeTax.note).toContain('non-members is taxable');
+    for (const code of IE_CODES) {
+      expect(rules('IE', code).incomeTaxForecast).toBe(false);
+      expect(rules('IE', code).reports).toEqual(['receipts_payments', 'vat']);
+    }
+  });
+
+  it('the Charitable Donation Scheme: the charity claims, with a certificate, within 4 years; not Gift Aid', () => {
+    const d = rules('IE', 'IE_REGISTERED_CHARITY').donationRelief!;
+    expect(d).toMatchObject({ scheme: 'charitable_donation_scheme', declarationRequired: true, claimWindowYears: 4 });
+    expect(d.ratePerPound).toBeUndefined();
+    expect(d.note).toContain('€449.27');
+    expect(rules('IE', 'IE_REGISTERED_CHARITY').reports).not.toContain('gift_aid_schedule');
+    expect(rules('IE', 'IE_SPORTS_BODY').donationRelief).toBeNull();
+    expect(rules('IE', 'IE_CLUB').donationRelief).toBeNull();
+  });
+
+  it('regulators: Charities Regulator and Revenue for a charity; Revenue for a sports body', () => {
+    expect(rules('IE', 'IE_REGISTERED_CHARITY').regulators.map((r) => r.name)).toEqual(['Charities Regulator (Ireland)', 'Revenue (Ireland), Charities and Sports Exemptions Unit']);
+    expect(rules('IE', 'IE_SPORTS_BODY').regulators.map((r) => r.name)).toEqual(['Revenue (Ireland), Charities and Sports Exemptions Unit']);
+    expect(rules('IE', 'IE_CLUB').regulators).toEqual([]);
+  });
+
+  it('figures: CDS €250 / 31% / 4 years, audited accounts over €250,000, VAT €42,500 / €85,000', () => {
+    expect(orgReportingThresholds('IE').map((f) => [f.id, f.value, f.test, f.currency])).toEqual([
+      ['IE.revenue.cdsDonationAtLeast', 250, 'at_least', 'EUR'],
+      ['IE.revenue.cdsSpecifiedRate', 0.31, 'is', null],
+      ['IE.revenue.cdsClaimWindowYears', 4, 'is', null],
+      ['IE.revenue.auditedAccountsIncomeOver', 250000, 'over', 'EUR'],
+      ['IE.revenue.vatServicesOver', 42500, 'over', 'EUR'],
+      ['IE.revenue.vatGoodsOver', 85000, 'over', 'EUR'],
+    ]);
+    // Revenue's worked example: €1,000 is 69% of the gross, (€1,000 / 69) x 100 = €1,449.27, a €449.27 refund.
+    const rate = figure('IE', 'IE.revenue.cdsSpecifiedRate').value;
+    // Revenue's figure is cut to the cent (1,449.2753... -> 1,449.27), not rounded.
+    const gross = Math.floor((1000 / (1 - rate)) * 100) / 100;
+    expect((gross - 1000).toFixed(2)).toBe('449.27');
+  });
+
+  it('sources: every IE row a revenue.ie page, read today, reviewed by 31 January 2027', () => {
+    const rows = Object.values(ORG_RULE_SOURCES).filter((s) => s.country === 'IE');
+    expect(rows.length).toBeGreaterThan(5);
+    for (const s of rows) {
+      expect(s.sourceUrl).toMatch(/^https:\/\/www\.revenue\.ie\//);
+      expect({ id: s.id, readOn: s.readOn, reviewBy: s.reviewBy }).toEqual({ id: s.id, readOn: '2026-10-11', reviewBy: '2027-01-31' });
+    }
+    for (const code of IE_CODES) expect(rules('IE', code).sources.length).toBeGreaterThan(1);
+  });
+});
+
+describe('Singapore (SG) — Commissioner of Charities and IRAS', () => {
+  it('types: registered charity, IPC, club or association', () => {
+    expect(orgTypesFor('SG').map((t) => [t.code, t.kind])).toEqual([
+      ['SG_REGISTERED_CHARITY', 'charity'],
+      ['SG_IPC', 'charity'],
+      ['SG_CLUB', 'club'],
+    ]);
+  });
+
+  it('statuses: charities exempt (automatic, section 13(1)(zm)); a club on the 50% members test', () => {
+    for (const code of ['SG_REGISTERED_CHARITY', 'SG_IPC']) {
+      expect(rules('SG', code).incomeTax.status).toBe('exempt');
+      expect(rules('SG', code).incomeTax.note).toContain('13(1)(zm)');
+    }
+    expect(rules('SG', 'SG_CLUB').incomeTax.status).toBe('mutuality');
+    expect(rules('SG', 'SG_CLUB').incomeTax.note).toContain('50%');
+    for (const code of SG_CODES) {
+      expect(rules('SG', code).incomeTaxForecast).toBe(false);
+      expect(rules('SG', code).reports).toEqual(['receipts_payments', 'gst']);
+    }
+  });
+
+  it('donor deduction (2.5 times) only for an IPC, information only; a plain charity has none', () => {
+    expect(rules('SG', 'SG_IPC').donationRelief).toMatchObject({ scheme: 'donor_deduction', declarationRequired: false });
+    expect(rules('SG', 'SG_IPC').donationRelief!.note).toContain('2.5 times');
+    expect(rules('SG', 'SG_REGISTERED_CHARITY').donationRelief).toBeNull();
+    expect(rules('SG', 'SG_REGISTERED_CHARITY').incomeTax.note).toContain('not tax deductible');
+    expect(rules('SG', 'SG_CLUB').donationRelief).toBeNull();
+  });
+
+  it('accounts: an IPC is always audited; a charity up to the $500,000 audit level', () => {
+    expect(rules('SG', 'SG_IPC').accounts.receiptsAndPaymentsAllowed).toBe(false);
+    expect(rules('SG', 'SG_REGISTERED_CHARITY').accounts).toMatchObject({ receiptsAndPaymentsAllowed: true, upToGrossIncome: 500000, currency: 'SGD', thresholdId: 'SG.coc.auditOver' });
+    expect(rules('SG', 'SG_REGISTERED_CHARITY').regulators.map((r) => r.name)).toEqual(['Commissioner of Charities (Singapore)', 'IRAS']);
+    expect(rules('SG', 'SG_CLUB').regulators.map((r) => r.name)).toEqual(['IRAS']);
+  });
+
+  it('figures: 6 months, $250,000 / $500,000 / $10 million, 2.5 times, 50%, 17%, GST $1 million', () => {
+    expect(orgReportingThresholds('SG').map((f) => [f.id, f.value, f.test, f.currency])).toEqual([
+      ['SG.coc.annualSubmissionDueMonths', 6, 'or_less', null],
+      ['SG.coc.anyIndependentExaminerUpTo', 250000, 'or_less', 'SGD'],
+      ['SG.coc.auditOver', 500000, 'over', 'SGD'],
+      ['SG.coc.largeCharityReceiptsAtLeast', 10000000, 'at_least', 'SGD'],
+      ['SG.iras.ipcDonationDeductionMultiple', 2.5, 'is', null],
+      ['SG.iras.clubMemberReceiptsShareAtLeast', 0.5, 'at_least', null],
+      ['SG.iras.clubTaxRate', 0.17, 'is', null],
+      ['SG.iras.gstRegistrationOver', 1000000, 'over', 'SGD'],
+    ]);
+  });
+
+  it('sources: every SG row an IRAS or Commissioner of Charities page, read today, reviewed by 31 March 2027', () => {
+    const rows = Object.values(ORG_RULE_SOURCES).filter((s) => s.country === 'SG');
+    expect(rows.length).toBeGreaterThan(5);
+    for (const s of rows) {
+      expect(s.sourceUrl).toMatch(/^https:\/\/www\.(iras|charities)\.gov\.sg\//);
+      expect({ id: s.id, readOn: s.readOn, reviewBy: s.reviewBy }).toEqual({ id: s.id, readOn: '2026-10-11', reviewBy: '2027-03-31' });
     }
   });
 });
@@ -381,7 +831,7 @@ describe('inventory and package exports', () => {
     expect(pkg.giftAidClaimValue).toBe(giftAidClaimValue);
     expect(pkg.orgRulesInventory).toBe(orgRulesInventory);
     expect(typeof pkg.orgRulesPastReview).toBe('function');
-    expect(pkg.ORG_REPORTS).toEqual(['receipts_payments', 'gift_aid_schedule', 'vat', 'gst_bas']);
+    expect(pkg.ORG_REPORTS).toEqual(['receipts_payments', 'gift_aid_schedule', 'vat', 'gst_bas', 'gst']);
     expect(pkg.GB_CC_THRESHOLDS_FROM_YEAR_END).toBe('2026-09-30');
   });
 });

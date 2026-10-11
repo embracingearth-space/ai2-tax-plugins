@@ -355,7 +355,7 @@ export type {
   OrgRuleInventoryItem,
 } from './decisions/organisations';
 export { ORG_RULE_SOURCES, ORG_FIGURES, ORG_URLS, ORG_RULES_READ_ON, GB_CC_THRESHOLDS_FROM_YEAR_END } from './decisions/organisationSources';
-export type { OrgSource, OrgSourceKey, OrgFigure, OrgFigureTest } from './decisions/organisationSources';
+export type { OrgSource, OrgSourceKey, OrgFigure, OrgFigureTest, OrgCountry, OrgCurrency } from './decisions/organisationSources';
 
 // Australia — per-unit deduction rates (WFH fixed rate, cents per km), effective-dated by income year.
 export {

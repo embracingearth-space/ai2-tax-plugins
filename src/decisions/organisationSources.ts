@@ -30,6 +30,34 @@
  * closing its accounts for a year that ended before then still uses the old
  * ones.
  *
+ * INDIA'S INCOME-TAX ACT, 2025 IS IN FORCE FROM 1 APRIL 2026. It replaces the
+ * Income-tax Act, 1961 from tax year 2026-27: the old sections 11-13, 12A /
+ * 12AB and 80G become Chapter XVII-B (registered non-profit organisations,
+ * sections 332-355) and section 133, and Forms 10B / 10BB become Form 112.
+ * The IN rows cite the 2025 Act. The section pages on incometaxindia.gov.in
+ * were read in a browser (the site refuses plain HTTP clients); their footer
+ * "Last reviewed and updated on" is site-wide, so `pageLastUpdated` is null
+ * for them. The Form 112 FAQ (a PDF) records its Last-Modified header.
+ *
+ * US rows are IRS pages, each with its own "Page Last Reviewed or Updated"
+ * date; federal only. State charity registration and state tax are named
+ * in the notes, not modelled.
+ *
+ * CA rows are canada.ca (CRA) pages with their "Date modified". NZ rows are
+ * Inland Revenue pages with their "Last updated" date, and Charities
+ * Services and Companies Office pages read in a browser (they refuse plain
+ * HTTP clients) that show only a month ("Updated June 2026") or no date, so
+ * `pageLastUpdated` is null there. NZ's Budget 2026 changes are proposals,
+ * not law: they are named in notes, never used as figures.
+ *
+ * IE rows are revenue.ie pages ("Published" date) and Tax and Duty Manuals
+ * ("last reviewed/updated" month, so null). charitiesregulator.ie sits
+ * behind a bot check and was not read: the Charities Regulator's own
+ * filing rules (annual report, accounts) are not modelled.
+ *
+ * SG rows are IRAS pages ("Last updated") and Commissioner of Charities
+ * pages read in a browser (no page date shown).
+ *
  * Nothing here is a number the app may use without its row: a test holds
  * every figure to an https source, a read date and a review date, and the
  * freshness test fails the build once a review date passes. 2fin
@@ -44,6 +72,18 @@ const R = ORG_RULES_READ_ON;
 const GB_REVIEW_BY = '2027-04-05';
 /** AU rows are re-read before the 2027-28 income year starts (1 July 2027). */
 const AU_REVIEW_BY = '2027-06-30';
+/** IN rows are re-read before tax year 2027-28 starts (1 April 2027), after the Finance Act 2027. */
+const IN_REVIEW_BY = '2027-03-31';
+/** US rows are re-read before the 2027 filing season (IRS pages are revised for each calendar tax year). */
+const US_REVIEW_BY = '2027-01-31';
+/** CA rows are re-read before the 2027 calendar year's returns, like the US rows. */
+const CA_REVIEW_BY = '2027-01-31';
+/** NZ rows are re-read before the 2027-28 income year (1 April 2027), when the Budget 2026 proposals would start. */
+const NZ_REVIEW_BY = '2027-03-31';
+/** IE rows are re-read after the Finance Act that follows Budget 2027 (in force 1 January 2027). */
+const IE_REVIEW_BY = '2027-01-31';
+/** SG rows are re-read after Budget 2027 (February) and before YA 2027 filing. */
+const SG_REVIEW_BY = '2027-03-31';
 
 /** The day the new Charity Commission thresholds start: financial years ENDING on or after it. */
 export const GB_CC_THRESHOLDS_FROM_YEAR_END = '2026-09-30';
@@ -98,17 +138,133 @@ export const ORG_URLS = {
   acncReportingAnnually: 'https://www.acnc.gov.au/for-charities/manage-your-charity/obligations-acnc/reporting-annually-acnc',
   acncIncorporatedAssociations: 'https://www.acnc.gov.au/tools/topic-guides/incorporated-associations',
   acnc: 'https://www.acnc.gov.au',
+  // India — Income Tax Department (Income-tax Act, 2025 and the Companies Act, 2013 as it hosts them)
+  inAct2025Commencement: 'https://www.incometaxindia.gov.in/w/section-1-1',
+  inS332Registration: 'https://www.incometaxindia.gov.in/w/section-332-7',
+  inS334TaxOnIncome: 'https://www.incometaxindia.gov.in/w/section-334-7',
+  inS335RegularIncome: 'https://www.incometaxindia.gov.in/w/section-335-7',
+  inS336TaxableRegularIncome: 'https://www.incometaxindia.gov.in/w/section-336-7',
+  inS341Application: 'https://www.incometaxindia.gov.in/w/section-341-7',
+  inS342Accumulation: 'https://www.incometaxindia.gov.in/w/section-342-7',
+  inS345CommercialActivity: 'https://www.incometaxindia.gov.in/w/section-345-7',
+  inS347Books: 'https://www.incometaxindia.gov.in/w/section-347-7',
+  inS348Audit: 'https://www.incometaxindia.gov.in/w/section-348-7',
+  inS349Return: 'https://www.incometaxindia.gov.in/w/section-349-7',
+  inS354DonorApproval: 'https://www.incometaxindia.gov.in/w/section-354-7',
+  inS355Interpretation: 'https://www.incometaxindia.gov.in/w/section-355-7',
+  inS133DonorDeduction: 'https://www.incometaxindia.gov.in/w/section-133-94',
+  inForm112Faqs: 'https://www.incometaxindia.gov.in/documents/d/guest/form-112-faqs',
+  inIncomeTaxReturns: 'https://www.incometaxindia.gov.in/income-tax-returns',
+  inCompaniesActS128: 'https://www.incometaxindia.gov.in/w/section-128-81',
+  // India — CBIC (GST) and the Supreme Court
+  inCgstS22Registration: 'https://taxinformation.cbic.gov.in/content/html/tax_repository/gst/acts/2017_CGST_act/active/chapter6/section22_v1.00.html',
+  inGstRwaCircular: 'https://cbic-gst.gov.in/pdf/circular-cgst-109n.pdf',
+  inScSecunderabadClub: 'https://api.sci.gov.in/supremecourt/2011/38510/38510_2011_12_1501_46128_Judgement_17-Aug-2023.pdf',
+  // United States — IRS
+  us990Series: 'https://www.irs.gov/charities-non-profits/form-990-series-which-forms-do-exempt-organizations-file-filing-phase-in',
+  usWhoMustFile: 'https://www.irs.gov/charities-non-profits/annual-exempt-organization-return-who-must-file',
+  us990DueDate: 'https://www.irs.gov/charities-non-profits/annual-exempt-organization-return-due-date',
+  usAutomaticRevocation: 'https://www.irs.gov/charities-non-profits/automatic-revocation-of-exemption',
+  us501c3Requirements: 'https://www.irs.gov/charities-non-profits/charitable-organizations/exemption-requirements-501c3-organizations',
+  usApplying: 'https://www.irs.gov/charities-non-profits/applying-for-tax-exempt-status',
+  usForm1024Instructions: 'https://www.irs.gov/pub/irs-pdf/i1024.pdf',
+  usSocialClubs: 'https://www.irs.gov/charities-non-profits/other-non-profits/social-clubs',
+  usSocialWelfare: 'https://www.irs.gov/charities-non-profits/other-non-profits/social-welfare-organizations',
+  us501c4Donations: 'https://www.irs.gov/charities-non-profits/other-non-profits/donations-to-section-501c4-organizations',
+  usDeductibleRecipients: 'https://www.irs.gov/charities-non-profits/exempt-organizations-general-issues-charitable-contributions',
+  usWrittenAcknowledgments: 'https://www.irs.gov/charities-non-profits/charitable-organizations/charitable-contributions-written-acknowledgments',
+  usUbit: 'https://www.irs.gov/charities-non-profits/unrelated-business-income-tax',
+  usStateSolicitation: 'https://www.irs.gov/charities-non-profits/charitable-organizations/charitable-solicitation-state-requirements',
+  // Canada — CRA (canada.ca)
+  caCharityAdvantages:
+    'https://www.canada.ca/en/revenue-agency/services/charities-giving/charities/registering-charitable-qualified-donee-status/apply-become-registered-charity/deciding/advantages-obligations-becoming-registered-charity.html',
+  caCharityVsNpo:
+    'https://www.canada.ca/en/revenue-agency/services/charities-giving/about-registered-charities/what-difference-between-a-registered-charity-a-non-profit-organization.html',
+  caT3010Filing: 'https://www.canada.ca/en/revenue-agency/services/charities-giving/charities/operating-a-registered-charity/filing-t3010-charity-return.html',
+  caDisbursementQuota:
+    'https://www.canada.ca/en/revenue-agency/services/charities-giving/charities/operating-a-registered-charity/annual-spending-requirement-disbursement-quota/disbursement-quota-calculation.html',
+  caNpoReturnGuide: 'https://www.canada.ca/en/revenue-agency/services/forms-publications/publications/t4117/income-tax-guide-non-profit-organization-information-return.html',
+  caRcaaaAdvantages:
+    'https://www.canada.ca/en/revenue-agency/services/charities-giving/charities/registering-charitable-qualified-donee-status/applying-other-qualified-donee-status/advantages-obligations-becoming-oqd.html',
+  caRcaaaApplying:
+    'https://www.canada.ca/en/revenue-agency/services/charities-giving/charities/registering-charitable-qualified-donee-status/applying-other-qualified-donee-status/applying-registered-canadian-amateur-athletic-association.html',
+  caRcaaaReceipts:
+    'https://www.canada.ca/en/revenue-agency/services/charities-giving/other-organizations-that-issue-donation-receipts-qualified-donees/canadian-amateur-athletic-associations.html',
+  caDonors: 'https://www.canada.ca/en/revenue-agency/services/charities-giving/giving-charity-information-donors.html',
+  caGstCharities: 'https://www.canada.ca/en/revenue-agency/services/forms-publications/publications/rc4082/gst-hst-information-charities.html',
+  caGstNpos: 'https://www.canada.ca/en/revenue-agency/services/forms-publications/publications/rc4081/gst-hst-information-non-profit-organizations.html',
+  // New Zealand — Inland Revenue, Charities Services, Companies Office
+  nzQualifyingExemption:
+    'https://www.ird.govt.nz/roles/not-for-profits-and-charities/setting-up/tax-exemptions-and-deductions-for-nfps/income-tax/qualifying-for-an-income-tax-exemption-or-deduction',
+  nzSportsClubs: 'https://www.ird.govt.nz/roles/not-for-profits-and-charities/types-of-nfps/sports-clubs-and-societies',
+  nzNfpDeduction: 'https://www.ird.govt.nz/roles/not-for-profits-and-charities/setting-up/tax-exemptions-and-deductions-for-nfps/income-tax/income-deduction',
+  nzIr9: 'https://www.ird.govt.nz/roles/not-for-profits-and-charities/types-of-nfps/sports-clubs-and-societies/file-ir9',
+  nzDonationTaxCredits: 'https://www.ird.govt.nz/income-tax/income-tax-for-individuals/individual-tax-credits/donation-tax-credits/about-donation-tax-credits',
+  nzGstRegistration: 'https://www.ird.govt.nz/registering-for-gst',
+  nzBudget2026Proposals: 'https://www.taxpolicy.ird.govt.nz/-/media/project/ir/tp/publications/2026/is-charities-not-for-profits.pdf',
+  nzCsAnnualReturn: 'https://www.charities.govt.nz/annual-reporting/annual-return',
+  nzCsTier4: 'https://www.charities.govt.nz/annual-reporting/tier-4',
+  nzCsTier3: 'https://www.charities.govt.nz/annual-reporting/tier-3',
+  nzCsAuditReview: 'https://www.charities.govt.nz/annual-reporting/statutory-audit-and-review-requirements',
+  nzIsRegister: 'https://is-register.companiesoffice.govt.nz/',
+  nzIsAnnualFiling:
+    'https://is-register.companiesoffice.govt.nz/help-centre/meeting-your-annual-filing-requirements/filing-annual-financial-statements-and-annual-returns/',
+  nzIsLargeSocieties:
+    'https://is-register.companiesoffice.govt.nz/help-centre/meeting-your-annual-filing-requirements/financial-reporting-standards-for-large-societies/',
+  // Ireland — Revenue (charitiesregulator.ie refused automated reading behind a bot check, so nothing here rests on it)
+  ieCharitableExemption: 'https://www.revenue.ie/en/companies-and-charities/charities-and-sports-bodies/charitable-tax-exemption/index.aspx',
+  ieCharityConditions:
+    'https://www.revenue.ie/en/companies-and-charities/charities-and-sports-bodies/charitable-tax-exemption/conditions-retaining-charitable-tax-exemption.aspx',
+  ieCdsOverview: 'https://www.revenue.ie/en/companies-and-charities/charities-and-sports-bodies/charitable-donation-scheme/index.aspx',
+  ieCdsClaiming: 'https://www.revenue.ie/en/companies-and-charities/charities-and-sports-bodies/charitable-donation-scheme/claiming-tax-relief-on-donations.aspx',
+  ieSportsBodyConditions:
+    'https://www.revenue.ie/en/companies-and-charities/charities-and-sports-bodies/sports-bodies-tax-exemption/conditions-retaining-tax-exemption.aspx',
+  ieMutualTrading: 'https://www.revenue.ie/en/tax-professionals/tdm/income-tax-capital-gains-tax-corporation-tax/part-36/36-00-05.pdf',
+  ieSportsExemptionManual: 'https://www.revenue.ie/en/tax-professionals/tdm/income-tax-capital-gains-tax-corporation-tax/part-07/07-03-08.pdf',
+  ieVatThresholds: 'https://www.revenue.ie/en/vat/vat-registration/who-should-register-for-vat/vat-thresholds.aspx',
+  /** The regulator's address for the app to link to; not a source (its pages sit behind a bot check). */
+  ieCharitiesRegulator: 'https://www.charitiesregulator.ie',
+  // Singapore — IRAS and the Commissioner of Charities
+  sgCharitiesTax: 'https://www.iras.gov.sg/taxes/other-taxes/charities/charities-ipcs-taxes',
+  sgDonations: 'https://www.iras.gov.sg/taxes/other-taxes/charities/donations-tax-deductions',
+  sgClubs: 'https://www.iras.gov.sg/taxes/other-taxes/bodiesofpersons/overview_bodiesofpersons',
+  sgGstRegistration: 'https://www.iras.gov.sg/taxes/goods-services-tax-(gst)/gst-registration-deregistration/do-i-need-to-register-for-gst',
+  sgCocAnnualSubmissions: 'https://www.charities.gov.sg/Pages/Charities-and-IPCs/Manage-Your-Charity/Annual-Submissions.aspx',
+  sgCocLargeCharities: 'https://www.charities.gov.sg/Pages/Charities-and-IPCs/Manage-Your-Charity/Additional-Requirements-for-Large-Charities-IPCs.aspx',
 } as const;
 
 const U = ORG_URLS;
 
+/** The countries with their own organisation rules. */
+export type OrgCountry = 'GB' | 'AU' | 'IN' | 'US' | 'CA' | 'NZ' | 'IE' | 'SG';
+
+/** The currencies their figures are in (ISO 4217). */
+export type OrgCurrency = 'GBP' | 'AUD' | 'INR' | 'USD' | 'CAD' | 'NZD' | 'EUR' | 'SGD';
+
 export interface OrgSource {
   /** The key in ORG_RULE_SOURCES. */
   id: string;
-  country: 'GB' | 'AU';
+  country: OrgCountry;
   /** What the page says that the rule rests on, in the page's own terms (short quotes in double quotes). */
   claim: string;
-  authority: 'HMRC' | 'Charity Commission' | 'OSCR' | 'CCNI' | 'ATO' | 'ACNC';
+  authority:
+    | 'HMRC'
+    | 'Charity Commission'
+    | 'OSCR'
+    | 'CCNI'
+    | 'ATO'
+    | 'ACNC'
+    | 'Income Tax Department (India)'
+    | 'CBIC (India)'
+    | 'Supreme Court of India'
+    | 'IRS'
+    | 'CRA'
+    | 'Inland Revenue (NZ)'
+    | 'Charities Services (NZ)'
+    | 'Companies Office (NZ)'
+    | 'Revenue (Ireland)'
+    | 'IRAS'
+    | 'Commissioner of Charities (SG)';
   sourceUrl: string;
   /** The page's own "last updated" date (YYYY-MM-DD), or null where it shows none. */
   pageLastUpdated: string | null;
@@ -136,6 +292,24 @@ const au = (authority: OrgSource['authority'], sourceUrl: string, pageLastUpdate
   pageLastUpdated,
   readOn: R,
   reviewBy: AU_REVIEW_BY,
+});
+const us = (sourceUrl: string, pageLastUpdated: string | null, claim: string): SourceRow => ({
+  country: 'US',
+  claim,
+  authority: 'IRS',
+  sourceUrl,
+  pageLastUpdated,
+  readOn: R,
+  reviewBy: US_REVIEW_BY,
+});
+const inr = (authority: OrgSource['authority'], sourceUrl: string, pageLastUpdated: string | null, claim: string): SourceRow => ({
+  country: 'IN',
+  claim,
+  authority,
+  sourceUrl,
+  pageLastUpdated,
+  readOn: R,
+  reviewBy: IN_REVIEW_BY,
 });
 
 const GB_SOURCES = {
@@ -408,15 +582,639 @@ const AU_SOURCES = {
   ),
 } satisfies Record<string, SourceRow>;
 
+const ITD = 'Income Tax Department (India)';
+const IN_SOURCES = {
+  inAct2025InForce: inr(
+    ITD,
+    U.inAct2025Commencement,
+    null,
+    'Income-tax Act, 2025 (Act No. 30 of 2025), section 1: "Save as otherwise provided in this Act, it shall come into force on the 1st ' +
+      'April, 2026."',
+  ),
+  inRegistration: inr(
+    ITD,
+    U.inS332Registration,
+    null,
+    'Section 332: "a public trust", "a society registered under the Societies Registration Act, 1860 ... or under any law in force in ' +
+      'India" and "a company registered under section 8 of the Companies Act, 2013" may apply to the Principal Commissioner or ' +
+      'Commissioner for registration "as a registered non-profit organisation", if constituted in India for charitable purposes or ' +
+      'public religious purposes with property held under an irrevocable trust. Registration: 3 tax years (provisional, activities not ' +
+      'begun) or 5 tax years; 10 where total income was at most five crore rupees in each of the two preceding tax years.',
+  ),
+  inOldRegistrationsCount: inr(
+    ITD,
+    U.inS355Interpretation,
+    null,
+    'Section 355: "registration" includes approval under section 10(23C) or 12AB(1) of the Income-tax Act, 1961 and under section 332, ' +
+      'but not approval under section 80G(5) or section 354; "registered non-profit organisation" means any person having a valid ' +
+      'registration under any specified provision that has not been cancelled; "donation" means any voluntary contribution it receives.',
+  ),
+  inTaxOnIncome: inr(
+    ITD,
+    U.inS334TaxOnIncome,
+    null,
+    'Section 334: a registered non-profit organisation pays tax "at the rate of 30% on specified income" and at the applicable rate ' +
+      'on taxable regular income and any residual income.',
+  ),
+  inRegularIncome: inr(
+    ITD,
+    U.inS335RegularIncome,
+    null,
+    'Section 335: regular income is income from the charitable or religious activity it is registered for, income from property, ' +
+      'deposits or investments held for those purposes, "voluntary contributions", and gains of permitted commercial activity.',
+  ),
+  inEightyFivePercent: inr(
+    ITD,
+    U.inS336TaxableRegularIncome,
+    null,
+    'Section 336: taxable regular income is "nil, where 85% or more of the regular income of such tax year has been applied as per ' +
+      'provisions of section 341 or accumulated under section 342"; otherwise 85% of regular income less what was applied or accumulated.',
+  ),
+  inApplication: inr(
+    ITD,
+    U.inS341Application,
+    null,
+    'Section 341: application of income is a sum applied for the registered charitable or religious purpose in India and "paid during ' +
+      'the tax year", and "85% of the sum paid by way of donation made to any other registered non-profit organisation"; a corpus ' +
+      'donation to another one does not count; a shortfall below 85% may be treated as deemed application if applied the next year.',
+  ),
+  inAccumulation: inr(
+    ITD,
+    U.inS342Accumulation,
+    null,
+    'Section 342: part of regular income may be accumulated or set apart by a statement to the Assessing Officer by the return due ' +
+      'date, for a stated purpose and a period "not exceeding five years", invested in the permitted modes.',
+  ),
+  inCommercialActivity: inr(
+    ITD,
+    U.inS345CommercialActivity,
+    null,
+    'Section 345: a registered non-profit organisation "shall not carry out any commercial activity" unless it is incidental to its ' +
+      'objectives and "separate books of account are maintained for such activities".',
+  ),
+  inBooks: inr(
+    ITD,
+    U.inS347Books,
+    null,
+    'Section 347: where total income, before this Part, exceeds "the maximum amount which is not chargeable to income-tax", the ' +
+      'registered non-profit organisation keeps books of account and other documents in the prescribed form, manner and place.',
+  ),
+  inAudit: inr(
+    ITD,
+    U.inS348Audit,
+    null,
+    'Section 348: above the same limit, the accounts "shall be audited by an accountant" and the audit report furnished in the ' +
+      'prescribed form by the prescribed date.',
+  ),
+  inReturn: inr(
+    ITD,
+    U.inS349Return,
+    null,
+    'Section 349: above the same limit, it furnishes a return of income under section 263(1)(a)(iii) within the time allowed by ' +
+      'section 263(1)(c) or 263(4).',
+  ),
+  inForm112: inr(
+    ITD,
+    U.inForm112Faqs,
+    '2026-03-20',
+    'Form 112 FAQ: Form No. 112 is the audit report under section 348 (Form 10B and 10BB under the 1961 rules; rule 186 of the ' +
+      'Income-tax Rules, 2026), filed online "one month prior to the due date of furnishing the return of income under section ' +
+      '263(1)". A "small registered NPO" has regular income not exceeding ₹5 crores, has not received foreign contribution exceeding ' +
+      '₹10 lakhs and has not applied income exceeding ₹10 lakhs outside India in the tax year; foreign contribution as defined in ' +
+      'section 2(1)(h) of the Foreign Contribution (Regulation) Act, 2010.',
+  ),
+  inItr7: inr(
+    ITD,
+    U.inIncomeTaxReturns,
+    '2026-09-16',
+    'Income Tax Returns (year 2026): "ITR-7 For persons including companies required to furnish return under sections 139(4A) or ' +
+      '139(4B) or 139(4C) or 139(4D) only" — the 1961 Act return for years before tax year 2026-27.',
+  ),
+  inDonorDeduction: inr(
+    ITD,
+    U.inS133DonorDeduction,
+    null,
+    'Section 133(1)(b)(ii): a donor deducts "50% of the aggregate of the sums paid as donation" to a fund or institution established ' +
+      'in India for a charitable purpose that is a registered non-profit organisation "approved under section 354". Qualifying sums ' +
+      'over 10% of adjusted gross total income are ignored; only "a sum of money"; over Rs. 2000 only if not paid in cash.',
+  ),
+  inDonorApproval: inr(
+    ITD,
+    U.inS354DonorApproval,
+    null,
+    'Section 354: a registered non-profit organisation applies for approval for section 133(1)(b)(ii) if it is not for a particular ' +
+      'religious community or caste, spends at most 5% of total income on religious purposes, "maintains regular accounts of its ' +
+      'receipts and expenditure", delivers a prescribed statement to the income-tax authority and "furnishes a ' +
+      'certificate to the donor specifying the amount of donation".',
+  ),
+  inCompanyAccruals: inr(
+    ITD,
+    U.inCompaniesActS128,
+    null,
+    'Companies Act, 2013, section 128(1): every company keeps books of account and financial statements giving a true and fair view, ' +
+      'and "such books shall be kept on accrual basis and according to the double entry system of accounting".',
+  ),
+  inGstRegistration: inr(
+    'CBIC (India)',
+    U.inCgstS22Registration,
+    null,
+    'CGST Act, 2017, section 22(1): a supplier registers "if his aggregate turnover in a financial year exceeds twenty lakh rupees"; ' +
+      'from a special category State (Arunachal Pradesh, Assam, Himachal Pradesh, Meghalaya, Sikkim, Uttarakhand), "ten lakh rupees", ' +
+      'which the Government may raise up to twenty lakh; up to forty lakh for a supplier of goods only.',
+  ),
+  inGstRwa: inr(
+    'CBIC (India)',
+    U.inGstRwaCircular,
+    '2019-07-22',
+    'Circular No. 109/28/2019-GST: an RWA\'s supply to its own members "up to an amount of Rs. 7500 per month per member" for common ' +
+      'use is exempt; "If aggregate turnover of an RWA does not exceed Rs.20 Lakh in a financial year, it shall not be required to take ' +
+      'registration and pay GST" even above Rs. 7500 a member.',
+  ),
+  inClubMutuality: inr(
+    'Supreme Court of India',
+    U.inScSecunderabadClub,
+    '2023-08-17',
+    'Secundrabad Club v. C.I.T.-V (2023 INSC 736), decided under the Income-tax Act, 1961: interest earned by clubs on fixed deposits ' +
+      '"has to be treated like any other income from other sources"; income earned "from persons who are not members of the Clubs" is ' +
+      '"not covered under the principle of mutuality"; no liability on profits from members using members\' facilities.',
+  ),
+} satisfies Record<string, SourceRow>;
+
+const US_SOURCES = {
+  us990Series: us(
+    U.us990Series,
+    '2026-06-28',
+    'Form 990-N: "Gross receipts normally ≤ $50,000"; Form 990-EZ: "Gross receipts < $200,000, and Total assets < $500,000"; Form 990: ' +
+      '"Gross receipts ≥ $200,000, or Total assets ≥ $500,000"; Form 990-PF for a private foundation regardless of financial status. ' +
+      'An organization eligible for the 990-N may file a full return instead.',
+  ),
+  usWhoMustFile: us(
+    U.usWhoMustFile,
+    '2026-06-27',
+    'Every organization exempt under section 501(a) "must file an annual information return", except among others a church or ' +
+      'convention or association of churches; one that "normally has annual gross receipts of $50,000 or less" may file the Form ' +
+      '990-N electronic notice instead.',
+  ),
+  us990DueDate: us(
+    U.us990DueDate,
+    '2026-06-28',
+    'Form 990, 990-EZ or 990-PF "must be filed by the 15th day of the 5th month after the end of your organization\'s accounting ' +
+      'period" (May 15 for a calendar year). The 990-N cannot be extended.',
+  ),
+  usAutomaticRevocation: us(
+    U.usAutomaticRevocation,
+    '2026-06-28',
+    '"Organizations that do not file for three consecutive years automatically lose their tax-exempt status" (section 6033(j)), ' +
+      'as of the original due date of the third return or notice.',
+  ),
+  us501c3Requirements: us(
+    U.us501c3Requirements,
+    '2026-06-28',
+    'A 501(c)(3) organization must be "organized and operated exclusively for exempt purposes set forth in section 501(c)(3)"; ' +
+      '"none of its earnings may inure to any private shareholder or individual"; it may not attempt to influence legislation as a ' +
+      'substantial part of its activities or take part in any political campaign. Organizations described in 501(c)(3) (except ' +
+      'testing for public safety) "are eligible to receive tax-deductible contributions in accordance with Code section 170".',
+  ),
+  usApplying: us(
+    U.usApplying,
+    '2026-07-21',
+    'Applications for recognition: Form 1023 or 1023-EZ for 501(c)(3); Form 1024-A for 501(c)(4) and Form 8976 (notice of intent ' +
+      'to operate under section 501(c)(4)); Form 1024 for other 501(c) organizations. "Form 1023 applications for recognition of ' +
+      'exemption must be submitted electronically online at Pay.gov."',
+  ),
+  usForm1024Optional: us(
+    U.usForm1024Instructions,
+    null,
+    'Instructions for Form 1024 (Rev. January 2022): "Certain organizations aren\'t required to apply for tax-exempt status; however, ' +
+      'they may wish to file Form 1024 to receive a determination letter of IRS recognition of their section 501(c) status".',
+  ),
+  usSocialClubs: us(
+    U.usSocialClubs,
+    '2026-06-28',
+    'A social club "may receive up to 35 percent of its gross receipts from nonmember sources", investment income included, and ' +
+      '"no more than 15 percent of gross receipts may be derived from nonmember use of club facilities and services". Clubs are ' +
+      '"generally taxed on income from non-members who are not bona fide guests of members" and "on income from investments"; Form ' +
+      '990-T for unrelated business income of $1,000 or more.',
+  ),
+  usSocialWelfare: us(
+    U.usSocialWelfare,
+    '2026-06-28',
+    'A 501(c)(4) organization must be "operated exclusively to promote social welfare" and not organized for profit. "Section 506 ' +
+      'requires an organization to notify the IRS of its intent to operate as a Section 501(c)(4) organization." Political ' +
+      'campaign activity may not be its primary activity.',
+  ),
+  us501c4Donations: us(
+    U.us501c4Donations,
+    '2026-06-28',
+    'Contributions to civic leagues or other 501(c)(4) organizations "generally are not deductible as charitable contributions for ' +
+      'federal income tax purposes"; donations to volunteer fire companies (for exclusively public purposes) and to certain war ' +
+      'veterans organizations are.',
+  ),
+  usDeductibleRecipients: us(
+    U.usDeductibleRecipients,
+    '2026-10-09',
+    '"Only certain categories of exempt organizations are eligible to receive tax-deductible charitable contributions": most ' +
+      '501(c)(3) organizations, certain 501(c)(8), (10) and (13) organizations, volunteer fire departments, certain veterans ' +
+      'organizations, and a state or its subdivisions for exclusively public purposes.',
+  ),
+  usWrittenAcknowledgments: us(
+    U.usWrittenAcknowledgments,
+    '2026-06-28',
+    'A donor needs a written acknowledgment from the charity to substantiate a "charitable contribution of $250 or more": the ' +
+      'organization\'s name, the cash amount, a description (not the value) of a non-cash gift, and any goods or services given in ' +
+      'return with a good-faith estimate of their value.',
+  ),
+  usUbit: us(
+    U.usUbit,
+    '2026-06-27',
+    '"An exempt organization that has $1,000 or more of gross income from an unrelated business must file" Form 990-T. Unrelated ' +
+      'business income is from "a trade or business, regularly carried on, that is not substantially related" to the exempt purpose; ' +
+      'special rules for 501(c)(7) clubs.',
+  ),
+  usStateSolicitation: us(
+    U.usStateSolicitation,
+    '2026-06-28',
+    '"Many states have laws regulating the solicitation of funds for charitable purposes"; they generally require a charity to ' +
+      'register with a state agency before soliciting, with exemptions for some categories.',
+  ),
+} satisfies Record<string, SourceRow>;
+
+const ca = (sourceUrl: string, pageLastUpdated: string | null, claim: string): SourceRow => ({
+  country: 'CA',
+  claim,
+  authority: 'CRA',
+  sourceUrl,
+  pageLastUpdated,
+  readOn: R,
+  reviewBy: CA_REVIEW_BY,
+});
+
+const CA_SOURCES = {
+  caCharityAdvantages: ca(
+    U.caCharityAdvantages,
+    '2018-10-16',
+    'A registered charity is "exempt from paying income tax", can issue official donation receipts for gifts from individuals and ' +
+      'corporations, and many goods and services it provides are exempt from GST/HST. It must "file your annual Form T3010" within ' +
+      'six months of the fiscal year-end, meet the annual spending requirement (disbursement quota), "keep reliable and complete ' +
+      'books and records" and "issue complete and accurate official donation receipts".',
+  ),
+  caCharityVsNpo: ca(
+    U.caCharityVsNpo,
+    '2025-09-02',
+    'A registered charity is established and operated exclusively for charitable purposes, must apply to register, can issue ' +
+      'official donation receipts, files the T3010 and has a spending requirement. A non-profit organization "Is not registered with ' +
+      'the CRA", "Cannot issue official donation receipts", is "Generally exempt from paying income tax" but may owe tax on property ' +
+      'income or capital gains, may need to file Form T1044 plus a T2 or T3 return, and has "No spending requirement".',
+  ),
+  caT3010: ca(
+    U.caT3010Filing,
+    '2026-06-12',
+    '"All registered charities must file their annual T3010 return." "File your return within six months of your fiscal year end."',
+  ),
+  caDisbursementQuota: ca(
+    U.caDisbursementQuota,
+    '2023-10-18',
+    'Disbursement quota: "3.5% of the average value of that property up to $1 million" and "5% on the amount that exceeds $1 million", ' +
+      'on property not used in charitable activities; it applies to a charitable organization when that average value "exceeds ' +
+      '$100,000" ($25,000 for a public or private foundation).',
+  ),
+  caNpoReturn: ca(
+    U.caNpoReturnGuide,
+    '2020-02-28',
+    'T4117: an NPO files Form T1044 if it received or was entitled to receive taxable dividends, interest, rentals or royalties ' +
+      '"totalling more than $10,000 in the fiscal period", its total assets were "more than $200,000 at the end of the immediately ' +
+      'preceding fiscal period", or it had to file an NPO information return for a previous fiscal period; due "no later than six ' +
+      'months after the end of its fiscal period". A corporation generally also files a T2. An organization whose main purpose is ' +
+      'providing dining, recreational or sporting facilities may be taxed on its property income under subsection 149(5) (deemed ' +
+      'trust, T3 return).',
+  ),
+  caRcaaaAdvantages: ca(
+    U.caRcaaaAdvantages,
+    '2021-06-10',
+    'RCAAAs "are exempt from paying income tax", many of their goods and services are exempt from GST/HST, they issue official ' +
+      'donation receipts and receive gifts from registered charities; they devote their resources to "promoting amateur athletics in ' +
+      'Canada on a nationwide basis" and file "Form T2052, Registered Canadian Amateur Athletic Association Information Return" ' +
+      'within six months of the fiscal period end.',
+  ),
+  caRcaaaEligibility: ca(
+    U.caRcaaaApplying,
+    '2025-01-27',
+    'An RCAAA must be created and resident in Canada with the "promotion of amateur athletics in Canada nation-wide" as its exclusive ' +
+      'purpose; organizations of a "local, regional, provincial, or territorial character", or that only field a single team or run ' +
+      'a local facility, cannot register.',
+  ),
+  caRcaaaReceipts: ca(
+    U.caRcaaaReceipts,
+    '2022-11-25',
+    'Canadian amateur athletic associations registered as qualified donees "can issue official donation receipts for income tax ' +
+      'purposes" for gifts from individuals and corporations; they keep a duplicate of each receipt and copies of the annual ' +
+      'information return (Form T2052).',
+  ),
+  caDonors: ca(
+    U.caDonors,
+    '2025-09-02',
+    'Giving to a registered charity or another qualified donee: donors "may also be able to receive an official donation receipt" for ' +
+      'a gift, and the page covers how to "claim a donation tax credit or deduction".',
+  ),
+  caGstCharities: ca(
+    U.caGstCharities,
+    null,
+    'RC4082 (Rev. 23): a charity is a small supplier under either test — "The fiscal-year limit for the gross revenue test for a ' +
+      'charity is $250,000" or "The taxable supplies limit for charities and other PSB is $50,000"; "You only have to meet one of ' +
+      'these tests to be a small supplier."',
+  ),
+  caGstNpos: ca(
+    U.caGstNpos,
+    null,
+    'RC4081 (Rev. 23): an NPO, a public service body, "is a small supplier if the total amount of all revenues (before expenses) from ' +
+      'the worldwide taxable supplies" of it and its associates "is $50,000 or less in any single calendar quarter and in the last ' +
+      'four consecutive calendar quarters."',
+  ),
+} satisfies Record<string, SourceRow>;
+
+const nz = (authority: OrgSource['authority'], sourceUrl: string, pageLastUpdated: string | null, claim: string): SourceRow => ({
+  country: 'NZ',
+  claim,
+  authority,
+  sourceUrl,
+  pageLastUpdated,
+  readOn: R,
+  reviewBy: NZ_REVIEW_BY,
+});
+const IRNZ = 'Inland Revenue (NZ)';
+const CSNZ = 'Charities Services (NZ)';
+const CONZ = 'Companies Office (NZ)';
+
+const NZ_SOURCES = {
+  nzCharityExempt: nz(
+    IRNZ,
+    U.nzQualifyingExemption,
+    '2025-06-23',
+    '"Registered charities are automatically exempt from income tax" (they may still pay tax on business income not used in New ' +
+      'Zealand). "Other not-for-profits, including sports clubs, can apply for an income tax exemption" if set up for the public ' +
+      'good and funds are not used for the private gain of anyone involved; otherwise "you do not pay tax on the first $1,000 your ' +
+      'not-for-profit earns each year".',
+  ),
+  nzSportsClubs: nz(
+    IRNZ,
+    U.nzSportsClubs,
+    '2024-07-01',
+    'A club may get an income tax exemption if it is "set up to promote an amateur game or sport", or for public recreation or ' +
+      'entertainment without significant barriers, and its funds cannot benefit members; otherwise it may get the $1,000 deduction ' +
+      'and files an IR9 each year. Incorporated societies are taxed at the company rate, unincorporated clubs at individual rates. ' +
+      'A club may still need to register for GST.',
+  ),
+  nzNfpDeduction: nz(
+    IRNZ,
+    U.nzNfpDeduction,
+    '2023-04-24',
+    'A not-for-profit that cannot get an exemption may reduce its income by $1,000 once Inland Revenue is satisfied it is a ' +
+      'not-for-profit. With income after expenses under $1,000 no return is needed; above it, a return is filed and tax is paid on ' +
+      'the amount over $1,000.',
+  ),
+  nzIr9: nz(
+    IRNZ,
+    U.nzIr9,
+    '2026-04-01',
+    'Clubs and societies file the IR9 income tax return; clubs with an exemption do not. "If you intend to claim the $1,000 income ' +
+      'deduction in your return, we need to approve you as a not-for-profit."',
+  ),
+  nzDonationTaxCredits: nz(
+    IRNZ,
+    U.nzDonationTaxCredits,
+    '2026-06-25',
+    'Individuals claim "1/3rd of the value of eligible donations over $5, up to their taxable income" for donations of $5 or more ' +
+      'to an approved donee organisation (charities, religious organisations, schools, kindergartens), with receipts that "clearly ' +
+      'show all required information", within 4 years.',
+  ),
+  nzGstRegistration: nz(
+    IRNZ,
+    U.nzGstRegistration,
+    '2025-02-13',
+    'Register for GST if "your turnover was at least $60,000 in the last 12 months" or you expect it to be in the next 12 months.',
+  ),
+  nzBudget2026Proposals: nz(
+    IRNZ,
+    U.nzBudget2026Proposals,
+    '2026-05-28',
+    'Budget 2026 information sheet (proposals, "may change as the legislation moves through the parliamentary process"): donations ' +
+      'eligible for the credit capped at the lower of $100,000 or taxable income from 1 April 2027; membership subscriptions and ' +
+      'levies of taxable not-for-profits to remain non-taxable from 1 April 2027; the effective tax-free threshold raised from $1,000 ' +
+      'to $10,000, with no return for income of $10,000 or less, from the 2027-28 income year.',
+  ),
+  nzCsAnnualReturn: nz(
+    CSNZ,
+    U.nzCsAnnualReturn,
+    null,
+    'Under the Charities Act 2005 "all registered charities must file an annual return within 6 months of their balance date", with ' +
+      'a Performance Report (Tiers 3 and 4) or Financial Report (Tiers 1 and 2) that meets the standards for their tier.',
+  ),
+  nzCsTier4: nz(
+    CSNZ,
+    U.nzCsTier4,
+    null,
+    'Tier 4 (updated June 2026): for a charity that "has annual operating payments under $140,000", has no public accountability and ' +
+      '"uses cash-based accounting"; its Performance Report shows what it did and "the cash your charity received and paid".',
+  ),
+  nzCsTier3: nz(
+    CSNZ,
+    U.nzCsTier3,
+    null,
+    'Tier 3 (updated June 2026): annual operating payments "of $140,000 or more, but less than $5 million", no public accountability, ' +
+      'accrual-based accounting; statements of service performance, financial performance and financial position.',
+  ),
+  nzCsAuditReview: nz(
+    CSNZ,
+    U.nzCsAuditReview,
+    null,
+    'Audit and review (updated November 2025): total operating expenditure in each of the previous two years "Over $550,000 ' +
+      '(medium)" — a review or an audit; "Over $1.1 million (large)" — an audit by a qualified auditor.',
+  ),
+  nzIsTransition: nz(
+    CONZ,
+    U.nzIsRegister,
+    null,
+    '"From 6 April 2026 there is one Act that incorporated societies need to comply with": the Incorporated Societies Act 2022. ' +
+      'Existing societies could reregister between 5 October 2023 and 5 April 2026; "That transition period has now ended"; a society ' +
+      'removed for not reregistering can apply to be restored.',
+  ),
+  nzIsAnnualFiling: nz(
+    CONZ,
+    U.nzIsAnnualFiling,
+    null,
+    'A society files its annual financial statements and an annual return "within 6 months of your balance date", after presenting ' +
+      'them at the AGM, signed by 2 committee members; a society registered with Charities Services files with Charities Services ' +
+      'instead.',
+  ),
+  nzIsReportingStandards: nz(
+    CONZ,
+    U.nzIsLargeSocieties,
+    null,
+    'A "small society" is not a registered charity or donee organisation and in each of the previous 2 financial years had "total ' +
+      'operating payments of less than $50,000, and total current assets of less than $50,000"; it uses the 2022 Act\'s minimum ' +
+      'standards. Other societies use the XRB tiers: Tier 4 (cash based, no audit) with "total operating payments of less than ' +
+      '$140,000".',
+  ),
+} satisfies Record<string, SourceRow>;
+
+const ie = (sourceUrl: string, pageLastUpdated: string | null, claim: string): SourceRow => ({
+  country: 'IE',
+  claim,
+  authority: 'Revenue (Ireland)',
+  sourceUrl,
+  pageLastUpdated,
+  readOn: R,
+  reviewBy: IE_REVIEW_BY,
+});
+
+const IE_SOURCES = {
+  ieCharitableExemption: ie(
+    U.ieCharitableExemption,
+    '2025-06-25',
+    '"You can apply for charitable tax exemption if you are a charity registered with the Charities Regulator." It may cover Income ' +
+      'Tax, Corporation Tax, Capital Gains Tax, DIRT, Capital Acquisitions Tax, Dividend Withholding Tax, Professional Services ' +
+      'Withholding Tax and Stamp Duty; PAYE still applies to employees and there is no general VAT exemption.',
+  ),
+  ieCharityConditions: ie(
+    U.ieCharityConditions,
+    '2026-08-05',
+    'To keep the exemption a charity must "remain tax compliant", "maintain its registered charity status with the Charities ' +
+      'Regulator", "use all income for its main charitable purpose only", "keep proper records and accounts" and "keep audited ' +
+      'accounts if your annual income is over €250,000"; trading needs approval, and its profits can only be used for the main ' +
+      'charitable purpose; prior approval to accumulate funds for more than five years.',
+  ),
+  ieCdsOverview: ie(
+    U.ieCdsOverview,
+    '2026-06-03',
+    '"If an individual donates €250 or more to an approved body, the body can claim a refund of tax paid on that donation"; a company ' +
+      'donating €250 or more in a year claims a deduction itself. "There is a four year time limit for making a claim under this scheme."',
+  ),
+  ieCdsClaiming: ie(
+    U.ieCdsClaiming,
+    '2026-06-03',
+    '"The specified rate is currently 31%": a €1,000 donation is grossed up to €1,449.27 and "The refund amount that can be claimed by ' +
+      'the approved body is €449.27"; the refund cannot exceed the tax the donor paid for the year; the donor authorises the claim with ' +
+      'an Enduring Certificate (five years) or an Annual Certificate (one year).',
+  ),
+  ieSportsBody: ie(
+    U.ieSportsBodyConditions,
+    '2026-08-10',
+    'An exempt sports body must stay tax compliant, use "all income to promote the athletic or amateur game or sport", keep proper ' +
+      'records and accounts and "audited accounts (if your annual income is over €250,000)", and get permission for constitution ' +
+      'changes; Revenue may withdraw the exemption back to the date it was granted.',
+  ),
+  ieSportsExemption: ie(
+    U.ieSportsExemptionManual,
+    null,
+    'Tax and Duty Manual Part 07-03-08 (last updated March 2026), section 235 TCA 1997: bodies "established for the sole purpose of the ' +
+      'promotion of athletic or amateur games or sports" can apply for exemption from income tax or corporation tax "for so much of ' +
+      'their income as is applied for the purpose of promoting the game or sport"; from the date Revenue approves it (Finance Act ' +
+      '2025), with a GS Number; no renewal, but the conditions must keep being met.',
+  ),
+  ieMutualTrading: ie(
+    U.ieMutualTrading,
+    null,
+    'Tax and Duty Manual Part 36-00-05 (last reviewed June 2025): a members\' club for social or recreational objects "is not carrying ' +
+      'on a trade with its members, even if the club is incorporated", and is not taxed on surplus from members; "where goods and ' +
+      'services are provided for a consideration to non-members, any surplus arising will be taxable" (green fees to non-members).',
+  ),
+  ieVatThresholds: ie(
+    U.ieVatThresholds,
+    '2026-05-06',
+    'VAT registration is obligatory when annual turnover in a calendar year "exceeds the VAT thresholds": "€42,500, in the case of ' +
+      'persons supplying services only" and "€85,000, for persons supplying goods"; "If your turnover is less than a threshold limit, ' +
+      'you may elect to register for VAT."',
+  ),
+} satisfies Record<string, SourceRow>;
+
+const sg = (authority: OrgSource['authority'], sourceUrl: string, pageLastUpdated: string | null, claim: string): SourceRow => ({
+  country: 'SG',
+  claim,
+  authority,
+  sourceUrl,
+  pageLastUpdated,
+  readOn: R,
+  reviewBy: SG_REVIEW_BY,
+});
+const COC = 'Commissioner of Charities (SG)';
+
+const SG_SOURCES = {
+  sgCharityExempt: sg(
+    'IRAS',
+    U.sgCharitiesTax,
+    '2024-04-16',
+    '"registered charities enjoy automatic income tax exemption under section 13(1)(zm) of the Income Tax Act" from YA 2008 and are ' +
+      'not required to file income tax returns. "An IPC is an organisation approved by the Commissioner of Charities to receive tax ' +
+      'deductible donations."',
+  ),
+  sgDonations: sg(
+    'IRAS',
+    U.sgDonations,
+    '2026-04-14',
+    'Donors get "up to 2.5 times the qualifying donation amount" for donations to Community Chest or an approved IPC; donations to a ' +
+      'charity without IPC status are not tax deductible. Deductions are allowed "based on the information from the IPC"; corporate ' +
+      'donors give the IPC their name and tax reference number; "IRAS does not accept claims for tax deduction based on donation ' +
+      'receipts."',
+  ),
+  sgClubs: sg(
+    'IRAS',
+    U.sgClubs,
+    '2026-01-22',
+    'A club is not deemed to carry on a business "Where 50% or more of the gross receipts on revenue accounts are from members" ' +
+      '(section 11(1)); it is then taxed only on income from "other sources derived from dealings with non-members such as interest, ' +
+      'rent and dividends". Under 50% it is "deemed to be carrying on a business" and also taxed on its operating surplus. Rate 17%; ' +
+      'Form P1 by 15 April of the year after the accounting year.',
+  ),
+  sgGstRegistration: sg(
+    'IRAS',
+    U.sgGstRegistration,
+    '2026-09-15',
+    'Compulsory GST registration if taxable turnover for the calendar year exceeded $1 million (apply by 30 January; registered from ' +
+      '1 March), or is "expected to be more than $1 million in the next 12 months" (apply within 30 days of the forecast).',
+  ),
+  sgAnnualSubmissions: sg(
+    COC,
+    U.sgCocAnnualSubmissions,
+    null,
+    'A charity submits its Annual Report (including Financial Statements) and Governance Evaluation Checklist "within 6 months from the ' +
+      'end of each financial year". Gross income or total expenditure of $250,000 or less: examination by an independent person; ' +
+      'between $250,000 and $500,000: by an ISCA member or someone qualified to be one; above $500,000, and all IPCs: "audited by a ' +
+      'public accountant". Audited statements use FRS or the Charities Accounting Standard; a company limited by guarantee follows the ' +
+      'Companies Act audit rules.',
+  ),
+  sgLargeCharities: sg(
+    COC,
+    U.sgCocLargeCharities,
+    null,
+    'A large charity or IPC has "gross annual receipts of not less than $10 million in each of the last 2 financial years"; it needs at ' +
+      'least 10 governing board members and auditors approved by the COC or its Sector Administrator, changed at least once every 5 ' +
+      'years — the last two also apply to all IPCs.',
+  ),
+} satisfies Record<string, SourceRow>;
+
 export type GbOrgSourceKey = keyof typeof GB_SOURCES;
 export type AuOrgSourceKey = keyof typeof AU_SOURCES;
-export type OrgSourceKey = GbOrgSourceKey | AuOrgSourceKey;
+export type InOrgSourceKey = keyof typeof IN_SOURCES;
+export type UsOrgSourceKey = keyof typeof US_SOURCES;
+export type CaOrgSourceKey = keyof typeof CA_SOURCES;
+export type NzOrgSourceKey = keyof typeof NZ_SOURCES;
+export type IeOrgSourceKey = keyof typeof IE_SOURCES;
+export type SgOrgSourceKey = keyof typeof SG_SOURCES;
+export type OrgSourceKey =
+  | GbOrgSourceKey
+  | AuOrgSourceKey
+  | InOrgSourceKey
+  | UsOrgSourceKey
+  | CaOrgSourceKey
+  | NzOrgSourceKey
+  | IeOrgSourceKey
+  | SgOrgSourceKey;
 
 const withIds = <K extends string>(rows: Record<K, SourceRow>): Record<K, OrgSource> =>
   Object.fromEntries(Object.entries<SourceRow>(rows).map(([id, r]) => [id, { id, ...r }])) as Record<K, OrgSource>;
 
-/** Every rule source, by key. GB and AU keys do not overlap. */
-export const ORG_RULE_SOURCES: Record<OrgSourceKey, OrgSource> = { ...withIds(GB_SOURCES), ...withIds(AU_SOURCES) };
+/** Every rule source, by key. Keys do not overlap between countries. */
+export const ORG_RULE_SOURCES: Record<OrgSourceKey, OrgSource> = { ...withIds(GB_SOURCES), ...withIds(AU_SOURCES), ...withIds(IN_SOURCES), ...withIds(US_SOURCES), ...withIds(CA_SOURCES), ...withIds(NZ_SOURCES), ...withIds(IE_SOURCES), ...withIds(SG_SOURCES) };
 
 // ─── Figures ────────────────────────────────────────────────────────────────
 
@@ -429,10 +1227,10 @@ export type OrgFigureTest = 'over' | 'at_least' | 'or_less' | 'under' | 'is';
 export interface OrgFigure extends SourcedFigure {
   /** 'GB.cc.receiptsAndPaymentsUpTo', 'AU.acnc.smallUnder', … */
   id: string;
-  country: 'GB' | 'AU';
+  country: OrgCountry;
   label: string;
-  /** 'GBP' / 'AUD', or null for a rate, a count or a number of years. */
-  currency: 'GBP' | 'AUD' | null;
+  /** The country's currency, or null for a rate, a share, a count or a number of years. */
+  currency: OrgCurrency | null;
   test: OrgFigureTest;
   /** Whose rule it is — the thresholds differ between the three UK charity regulators. */
   regulator: string;
@@ -451,6 +1249,15 @@ const GB_NON_COMPANY_CHARITIES = ['GB_CHARITY', 'GB_CIO'];
 const GB_GIFT_AID = [...GB_CHARITIES, 'GB_CASC'];
 const GB_ALL = ['GB_CLUB', 'GB_PTA', 'GB_CASC', ...GB_CHARITIES];
 const AU_ALL = ['AU_INCORPORATED_ASSOCIATION', 'AU_ACNC_CHARITY', 'AU_CLUB'];
+const IN_NPOS = ['IN_PUBLIC_TRUST', 'IN_SOCIETY', 'IN_SECTION8_COMPANY'];
+const IN_ALL = [...IN_NPOS, 'IN_CLUB'];
+const US_EXEMPT = ['US_501C3', 'US_501C7', 'US_501C4'];
+const CA_ALL = ['CA_REGISTERED_CHARITY', 'CA_NPO', 'CA_RCAAA'];
+const NZ_ALL = ['NZ_REGISTERED_CHARITY', 'NZ_INCORPORATED_SOCIETY', 'NZ_CLUB'];
+const NZ_TAXABLE_NFPS = ['NZ_INCORPORATED_SOCIETY', 'NZ_CLUB'];
+const IE_ALL = ['IE_REGISTERED_CHARITY', 'IE_SPORTS_BODY', 'IE_CLUB'];
+const SG_CHARITIES = ['SG_REGISTERED_CHARITY', 'SG_IPC'];
+const SG_ALL = [...SG_CHARITIES, 'SG_CLUB'];
 
 const CC = 'Charity Commission (England and Wales)';
 const NEW = GB_CC_THRESHOLDS_FROM_YEAR_END;
@@ -574,4 +1381,69 @@ export const ORG_FIGURES: readonly OrgFigure[] = [
   fig({ id: 'AU.acnc.smallUnder', country: 'AU', label: 'ACNC small charity: annual revenue under', value: 500000, taxYear: 'from the 2022 Annual Information Statement', currency: 'AUD', test: 'under', regulator: 'ACNC', appliesTo: ['AU_ACNC_CHARITY'], yearsEndingFrom: null, yearsEndingBefore: null, source: 'acncCharitySize', note: 'Small: Annual Information Statement only (a financial report is optional); cash or accrual accounting.' }),
   fig({ id: 'AU.acnc.largeAtLeast', country: 'AU', label: 'ACNC large charity: annual revenue of at least', value: 3000000, taxYear: 'from the 2022 Annual Information Statement', currency: 'AUD', test: 'at_least', regulator: 'ACNC', appliesTo: ['AU_ACNC_CHARITY'], yearsEndingFrom: null, yearsEndingBefore: null, source: 'acncCharitySize', note: 'Large ($3 million or more): Annual Information Statement and an audited financial report. Medium ($500,000 to under $3 million): a reviewed or audited financial report. Both use accrual accounting.' }),
   fig({ id: 'AU.ato.nfpGstRegistrationAtLeast', country: 'AU', label: 'NFP GST registration: GST turnover of at least', value: 150000, taxYear: 'current', currency: 'AUD', test: 'at_least', regulator: 'ATO', appliesTo: AU_ALL, yearsEndingFrom: null, yearsEndingBefore: null, source: 'gstNfp', note: 'An NFP carrying on an enterprise registers for GST (and lodges a BAS) when its GST turnover is $150,000 or more; voluntary below it.' }),
+  // ─── IN — Income-tax Act, 2025 (tax year 2026-27 onwards) ───
+  fig({ id: 'IN.ita.applicationShareAtLeast', country: 'IN', label: 'Regular income applied or accumulated for taxable regular income to be nil: at least', value: 0.85, taxYear: 'tax years from 2026-27 (Income-tax Act, 2025)', currency: null, test: 'at_least', regulator: ITD, appliesTo: IN_NPOS, yearsEndingFrom: null, yearsEndingBefore: null, source: 'inEightyFivePercent', note: 'Taxable regular income is nil where 85% or more of regular income is applied (section 341) or accumulated (section 342) in the tax year; otherwise 85% of regular income less what was applied or accumulated is taxed.' }),
+  fig({ id: 'IN.ita.specifiedIncomeRate', country: 'IN', label: 'Tax rate on specified income of a registered non-profit organisation', value: 0.3, taxYear: 'tax years from 2026-27 (Income-tax Act, 2025)', currency: null, test: 'is', regulator: ITD, appliesTo: IN_NPOS, yearsEndingFrom: null, yearsEndingBefore: null, source: 'inTaxOnIncome', note: 'Section 334: 30% on specified income (section 337); taxable regular income and residual income at the rates that otherwise apply.' }),
+  fig({ id: 'IN.ita.accumulationMaxYears', country: 'IN', label: 'Accumulated or set-apart income: period up to (years)', value: 5, taxYear: 'tax years from 2026-27 (Income-tax Act, 2025)', currency: null, test: 'or_less', regulator: ITD, appliesTo: IN_NPOS, yearsEndingFrom: null, yearsEndingBefore: null, source: 'inAccumulation', note: 'Regular income may be accumulated for a stated purpose for up to five years, by a statement filed by the return due date, and invested in the permitted modes.' }),
+  fig({ id: 'IN.ita.donorDeductionShare', country: 'IN', label: 'Donor deduction for a donation to an approved organisation: share of the donation', value: 0.5, taxYear: 'tax years from 2026-27 (Income-tax Act, 2025)', currency: null, test: 'is', regulator: ITD, appliesTo: IN_NPOS, yearsEndingFrom: null, yearsEndingBefore: null, source: 'inDonorDeduction', note: 'Information only: a donor deducts 50% of donations to an organisation approved under section 354 (section 133(1)(b)(ii)), within the 10% limit below.' }),
+  fig({ id: 'IN.ita.donorDeductionIncomeCap', country: 'IN', label: 'Donor deduction: qualifying donations counted up to this share of adjusted gross total income', value: 0.1, taxYear: 'tax years from 2026-27 (Income-tax Act, 2025)', currency: null, test: 'or_less', regulator: ITD, appliesTo: IN_NPOS, yearsEndingFrom: null, yearsEndingBefore: null, source: 'inDonorDeduction', note: 'Section 133(2): qualifying donations over 10% of the donor\'s adjusted gross total income are ignored.' }),
+  fig({ id: 'IN.ita.donationCashUpTo', country: 'IN', label: 'Donor deduction: a cash donation qualifies only up to', value: 2000, taxYear: 'tax years from 2026-27 (Income-tax Act, 2025)', currency: 'INR', test: 'or_less', regulator: ITD, appliesTo: IN_NPOS, yearsEndingFrom: null, yearsEndingBefore: null, source: 'inDonorDeduction', note: 'Section 133(5): a deduction for a donation over Rs. 2000 is allowed only if it is paid other than in cash. Donations in kind never qualify.' }),
+  fig({ id: 'IN.ita.smallNpoRegularIncomeUpTo', country: 'IN', label: 'Form 112 small registered NPO: regular income up to', value: 50000000, taxYear: 'tax years from 2026-27 (Income-tax Rules, 2026)', currency: 'INR', test: 'or_less', regulator: ITD, appliesTo: IN_NPOS, yearsEndingFrom: null, yearsEndingBefore: null, source: 'inForm112', note: 'A small registered NPO (regular income not over ₹5 crore, foreign contribution not over ₹10 lakh, income applied outside India not over ₹10 lakh) fills fewer schedules of Form 112.' }),
+  fig({ id: 'IN.ita.smallNpoForeignContributionUpTo', country: 'IN', label: 'Form 112 small registered NPO: foreign contribution received up to', value: 1000000, taxYear: 'tax years from 2026-27 (Income-tax Rules, 2026)', currency: 'INR', test: 'or_less', regulator: ITD, appliesTo: IN_NPOS, yearsEndingFrom: null, yearsEndingBefore: null, source: 'inForm112', note: 'Foreign contribution as the Foreign Contribution (Regulation) Act, 2010 defines it (section 2(1)(h)).' }),
+  // ─── IN — GST (CBIC) ───
+  fig({ id: 'IN.gst.registrationOver', country: 'IN', label: 'GST registration: aggregate turnover in a financial year over', value: 2000000, taxYear: 'current', currency: 'INR', test: 'over', regulator: 'CBIC (India)', appliesTo: IN_ALL, yearsEndingFrom: null, yearsEndingBefore: null, source: 'inGstRegistration', note: 'Twenty lakh rupees (CGST Act section 22(1)), for a supplier of services. A State may have it raised to forty lakh for a supplier of goods only.' }),
+  fig({ id: 'IN.gst.registrationSpecialCategoryOver', country: 'IN', label: 'GST registration from a special category State: aggregate turnover over', value: 1000000, taxYear: 'current', currency: 'INR', test: 'over', regulator: 'CBIC (India)', appliesTo: IN_ALL, yearsEndingFrom: null, yearsEndingBefore: null, source: 'inGstRegistration', note: 'Ten lakh rupees for supplies from Arunachal Pradesh, Assam, Himachal Pradesh, Meghalaya, Sikkim or Uttarakhand; the Government may raise it to up to twenty lakh on the State\'s request.' }),
+  fig({ id: 'IN.gst.rwaMemberContributionExemptUpTo', country: 'IN', label: 'RWA: member contribution exempt from GST up to (per member, per month)', value: 7500, taxYear: 'from 25 January 2018 (Circular 109/28/2019-GST)', currency: 'INR', test: 'or_less', regulator: 'CBIC (India)', appliesTo: ['IN_SOCIETY', 'IN_CLUB'], yearsEndingFrom: null, yearsEndingBefore: null, source: 'inGstRwa', note: 'A resident welfare association\'s charges to its own members for common use are exempt up to Rs. 7,500 a member a month; with aggregate turnover of Rs. 20 lakh or less it need not register at all.' }),
+  // ─── US — IRS ───
+  fig({ id: 'US.irs.form990nGrossReceiptsUpTo', country: 'US', label: 'Form 990-N (e-Postcard) allowed: gross receipts normally up to', value: 50000, taxYear: 'current', currency: 'USD', test: 'or_less', regulator: 'IRS', appliesTo: US_EXEMPT, yearsEndingFrom: null, yearsEndingBefore: null, source: 'us990Series', note: 'Gross receipts normally $50,000 or less: the Form 990-N electronic notice (a full return is allowed instead). Not for a private foundation.' }),
+  fig({ id: 'US.irs.form990ezGrossReceiptsUnder', country: 'US', label: 'Form 990-EZ allowed: gross receipts under', value: 200000, taxYear: 'current', currency: 'USD', test: 'under', regulator: 'IRS', appliesTo: US_EXEMPT, yearsEndingFrom: null, yearsEndingBefore: null, source: 'us990Series', note: 'Gross receipts under $200,000 AND total assets under $500,000: Form 990-EZ; otherwise Form 990.' }),
+  fig({ id: 'US.irs.form990ezTotalAssetsUnder', country: 'US', label: 'Form 990-EZ allowed: total assets under', value: 500000, taxYear: 'current', currency: 'USD', test: 'under', regulator: 'IRS', appliesTo: US_EXEMPT, yearsEndingFrom: null, yearsEndingBefore: null, source: 'us990Series', note: 'Total assets of $500,000 or more (or gross receipts of $200,000 or more): Form 990.' }),
+  fig({ id: 'US.irs.returnDueMonthAfterYearEnd', country: 'US', label: 'Form 990 / 990-EZ due: the 15th day of this month after the year end', value: 5, taxYear: 'current', currency: null, test: 'is', regulator: 'IRS', appliesTo: US_EXEMPT, yearsEndingFrom: null, yearsEndingBefore: null, source: 'us990DueDate', note: 'The 15th day of the 5th month after the accounting period ends (May 15 for a calendar year).' }),
+  fig({ id: 'US.irs.automaticRevocationYears', country: 'US', label: 'Exemption automatically revoked after this many consecutive years without a return or notice', value: 3, taxYear: 'current', currency: null, test: 'is', regulator: 'IRS', appliesTo: US_EXEMPT, yearsEndingFrom: null, yearsEndingBefore: null, source: 'usAutomaticRevocation', note: 'Three consecutive years with no Form 990-series return or 990-N notice: exemption is lost from the third due date (section 6033(j)).' }),
+  fig({ id: 'US.irs.form990tUnrelatedIncomeAtLeast', country: 'US', label: 'Form 990-T required: gross unrelated business income of at least', value: 1000, taxYear: 'current', currency: 'USD', test: 'at_least', regulator: 'IRS', appliesTo: US_EXEMPT, yearsEndingFrom: null, yearsEndingBefore: null, source: 'usUbit', note: '$1,000 or more of gross income from an unrelated trade or business regularly carried on: file Form 990-T.' }),
+  fig({ id: 'US.irs.socialClubNonmemberShareUpTo', country: 'US', label: 'Social club: gross receipts from nonmember sources (investment income included) up to', value: 0.35, taxYear: 'current', currency: null, test: 'or_less', regulator: 'IRS', appliesTo: ['US_501C7'], yearsEndingFrom: null, yearsEndingBefore: null, source: 'usSocialClubs', note: 'Up to 35% of gross receipts from nonmember sources, of which no more than 15% from nonmember use of club facilities and services.' }),
+  fig({ id: 'US.irs.socialClubNonmemberFacilitiesShareUpTo', country: 'US', label: 'Social club: gross receipts from nonmember use of facilities and services up to', value: 0.15, taxYear: 'current', currency: null, test: 'or_less', regulator: 'IRS', appliesTo: ['US_501C7'], yearsEndingFrom: null, yearsEndingBefore: null, source: 'usSocialClubs', note: 'Within the 35%: no more than 15% of gross receipts from nonmembers using the club\'s facilities and services. Over the safe harbor, the facts must show the club is organized substantially for exempt purposes.' }),
+  fig({ id: 'US.irs.writtenAcknowledgmentAtLeast', country: 'US', label: 'Donor needs a written acknowledgment from the charity: single contribution of at least', value: 250, taxYear: 'current', currency: 'USD', test: 'at_least', regulator: 'IRS', appliesTo: ['US_501C3'], yearsEndingFrom: null, yearsEndingBefore: null, source: 'usWrittenAcknowledgments', note: 'For a contribution of $250 or more the donor needs the charity\'s written acknowledgment: its name, the amount, a description of non-cash gifts, and any goods or services given in return with their estimated value.' }),
+  // ─── CA — CRA ───
+  fig({ id: 'CA.cra.t3010DueMonths', country: 'CA', label: 'T3010 registered charity return due within (months after the fiscal year end)', value: 6, taxYear: 'current', currency: null, test: 'or_less', regulator: 'CRA', appliesTo: ['CA_REGISTERED_CHARITY'], yearsEndingFrom: null, yearsEndingBefore: null, source: 'caT3010', note: 'Every registered charity files the T3010 within six months of its fiscal year end.' }),
+  fig({ id: 'CA.cra.dqThresholdOver', country: 'CA', label: 'Disbursement quota applies: average property not used in charitable activities over', value: 100000, taxYear: 'current', currency: 'CAD', test: 'over', regulator: 'CRA', appliesTo: ['CA_REGISTERED_CHARITY'], yearsEndingFrom: null, yearsEndingBefore: null, source: 'caDisbursementQuota', note: 'For a charitable organization ($25,000 for a public or private foundation), on the average value over the previous 24 months.' }),
+  fig({ id: 'CA.cra.dqRate', country: 'CA', label: 'Disbursement quota rate on that property up to $1 million', value: 0.035, taxYear: 'current', currency: null, test: 'is', regulator: 'CRA', appliesTo: ['CA_REGISTERED_CHARITY'], yearsEndingFrom: null, yearsEndingBefore: null, source: 'caDisbursementQuota', note: '3.5% of the average value of property not used in charitable activities up to $1 million.' }),
+  fig({ id: 'CA.cra.dqRateOverMillion', country: 'CA', label: 'Disbursement quota rate on that property over $1 million', value: 0.05, taxYear: 'current', currency: null, test: 'is', regulator: 'CRA', appliesTo: ['CA_REGISTERED_CHARITY'], yearsEndingFrom: null, yearsEndingBefore: null, source: 'caDisbursementQuota', note: '5% on the amount that exceeds $1 million.' }),
+  fig({ id: 'CA.cra.dqHigherRateOver', country: 'CA', label: 'Disbursement quota: the 5% rate applies to property over', value: 1000000, taxYear: 'current', currency: 'CAD', test: 'over', regulator: 'CRA', appliesTo: ['CA_REGISTERED_CHARITY'], yearsEndingFrom: null, yearsEndingBefore: null, source: 'caDisbursementQuota', note: 'The first $1 million at 3.5%, the excess at 5%.' }),
+  fig({ id: 'CA.cra.t1044PropertyIncomeOver', country: 'CA', label: 'NPO files Form T1044: taxable dividends, interest, rentals or royalties in the fiscal period over', value: 10000, taxYear: 'current', currency: 'CAD', test: 'over', regulator: 'CRA', appliesTo: ['CA_NPO'], yearsEndingFrom: null, yearsEndingBefore: null, source: 'caNpoReturn', note: 'One of the three T1044 tests (with total assets over $200,000, or having had to file before). Due six months after the fiscal period ends.' }),
+  fig({ id: 'CA.cra.t1044TotalAssetsOver', country: 'CA', label: 'NPO files Form T1044: total assets at the end of the previous fiscal period over', value: 200000, taxYear: 'current', currency: 'CAD', test: 'over', regulator: 'CRA', appliesTo: ['CA_NPO'], yearsEndingFrom: null, yearsEndingBefore: null, source: 'caNpoReturn', note: 'Book value under generally accepted accounting principles.' }),
+  fig({ id: 'CA.cra.t1044DueMonths', country: 'CA', label: 'T1044 NPO information return due within (months after the fiscal period end)', value: 6, taxYear: 'current', currency: null, test: 'or_less', regulator: 'CRA', appliesTo: ['CA_NPO'], yearsEndingFrom: null, yearsEndingBefore: null, source: 'caNpoReturn', note: 'No later than six months after the end of the fiscal period.' }),
+  fig({ id: 'CA.cra.t2052DueMonths', country: 'CA', label: 'T2052 RCAAA return due within (months after the fiscal period end)', value: 6, taxYear: 'current', currency: null, test: 'or_less', regulator: 'CRA', appliesTo: ['CA_RCAAA'], yearsEndingFrom: null, yearsEndingBefore: null, source: 'caRcaaaAdvantages', note: 'Form T2052 within six months of the fiscal period end.' }),
+  fig({ id: 'CA.cra.gstSmallSupplierTaxableSuppliesUpTo', country: 'CA', label: 'GST/HST small supplier (public service body): taxable supplies up to', value: 50000, taxYear: 'current', currency: 'CAD', test: 'or_less', regulator: 'CRA', appliesTo: CA_ALL, yearsEndingFrom: null, yearsEndingBefore: null, source: 'caGstNpos', note: 'Taxable supplies of $50,000 or less in a single calendar quarter and in the last four consecutive quarters: a small supplier, registration voluntary.' }),
+  fig({ id: 'CA.cra.gstCharityGrossRevenueUpTo', country: 'CA', label: 'GST/HST small supplier, charity gross revenue test: gross revenue up to', value: 250000, taxYear: 'current', currency: 'CAD', test: 'or_less', regulator: 'CRA', appliesTo: ['CA_REGISTERED_CHARITY'], yearsEndingFrom: null, yearsEndingBefore: null, source: 'caGstCharities', note: 'A charity is a small supplier if it meets either test: gross revenue of $250,000 or less in the fiscal year, or taxable supplies of $50,000 or less.' }),
+  // ─── NZ — Charities Services, Companies Office, Inland Revenue ───
+  fig({ id: 'NZ.cs.annualReturnDueMonths', country: 'NZ', label: 'Charity annual return due within (months after balance date)', value: 6, taxYear: 'current', currency: null, test: 'or_less', regulator: CSNZ, appliesTo: ['NZ_REGISTERED_CHARITY'], yearsEndingFrom: null, yearsEndingBefore: null, source: 'nzCsAnnualReturn', note: 'Every registered charity files its annual return, with its Performance or Financial Report, within 6 months of balance date.' }),
+  fig({ id: 'NZ.cs.tier4OperatingPaymentsUnder', country: 'NZ', label: 'Tier 4 (cash-based Performance Report): annual operating payments under', value: 140000, taxYear: 'current', currency: 'NZD', test: 'under', regulator: CSNZ, appliesTo: ['NZ_REGISTERED_CHARITY'], yearsEndingFrom: null, yearsEndingBefore: null, source: 'nzCsTier4', note: 'Under $140,000 of annual operating payments (and no public accountability): Tier 4, cash-based accounting.' }),
+  fig({ id: 'NZ.cs.tier3OperatingPaymentsUnder', country: 'NZ', label: 'Tier 3 (accrual Performance Report): annual operating payments under', value: 5000000, taxYear: 'current', currency: 'NZD', test: 'under', regulator: CSNZ, appliesTo: ['NZ_REGISTERED_CHARITY'], yearsEndingFrom: null, yearsEndingBefore: null, source: 'nzCsTier3', note: '$140,000 or more but under $5 million: Tier 3, accrual-based accounting. From $5 million, Tier 2 or 1 (XRB).' }),
+  fig({ id: 'NZ.cs.reviewOrAuditOver', country: 'NZ', label: 'Charity review or audit: operating expenditure in each of the previous two years over', value: 550000, taxYear: 'current', currency: 'NZD', test: 'over', regulator: CSNZ, appliesTo: ['NZ_REGISTERED_CHARITY'], yearsEndingFrom: null, yearsEndingBefore: null, source: 'nzCsAuditReview', note: 'Over $550,000 (medium): a review or an audit by a qualified auditor.' }),
+  fig({ id: 'NZ.cs.auditOver', country: 'NZ', label: 'Charity audit: operating expenditure in each of the previous two years over', value: 1100000, taxYear: 'current', currency: 'NZD', test: 'over', regulator: CSNZ, appliesTo: ['NZ_REGISTERED_CHARITY'], yearsEndingFrom: null, yearsEndingBefore: null, source: 'nzCsAuditReview', note: 'Over $1.1 million (large): an audit by a qualified auditor.' }),
+  fig({ id: 'NZ.is.annualReturnDueMonths', country: 'NZ', label: 'Society financial statements and annual return due within (months after balance date)', value: 6, taxYear: 'current', currency: null, test: 'or_less', regulator: CONZ, appliesTo: ['NZ_INCORPORATED_SOCIETY'], yearsEndingFrom: null, yearsEndingBefore: null, source: 'nzIsAnnualFiling', note: 'Within 6 months of balance date, after the AGM, signed by 2 committee members.' }),
+  fig({ id: 'NZ.is.smallSocietyOperatingPaymentsUnder', country: 'NZ', label: 'Small society: total operating payments in each of the previous 2 years under', value: 50000, taxYear: 'current', currency: 'NZD', test: 'under', regulator: CONZ, appliesTo: ['NZ_INCORPORATED_SOCIETY'], yearsEndingFrom: null, yearsEndingBefore: null, source: 'nzIsReportingStandards', note: 'With total current assets also under $50,000, and not a registered charity or donee organisation: the 2022 Act\'s minimum reporting standards.' }),
+  fig({ id: 'NZ.is.smallSocietyCurrentAssetsUnder', country: 'NZ', label: 'Small society: total current assets in each of the previous 2 years under', value: 50000, taxYear: 'current', currency: 'NZD', test: 'under', regulator: CONZ, appliesTo: ['NZ_INCORPORATED_SOCIETY'], yearsEndingFrom: null, yearsEndingBefore: null, source: 'nzIsReportingStandards', note: 'Both tests in each of the previous 2 financial years.' }),
+  fig({ id: 'NZ.is.tier4OperatingPaymentsUnder', country: 'NZ', label: 'Society on XRB Tier 4 (cash based, no audit): total operating payments under', value: 140000, taxYear: 'current', currency: 'NZD', test: 'under', regulator: CONZ, appliesTo: ['NZ_INCORPORATED_SOCIETY'], yearsEndingFrom: null, yearsEndingBefore: null, source: 'nzIsReportingStandards', note: 'A society that is not small, with operating payments under $140,000: Tier 4, cash-based.' }),
+  fig({ id: 'NZ.ird.nfpIncomeDeduction', country: 'NZ', label: 'Not-for-profit income deduction (taxable NFPs approved by Inland Revenue)', value: 1000, taxYear: 'current (a $10,000 threshold is proposed from 2027-28)', currency: 'NZD', test: 'is', regulator: IRNZ, appliesTo: NZ_TAXABLE_NFPS, yearsEndingFrom: null, yearsEndingBefore: null, source: 'nzNfpDeduction', note: 'No tax on the first $1,000 of net income; no return while income after expenses is under $1,000. Budget 2026 proposes $10,000 from the 2027-28 income year (not yet law).' }),
+  fig({ id: 'NZ.ird.donationTaxCreditShare', country: 'NZ', label: 'Donation tax credit for individual donors: share of eligible donations', value: 1 / 3, taxYear: 'current', currency: null, test: 'is', regulator: IRNZ, appliesTo: ['NZ_REGISTERED_CHARITY'], yearsEndingFrom: null, yearsEndingBefore: null, source: 'nzDonationTaxCredits', note: 'Information only: one third of eligible donations to an approved donee organisation, up to the donor\'s taxable income. Budget 2026 proposes capping eligible donations at $100,000 from 1 April 2027 (not yet law).' }),
+  fig({ id: 'NZ.ird.donationMinimum', country: 'NZ', label: 'Donation tax credit: each donation of at least', value: 5, taxYear: 'current', currency: 'NZD', test: 'at_least', regulator: IRNZ, appliesTo: ['NZ_REGISTERED_CHARITY'], yearsEndingFrom: null, yearsEndingBefore: null, source: 'nzDonationTaxCredits', note: 'Donations of $5 or more, with a receipt showing all the required information.' }),
+  fig({ id: 'NZ.ird.gstRegistrationAtLeast', country: 'NZ', label: 'GST registration: turnover in 12 months of at least', value: 60000, taxYear: 'current', currency: 'NZD', test: 'at_least', regulator: IRNZ, appliesTo: NZ_ALL, yearsEndingFrom: null, yearsEndingBefore: null, source: 'nzGstRegistration', note: 'Register when turnover was at least $60,000 in the last 12 months or is expected to be in the next 12.' }),
+  // ─── IE — Revenue ───
+  fig({ id: 'IE.revenue.cdsDonationAtLeast', country: 'IE', label: 'Charitable Donation Scheme: an individual\'s donations in the year of at least', value: 250, taxYear: 'current', currency: 'EUR', test: 'at_least', regulator: 'Revenue (Ireland)', appliesTo: ['IE_REGISTERED_CHARITY'], yearsEndingFrom: null, yearsEndingBefore: null, source: 'ieCdsOverview', note: 'The charity can claim a refund of the tax paid on an individual\'s donations of €250 or more, with the donor\'s certificate.' }),
+  fig({ id: 'IE.revenue.cdsSpecifiedRate', country: 'IE', label: 'Charitable Donation Scheme: specified rate the donation is grossed up at', value: 0.31, taxYear: 'current', currency: null, test: 'is', regulator: 'Revenue (Ireland)', appliesTo: ['IE_REGISTERED_CHARITY'], yearsEndingFrom: null, yearsEndingBefore: null, source: 'ieCdsClaiming', note: 'The donation is 69% of the grossed-up amount: €1,000 grosses up to €1,449.27, a €449.27 refund (31/69 of the donation), capped at the tax the donor paid that year.' }),
+  fig({ id: 'IE.revenue.cdsClaimWindowYears', country: 'IE', label: 'Charitable Donation Scheme claim window (years)', value: 4, taxYear: 'current', currency: null, test: 'is', regulator: 'Revenue (Ireland)', appliesTo: ['IE_REGISTERED_CHARITY'], yearsEndingFrom: null, yearsEndingBefore: null, source: 'ieCdsOverview', note: 'A four year time limit for making a claim.' }),
+  fig({ id: 'IE.revenue.auditedAccountsIncomeOver', country: 'IE', label: 'Audited accounts required to keep the exemption: annual income over', value: 250000, taxYear: 'current', currency: 'EUR', test: 'over', regulator: 'Revenue (Ireland)', appliesTo: ['IE_REGISTERED_CHARITY', 'IE_SPORTS_BODY'], yearsEndingFrom: null, yearsEndingBefore: null, source: 'ieCharityConditions', note: 'A charity or exempt sports body with annual income over €250,000 keeps audited accounts (a condition of its Revenue exemption).' }),
+  fig({ id: 'IE.revenue.vatServicesOver', country: 'IE', label: 'VAT registration, supplying services only: turnover in a calendar year over', value: 42500, taxYear: 'from 1 January 2025', currency: 'EUR', test: 'over', regulator: 'Revenue (Ireland)', appliesTo: IE_ALL, yearsEndingFrom: null, yearsEndingBefore: null, source: 'ieVatThresholds', note: 'Obligatory above €42,500 for services (€85,000 for goods); voluntary below.' }),
+  fig({ id: 'IE.revenue.vatGoodsOver', country: 'IE', label: 'VAT registration, supplying goods: turnover in a calendar year over', value: 85000, taxYear: 'from 1 January 2025', currency: 'EUR', test: 'over', regulator: 'Revenue (Ireland)', appliesTo: IE_ALL, yearsEndingFrom: null, yearsEndingBefore: null, source: 'ieVatThresholds', note: 'Also for goods and services where 90% or more of turnover is from goods.' }),
+  // ─── SG — Commissioner of Charities and IRAS ───
+  fig({ id: 'SG.coc.annualSubmissionDueMonths', country: 'SG', label: 'Charity annual report and financial statements due within (months after the financial year end)', value: 6, taxYear: 'current', currency: null, test: 'or_less', regulator: COC, appliesTo: SG_CHARITIES, yearsEndingFrom: null, yearsEndingBefore: null, source: 'sgAnnualSubmissions', note: 'Annual Report (with financial statements) and Governance Evaluation Checklist through the Charity Portal within 6 months.' }),
+  fig({ id: 'SG.coc.anyIndependentExaminerUpTo', country: 'SG', label: 'Charity accounts examined by any competent independent person: gross income or total expenditure up to', value: 250000, taxYear: 'current', currency: 'SGD', test: 'or_less', regulator: COC, appliesTo: ['SG_REGISTERED_CHARITY'], yearsEndingFrom: null, yearsEndingBefore: null, source: 'sgAnnualSubmissions', note: 'Gross income or total expenditure of $250,000 or less: an independent examiner; up to $500,000 the examiner must be an ISCA member or qualified to be one. Not for an IPC.' }),
+  fig({ id: 'SG.coc.auditOver', country: 'SG', label: 'Charity accounts audited by a public accountant: gross income or total expenditure over', value: 500000, taxYear: 'current', currency: 'SGD', test: 'over', regulator: COC, appliesTo: ['SG_REGISTERED_CHARITY'], yearsEndingFrom: null, yearsEndingBefore: null, source: 'sgAnnualSubmissions', note: 'Above $500,000 a public accountant audits the accounts; every IPC is audited whatever its size.' }),
+  fig({ id: 'SG.coc.largeCharityReceiptsAtLeast', country: 'SG', label: 'Large charity or IPC: gross annual receipts in each of the last 2 financial years of at least', value: 10000000, taxYear: 'current', currency: 'SGD', test: 'at_least', regulator: COC, appliesTo: SG_CHARITIES, yearsEndingFrom: null, yearsEndingBefore: null, source: 'sgLargeCharities', note: 'At least 10 governing board members, COC-approved auditors and auditor rotation every 5 years.' }),
+  fig({ id: 'SG.iras.ipcDonationDeductionMultiple', country: 'SG', label: 'Donor tax deduction for a qualifying donation to an IPC: times the donation', value: 2.5, taxYear: 'current', currency: null, test: 'is', regulator: 'IRAS', appliesTo: ['SG_IPC'], yearsEndingFrom: null, yearsEndingBefore: null, source: 'sgDonations', note: 'Information only: donors deduct up to 2.5 times a qualifying donation, from the information the IPC gives IRAS.' }),
+  fig({ id: 'SG.iras.clubMemberReceiptsShareAtLeast', country: 'SG', label: 'Club not deemed to carry on a business: share of gross revenue receipts from members of at least', value: 0.5, taxYear: 'current', currency: null, test: 'at_least', regulator: 'IRAS', appliesTo: ['SG_CLUB'], yearsEndingFrom: null, yearsEndingBefore: null, source: 'sgClubs', note: '50% or more from members: taxed only on non-member income such as interest, rent and dividends; under 50%, on the operating surplus too.' }),
+  fig({ id: 'SG.iras.clubTaxRate', country: 'SG', label: 'Income tax rate for clubs and associations', value: 0.17, taxYear: 'from YA 2020', currency: null, test: 'is', regulator: 'IRAS', appliesTo: ['SG_CLUB'], yearsEndingFrom: null, yearsEndingBefore: null, source: 'sgClubs', note: 'The prevailing corporate rate, 17%; Form P1 by 15 April.' }),
+  fig({ id: 'SG.iras.gstRegistrationOver', country: 'SG', label: 'GST registration: taxable turnover in a calendar year (or expected in the next 12 months) over', value: 1000000, taxYear: 'current', currency: 'SGD', test: 'over', regulator: 'IRAS', appliesTo: SG_ALL, yearsEndingFrom: null, yearsEndingBefore: null, source: 'sgGstRegistration', note: 'Over $1 million in a calendar year (apply by 30 January) or expected over $1 million in the next 12 months (apply within 30 days).' }),
 ];

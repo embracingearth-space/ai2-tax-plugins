@@ -98,6 +98,33 @@ These four countries left out a published employee deduction "because it was not
   - `formatGiftAidDate(d)` formats a date as DD/MM/YY.
   - `giftAidClaimValue(total)` returns 25p per £1, to the penny.
 - The organisation sources and figures have their own freshness test and Rate Watch section, `orgRulesInventory()` and `orgRulesPastReview(asOf)`. GB rows are due for review on 5 April 2027 and AU rows on 30 June 2027. All pages were read on 11 October 2026.
+- India (IN), under the Income-tax Act, 2025 (in force 1 April 2026):
+  - types `IN_PUBLIC_TRUST`, `IN_SOCIETY`, `IN_SECTION8_COMPANY` and `IN_CLUB` (clubs and resident welfare associations);
+  - trusts, societies and section 8 companies are `exempt_if_conditions`: registered under section 332 (the successor of 12A/12AB) with 85% of regular income applied or accumulated; audit report in Form 112 (formerly 10B/10BB);
+  - clubs are `mutuality`, after the Supreme Court's Secundrabad Club judgment (2023): non-member income and bank interest are taxable;
+  - donor deduction under section 133 / approval under section 354 (the successor of 80G) as the new `donationRelief.scheme` `'donor_deduction'`, information only;
+  - the new report code `'gst'` (a GST return that is not Australia's BAS), and the 85%, 30%, Form 112 small-NPO, donor-deduction, GST registration and RWA figures, in INR. IN rows are due for review on 31 March 2027.
+- United States (US), federal rules from irs.gov:
+  - types `US_501C3`, `US_501C7` (social club), `US_501C4` (social welfare and other 501(c)) and `US_CLUB` (not recognised as exempt);
+  - 501(c)(3) and 501(c)(4) are `exempt_if_conditions`, a 501(c)(7) club is `mutuality` (taxed on nonmember and investment income), an unrecognised club is `check_locally`;
+  - donor deduction for 501(c)(3) only, information only, with the $250 written acknowledgment; state charity registration named as a regulator, not modelled;
+  - figures in USD: Form 990-N up to $50,000, 990-EZ under $200,000 / $500,000 assets, the 5th-month due date, automatic revocation after 3 years, Form 990-T at $1,000, the social club 35% / 15% limits. US rows are due for review on 31 January 2027.
+- Canada (CA), from canada.ca (CRA):
+  - types `CA_REGISTERED_CHARITY`, `CA_NPO` (club, association or society) and `CA_RCAAA` (national amateur athletic association), all `exempt_if_conditions`;
+  - the T3010 / T1044 / T2052 returns (six months), the disbursement quota (3.5% up to $1 million, 5% above, once property not used in charitable activities exceeds $100,000), the T1044 tests ($10,000 property income, $200,000 assets), subsection 149(5) for dining, recreational and sporting clubs;
+  - official donation receipts for charities and RCAAAs as `'donor_deduction'`, information only; `'gst'` for the GST/HST return, with the $50,000 small-supplier and $250,000 charity gross-revenue tests. CA rows are due for review on 31 January 2027.
+- New Zealand (NZ), from Inland Revenue, Charities Services and the Companies Office:
+  - types `NZ_REGISTERED_CHARITY` (`exempt_if_conditions`: registered charities are automatically exempt), `NZ_INCORPORATED_SOCIETY` and `NZ_CLUB` (`check_locally`: an Inland Revenue exemption, e.g. amateur sport, or the $1,000 not-for-profit deduction and an IR9);
+  - Charities Services annual return within 6 months, Tier 4 cash reporting under $140,000 of operating payments, Tier 3 under $5 million, review over $550,000 and audit over $1.1 million; Incorporated Societies Act 2022 filing (re-registration closed 5 April 2026), the small-society and Tier 4 limits;
+  - donee status (one-third tax credit on donations of $5 or more) as `'donor_deduction'`, information only; `'gst'` with the $60,000 threshold. Budget 2026 proposals ($10,000 threshold, $100,000 donation cap) are named in notes as not yet law. NZ rows are due for review on 31 March 2027.
+- Ireland (IE), from revenue.ie:
+  - types `IE_REGISTERED_CHARITY` and `IE_SPORTS_BODY` (`exempt_if_conditions`: Revenue's charitable and section 235 sports exemptions, audited accounts over €250,000 income) and `IE_CLUB` (`mutuality`: members' club surplus not taxed, non-member surplus taxed);
+  - the Charitable Donation Scheme as the new `donationRelief.scheme` `'charitable_donation_scheme'`: the charity claims the donor's tax back (€250 minimum, 31% specified rate, donor certificate, four years) — a claim like Gift Aid's, so not `'donor_deduction'`, but not Gift Aid either;
+  - `'vat'` with the €42,500 services / €85,000 goods thresholds. The Charities Regulator's own filing rules are not modelled: its site could not be read. IE rows are due for review on 31 January 2027.
+- Singapore (SG), from IRAS and the Commissioner of Charities:
+  - types `SG_REGISTERED_CHARITY` and `SG_IPC` (`exempt`: automatic under section 13(1)(zm), no income tax return) and `SG_CLUB` (`mutuality`: 50% or more of revenue receipts from members, else the operating surplus is taxed; 17%, Form P1);
+  - annual submission within 6 months, examination up to $250,000 / $500,000 and audit above $500,000 (every IPC audited), the $10 million large-charity rules;
+  - IPC donations (up to 2.5 times) as `'donor_deduction'`, information only; `'gst'` with the $1 million threshold. SG rows are due for review on 31 March 2027.
 
 ### Added — GST/VAT for every country, US states and Canadian provinces (rate ledger)
 
