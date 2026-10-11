@@ -2,6 +2,46 @@
 
 ## 2.2.0 — Unreleased
 
+### Fixed — the individual-return plugins tax self-employed income correctly
+
+An audit of the five individual-return plugins (IN-IT, US-IT, GB-SA, CA-IT, AU-IT), run against each authority's own pages, found salaried rules applied to self-employed income and the reverse, along with code that disagreed with its own help text. Every fix has a worked-example regression test (`__tests__/incomeTaxSelfEmployed.regression.test.ts`, `__tests__/filing{US,GB,CA,AU}.regression.test.ts`).
+
+- **IN-IT:**
+  - the ₹75,000 / ₹50,000 standard deduction is now limited to salary or pension income; a freelancer got it before, worth ₹11,700 of tax on ₹14.1L;
+  - presumptive business turnover splits into 6% (digital) and 8% (other); it was a flat 8%;
+  - new `professional_receipts` deems 50% of a profession's receipts (formerly 44ADA);
+  - the old regime's top surcharge is 37%, and surcharge has marginal relief.
+- **US-IT:**
+  - new W-2 `wages` fields, so the app no longer files salary as Schedule C receipts and charges it SE tax;
+  - the Additional Medicare Tax is separate, and stays out of SE tax and the half-SE deduction;
+  - SE earnings under $400 owe no SE tax;
+  - the simplified home office deduction can't create a loss, and a user's own figure is kept;
+  - new qualified business income deduction (IRC 199A), with the conservative wage/property/service-business limit above the threshold and the 2026 $400 minimum;
+  - the quarterly estimate is net of withholding and nil under $1,000;
+  - help text is built from the year's own figures.
+- **GB-SA:**
+  - compulsory Class 2 NI removed (abolished from 2024-25);
+  - pension and Gift Aid extend the basic and higher rate bands and reduce adjusted net income, instead of being deducted from income;
+  - savings and dividends are taxed in statutory order, with the starting rate for savings, the personal savings allowance, the £500 dividend allowance and 2026-27 dividend rates of 10.75/35.75/39.35%;
+  - new `taxpayer_region` applies Scottish bands to non-savings income;
+  - the tapered personal allowance no longer widens the basic rate band;
+  - new `tax_year`.
+- **CA-IT:**
+  - self-employed CPP splits into the line 31000 credit (base employee half) and the line 22200 deduction (employer half, enhanced and CPP2), and counts CPP already paid through a T4 (Schedule 8);
+  - credits can no longer reduce CPP;
+  - the medical expense credit and disability amount are applied;
+  - T2125 line labels corrected;
+  - auto-filled gross income is now used;
+  - employees get the base CPP and EI credits, the enhanced CPP and CPP2 deduction, and the Canada employment amount;
+  - new `net_federal_tax`.
+- **AU-IT:**
+  - LITO follows the ATO schedule ($700 to $37,500, then 5c and 1.5c tapers) and no longer reduces the Medicare levy;
+  - Medicare low-income reduction applied by year;
+  - excess franking credits are refunded instead of lost;
+  - the franked-dividend label agrees with the code;
+  - rates follow the return's new `income_year`;
+  - new small business income tax offset (16%, capped at $1,000).
+
 ### Fixed — the income-tax estimator says what income it was computed for
 
 The estimator takes one gross figure and no income type, so countries that apply an employee-only item quietly handed salaried figures to freelancers. India gave a freelancer on ₹14.1L the ₹75,000 salary standard deduction, ₹83,460 instead of ₹95,160, and the answer carried no assumptions at all: the "salaried" scope lived in the scheme `note`, which never reaches a result. An audit of all 57 countries found employment-only items applied in 35 of them.
