@@ -304,8 +304,9 @@ describe('Australia Income Tax (AU-IT)', () => {
     expect(calcAuTax(100000, fyStartYear)).toBe(expected);
   });
   it('calculates LITO for low income', () => {
+    // $700 to $37,500, then less 5c per $1: 700 − 2,500 × 5% = 575 (ATO schedule).
     const r = p.calculateFields({ salary_wages: 40000 });
-    expect(Number(r.lito)).toBe(700);
+    expect(Number(r.lito)).toBe(575);
   });
   it('applies 2% Medicare levy', () => {
     const r = p.calculateFields({ salary_wages: 100000 });
