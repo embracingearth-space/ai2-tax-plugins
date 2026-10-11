@@ -20,6 +20,7 @@ import {
   ORG_FIGURES,
   ORG_REPORTS,
   ORG_RULE_SOURCES,
+  ORG_URLS,
   type OrgRules,
 } from '../src';
 
@@ -36,9 +37,12 @@ const figure = (country: string, id: string, yearEnd?: string) => {
 
 const GB_CODES = ['GB_CLUB', 'GB_PTA', 'GB_CASC', 'GB_CHARITY', 'GB_CIO', 'GB_CHARITABLE_COMPANY'];
 const AU_CODES = ['AU_INCORPORATED_ASSOCIATION', 'AU_ACNC_CHARITY', 'AU_CLUB'];
+const IN_NPO_CODES = ['IN_PUBLIC_TRUST', 'IN_SOCIETY', 'IN_SECTION8_COMPANY'];
+const IN_CODES = [...IN_NPO_CODES, 'IN_CLUB'];
+/** Every country with its own types, and its codes. */
+const COUNTRY_CODES: Record<string, string[]> = { GB: GB_CODES, AU: AU_CODES, IN: IN_CODES };
 const ALL: Array<[string, string]> = [
-  ...GB_CODES.map((c): [string, string] => ['GB', c]),
-  ...AU_CODES.map((c): [string, string] => ['AU', c]),
+  ...Object.entries(COUNTRY_CODES).flatMap(([country, codes]) => codes.map((c): [string, string] => [country, c])),
   ['FR', 'CLUB'],
   ['FR', 'CHARITY'],
 ];
@@ -83,7 +87,11 @@ describe('orgTypesFor', () => {
   });
 
   it('every type has rules', () => {
-    for (const c of ['GB', 'AU', 'US']) for (const ty of orgTypesFor(c)) expect(orgRulesFor(c, ty.code)).not.toBeNull();
+    for (const c of [...Object.keys(COUNTRY_CODES), 'FR']) for (const ty of orgTypesFor(c)) expect(orgRulesFor(c, ty.code)).not.toBeNull();
+  });
+
+  it('each country with its own types offers exactly its codes, in order', () => {
+    for (const [c, codes] of Object.entries(COUNTRY_CODES)) expect(orgTypesFor(c).map((t) => t.code)).toEqual(codes);
   });
 });
 
@@ -306,7 +314,7 @@ describe('orgReportingThresholds', () => {
   });
 
   it('every figure: law, finite, https source matching its source row, read and review dates, codes that exist', () => {
-    const codes = new Set([...orgTypesFor('GB'), ...orgTypesFor('AU')].map((x) => x.code));
+    const codes = new Set(Object.keys(COUNTRY_CODES).flatMap((c) => orgTypesFor(c)).map((x) => x.code));
     for (const f of ORG_FIGURES) {
       const s = ORG_RULE_SOURCES[f.source];
       expect({ id: f.id, kind: f.kind, finite: Number.isFinite(f.value) }).toEqual({ id: f.id, kind: 'law', finite: true });
@@ -315,6 +323,109 @@ describe('orgReportingThresholds', () => {
       expect(s.country).toBe(f.country);
       for (const c of f.appliesTo) expect({ id: f.id, code: c, known: codes.has(c) }).toEqual({ id: f.id, code: c, known: true });
     }
+  });
+});
+
+/** The currency every money figure of a country is in. */
+const CURRENCY: Record<string, string> = { GB: 'GBP', AU: 'AUD', IN: 'INR' };
+
+describe('every country: figures in its own currency, sources in its own country', () => {
+  it.each(Object.keys(COUNTRY_CODES))('%s', (c) => {
+    const figs = orgReportingThresholds(c, '2026-12-31');
+    expect(figs.length).toBeGreaterThan(0);
+    for (const f of figs) {
+      expect(f.country).toBe(c);
+      if (f.currency !== null) expect({ id: f.id, currency: f.currency }).toEqual({ id: f.id, currency: CURRENCY[c] });
+      expect(ORG_RULE_SOURCES[f.source].country).toBe(c);
+    }
+  });
+});
+
+describe('India (IN) — Income-tax Act, 2025, from tax year 2026-27', () => {
+  it('types: public trust, society, section 8 company, club or association (RWAs included)', () => {
+    expect(orgTypesFor('IN').map((t) => [t.code, t.label, t.kind])).toEqual([
+      ['IN_PUBLIC_TRUST', 'Public charitable trust', 'charity'],
+      ['IN_SOCIETY', 'Registered society', 'association'],
+      ['IN_SECTION8_COMPANY', 'Section 8 company', 'charity'],
+      ['IN_CLUB', 'Club or association (including a resident welfare association)', 'club'],
+    ]);
+  });
+
+  it('statuses: exempt only if registered under section 332 and 85% applied; clubs on mutuality; no forecast', () => {
+    for (const code of IN_NPO_CODES) {
+      const r = rules('IN', code);
+      expect(r.incomeTax.status).toBe('exempt_if_conditions');
+      expect(r.incomeTax.note).toContain('section 332');
+      expect(r.incomeTax.note).toContain('85%');
+      expect(r.incomeTax.note).toContain('Form 112');
+      expect(r.incomeTax.note).toContain('Foreign Contribution (Regulation) Act, 2010');
+      expect(r.incomeTaxForecast).toBe(false);
+    }
+    const club = rules('IN', 'IN_CLUB');
+    expect(club.incomeTax.status).toBe('mutuality');
+    expect(club.incomeTax.note).toContain('interest on bank deposits are taxable');
+    expect(club.incomeTaxForecast).toBe(false);
+  });
+
+  it('the 2025 Act is cited, not the 1961 sections it replaced', () => {
+    const urls = rules('IN', 'IN_PUBLIC_TRUST').sources.map((s) => s.sourceUrl);
+    expect(urls).toEqual(expect.arrayContaining([ORG_URLS.inAct2025Commencement, ORG_URLS.inS332Registration, ORG_URLS.inS336TaxableRegularIncome, ORG_URLS.inForm112Faqs]));
+    expect(ORG_RULE_SOURCES.inAct2025InForce.claim).toContain('1st April, 2026');
+    expect(ORG_RULE_SOURCES.inForm112.claim).toContain('Form 10B and 10BB');
+  });
+
+  it('donor deduction (section 133 / 354) is information only for the NPOs; none for clubs', () => {
+    for (const code of IN_NPO_CODES) {
+      const d = rules('IN', code).donationRelief!;
+      expect(d).toMatchObject({ scheme: 'donor_deduction', declarationRequired: false });
+      expect(d.ratePerPound).toBeUndefined();
+      expect(d.claimWindowYears).toBeUndefined();
+      expect(d.note).toContain('section 354');
+      expect(d.note).toContain('certificate');
+    }
+    expect(rules('IN', 'IN_CLUB').donationRelief).toBeNull();
+  });
+
+  it('reports: receipts and payments and GST for every type; regulators: the Income Tax Department for the NPOs', () => {
+    for (const code of IN_CODES) expect(rules('IN', code).reports).toEqual(['receipts_payments', 'gst']);
+    for (const code of IN_NPO_CODES) expect(rules('IN', code).regulators.map((r) => r.name)).toEqual(['Income Tax Department (India)']);
+    expect(rules('IN', 'IN_CLUB').regulators).toEqual([]);
+  });
+
+  it('accounts: a section 8 company keeps accrual books (Companies Act s 128); trusts, societies and clubs may use receipts and payments', () => {
+    const co = rules('IN', 'IN_SECTION8_COMPANY');
+    expect(co.accounts.receiptsAndPaymentsAllowed).toBe(false);
+    expect(co.accounts.note).toContain('accrual basis');
+    expect(co.sources.map((s) => s.id)).toContain('inCompanyAccruals');
+    for (const code of ['IN_PUBLIC_TRUST', 'IN_SOCIETY', 'IN_CLUB']) expect(rules('IN', code).accounts.receiptsAndPaymentsAllowed).toBe(true);
+    expect(rules('IN', 'IN_CLUB').accounts.note).toContain('Rs. 7,500');
+  });
+
+  it('figures: 85%, 30%, 5 years, donor 50% / 10% / Rs 2,000 cash, Form 112 small NPO, GST Rs 20 lakh / 10 lakh, RWA Rs 7,500', () => {
+    expect(orgReportingThresholds('IN').map((f) => [f.id, f.value, f.test, f.currency])).toEqual([
+      ['IN.ita.applicationShareAtLeast', 0.85, 'at_least', null],
+      ['IN.ita.specifiedIncomeRate', 0.3, 'is', null],
+      ['IN.ita.accumulationMaxYears', 5, 'or_less', null],
+      ['IN.ita.donorDeductionShare', 0.5, 'is', null],
+      ['IN.ita.donorDeductionIncomeCap', 0.1, 'or_less', null],
+      ['IN.ita.donationCashUpTo', 2000, 'or_less', 'INR'],
+      ['IN.ita.smallNpoRegularIncomeUpTo', 50000000, 'or_less', 'INR'],
+      ['IN.ita.smallNpoForeignContributionUpTo', 1000000, 'or_less', 'INR'],
+      ['IN.gst.registrationOver', 2000000, 'over', 'INR'],
+      ['IN.gst.registrationSpecialCategoryOver', 1000000, 'over', 'INR'],
+      ['IN.gst.rwaMemberContributionExemptUpTo', 7500, 'or_less', 'INR'],
+    ]);
+    expect(figure('IN', 'IN.gst.rwaMemberContributionExemptUpTo').appliesTo).toEqual(['IN_SOCIETY', 'IN_CLUB']);
+  });
+
+  it('sources: every IN row from an Indian government page or the Supreme Court, read today, reviewed before tax year 2027-28', () => {
+    const rows = Object.values(ORG_RULE_SOURCES).filter((s) => s.country === 'IN');
+    expect(rows.length).toBeGreaterThan(15);
+    for (const s of rows) {
+      expect(s.sourceUrl).toMatch(/^https:\/\/(www\.incometaxindia\.gov\.in|taxinformation\.cbic\.gov\.in|cbic-gst\.gov\.in|api\.sci\.gov\.in)\//);
+      expect({ id: s.id, readOn: s.readOn, reviewBy: s.reviewBy }).toEqual({ id: s.id, readOn: '2026-10-11', reviewBy: '2027-03-31' });
+    }
+    for (const code of IN_CODES) expect(rules('IN', code).sources.length).toBeGreaterThan(3);
   });
 });
 
@@ -381,7 +492,7 @@ describe('inventory and package exports', () => {
     expect(pkg.giftAidClaimValue).toBe(giftAidClaimValue);
     expect(pkg.orgRulesInventory).toBe(orgRulesInventory);
     expect(typeof pkg.orgRulesPastReview).toBe('function');
-    expect(pkg.ORG_REPORTS).toEqual(['receipts_payments', 'gift_aid_schedule', 'vat', 'gst_bas']);
+    expect(pkg.ORG_REPORTS).toEqual(['receipts_payments', 'gift_aid_schedule', 'vat', 'gst_bas', 'gst']);
     expect(pkg.GB_CC_THRESHOLDS_FROM_YEAR_END).toBe('2026-09-30');
   });
 });

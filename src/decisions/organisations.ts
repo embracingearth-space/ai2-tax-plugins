@@ -26,6 +26,10 @@
  *   'gift_aid_schedule'  GB charities, CIOs, charitable companies and CASCs
  *   'vat'                every GB type (any of them may be VAT registered)
  *   'gst_bas'            every AU type (any of them may be GST registered)
+ *   'gst'                every type in a country whose GST return the package
+ *                        files that is not a BAS: IN (GSTR-3B). Added because
+ *                        'gst_bas' names Australia's activity statement and
+ *                        'vat' is not GST; any of these orgs may be registered.
  * No income-tax-return export is listed for any org type.
  *
  * `incomeTaxForecast` is true only where a forecast on the books' surplus
@@ -44,6 +48,7 @@ import {
   ORG_FIGURES,
   ORG_RULE_SOURCES,
   ORG_URLS,
+  type OrgCurrency,
   type OrgFigure,
   type OrgSource,
   type OrgSourceKey,
@@ -66,14 +71,18 @@ export interface OrgType {
 
 export type OrgIncomeTaxStatus = 'exempt' | 'exempt_if_conditions' | 'mutuality' | 'taxable' | 'check_locally';
 
-export type OrgReport = 'receipts_payments' | 'gift_aid_schedule' | 'vat' | 'gst_bas';
+export type OrgReport = 'receipts_payments' | 'gift_aid_schedule' | 'vat' | 'gst_bas' | 'gst';
 
 /** The report vocabulary, in the order the app lists reports. */
-export const ORG_REPORTS: readonly OrgReport[] = ['receipts_payments', 'gift_aid_schedule', 'vat', 'gst_bas'];
+export const ORG_REPORTS: readonly OrgReport[] = ['receipts_payments', 'gift_aid_schedule', 'vat', 'gst_bas', 'gst'];
 
 export interface OrgDonationRelief {
-  /** 'gift_aid': the org claims tax back on donations (GB). 'dgr': donors deduct gifts (AU) — information only, nothing to claim. */
-  scheme: 'gift_aid' | 'dgr';
+  /**
+   * 'gift_aid': the org claims tax back on donations (GB). 'dgr': donors deduct gifts (AU) — information only, nothing
+   * to claim. 'donor_deduction': donors deduct gifts, or claim a credit for them, under the country's own approval (IN
+   * section 354) — information only for the org's tax; the note says what the org must issue or file for its donors.
+   */
+  scheme: 'gift_aid' | 'dgr' | 'donor_deduction';
   /** What the org is repaid per £1 donated (Gift Aid: 0.25). */
   ratePerPound?: number;
   /** Whether each donor must give a declaration before the org can claim. */
@@ -88,7 +97,7 @@ export interface OrgAccounts {
   receiptsAndPaymentsAllowed: boolean;
   /** Gross income up to which (inclusive) they are allowed, where a regulator sets one. In `currency`. */
   upToGrossIncome?: number;
-  currency?: 'GBP' | 'AUD';
+  currency?: OrgCurrency;
   /** The ORG_FIGURES id the limit comes from, where there is one. */
   thresholdId?: string;
   note: string;
@@ -142,6 +151,16 @@ const AU_TYPES: OrgType[] = [
   t('AU_CLUB', 'Club or community group', 'AU', 'community', 'Not registered'),
 ];
 
+const IN_TYPES: OrgType[] = [
+  t('IN_PUBLIC_TRUST', 'Public charitable trust', 'IN', 'charity', 'Income Tax Department (section 332 registration)'),
+  t('IN_SOCIETY', 'Registered society', 'IN', 'association', 'Registrar of Societies, and the Income Tax Department for section 332'),
+  t('IN_SECTION8_COMPANY', 'Section 8 company', 'IN', 'charity', 'Registrar of Companies, and the Income Tax Department for section 332'),
+  t('IN_CLUB', 'Club or association (including a resident welfare association)', 'IN', 'club', 'Not registered, or as a society'),
+];
+
+/** The countries with their own types; every other country gets the generic ones. */
+const COUNTRY_TYPES: Record<string, OrgType[]> = { GB: GB_TYPES, AU: AU_TYPES, IN: IN_TYPES };
+
 const GENERIC_CODES = ['CLUB', 'CHARITY'] as const;
 const genericTypes = (country: string): OrgType[] => [
   t('CLUB', 'Club or community group', country, 'community', 'Check locally'),
@@ -159,13 +178,13 @@ function countryOf(country: string): string | null {
 }
 
 /**
- * The organisation types to offer in a country. GB (or 'UK') and AU have their own; any other country gets the
+ * The organisation types to offer in a country. GB (or 'UK'), AU and IN have their own; any other country gets the
  * generic CLUB and CHARITY, whose rules say to check locally. Not a two-letter code: an empty list. Returns copies.
  */
 export function orgTypesFor(country: string): OrgType[] {
   const c = countryOf(country);
   if (!c) return [];
-  const list = c === 'GB' ? GB_TYPES : c === 'AU' ? AU_TYPES : genericTypes(c);
+  const list = COUNTRY_TYPES[c] ?? genericTypes(c);
   return list.map((x) => ({ ...x }));
 }
 
@@ -227,6 +246,15 @@ const REGULATORS = {
     covers: 'Incorporated associations, under the Associations Incorporation law where incorporated',
     url: ORG_URLS.acncIncorporatedAssociations,
     note: 'May require annual reports or financial records; the requirements differ by state and territory.',
+  },
+  incomeTaxIndia: {
+    name: 'Income Tax Department (India)',
+    covers: 'Registration as a registered non-profit organisation (section 332) and approval for donor deduction (section 354)',
+    url: ORG_URLS.inS332Registration,
+    note:
+      'Both are applied for to the Principal Commissioner or Commissioner and are separate: registration gives the organisation its ' +
+      'exemption, approval lets donors deduct. Registration lasts 3 tax years (provisional) or 5 (10 for a small organisation); a ' +
+      'registration under section 12AB(1) or 10(23C), or an approval under section 80G(5), of the 1961 Act counts while it is valid (section 355).',
   },
 } satisfies Record<string, OrgRegulator>;
 
@@ -480,6 +508,112 @@ function auRules(code: string): OrgRules | null {
   }
 }
 
+const IN_NPO_TAX_NOTE =
+  'Income-tax Act, 2025 (in force from 1 April 2026, tax year 2026-27 onwards; it replaces sections 11-13 and 12A/12AB of the ' +
+  '1961 Act). Exempt only as a registered non-profit organisation (section 332): taxable regular income is nil when 85% or more of ' +
+  'regular income (activity income, investment income, voluntary contributions) is applied for its registered purposes in India in ' +
+  'the tax year or accumulated for up to 5 years; otherwise 85% of regular income less what was applied is taxed. Specified income ' +
+  'is taxed at 30%. Commercial activity is allowed only if incidental to the objects, with separate books. When total income before ' +
+  'these provisions exceeds the maximum amount not chargeable to tax (the basic exemption limit): books in the prescribed form, an accountant\'s audit report in Form 112 (which ' +
+  'replaces Forms 10B/10BB) one month before the return due date, and a return of income (section 349). Returns for years before ' +
+  '2026-27 are ITR-7 under the 1961 Act. An organisation that is not registered does not get these provisions. Foreign contributions are governed ' +
+  'separately by the Foreign Contribution (Regulation) Act, 2010, which is not modelled here: check FCRA status before accepting any.';
+
+const IN_DONOR_NOTE =
+  'Information only: donors deduct 50% of a donation to an organisation approved under section 354 (the successor of section ' +
+  '80G(5)), within 10% of their adjusted gross total income, for money only and, over Rs. 2,000, not in cash (section 133(1)(b)(ii)). ' +
+  'Approval is separate from registration under section 332. An approved organisation keeps regular accounts of receipts and ' +
+  'expenditure, files the prescribed statement with the Income Tax Department and gives each donor a certificate of the amount.';
+
+const IN_GST_NOTE =
+  'GST: register once aggregate turnover in a financial year exceeds Rs. 20 lakh (Rs. 10 lakh from a special category State).';
+
+const IN_NPO_SOURCES: OrgSourceKey[] = [
+  'inAct2025InForce',
+  'inRegistration',
+  'inOldRegistrationsCount',
+  'inTaxOnIncome',
+  'inRegularIncome',
+  'inEightyFivePercent',
+  'inApplication',
+  'inAccumulation',
+  'inCommercialActivity',
+  'inBooks',
+  'inAudit',
+  'inReturn',
+  'inForm112',
+  'inItr7',
+  'inDonorDeduction',
+  'inDonorApproval',
+  'inGstRegistration',
+];
+
+function inRules(code: string): OrgRules | null {
+  const base = { country: 'IN', code };
+  const npo = (accounts: OrgAccounts, extraSources: OrgSourceKey[] = []): OrgRules => ({
+    ...base,
+    incomeTax: { status: 'exempt_if_conditions', note: IN_NPO_TAX_NOTE },
+    donationRelief: { scheme: 'donor_deduction', declarationRequired: false, note: IN_DONOR_NOTE },
+    reports: ['receipts_payments', 'gst'],
+    incomeTaxForecast: false,
+    accounts,
+    regulators: reg('incomeTaxIndia'),
+    sources: src(...IN_NPO_SOURCES, ...extraSources),
+  });
+  const trustAccounts = (who: string): OrgAccounts => ({
+    receiptsAndPaymentsAllowed: true,
+    note:
+      `The Income-tax Act sets no statement format for ${who}: books "in such form and manner ... as may be prescribed" and, above the ` +
+      'maximum amount not chargeable to tax, accounts audited by an accountant. Receipts and payments is the working report; what the audited ' +
+      `accounts must contain (an income and expenditure account, a balance sheet) is for the auditor and any state law to settle. ${IN_GST_NOTE}`,
+  });
+  switch (code) {
+    case 'IN_PUBLIC_TRUST':
+      return npo(trustAccounts('a public trust'));
+    case 'IN_SOCIETY':
+      return npo(trustAccounts('a registered society'), ['inGstRwa']);
+    case 'IN_SECTION8_COMPANY':
+      return npo(
+        {
+          receiptsAndPaymentsAllowed: false,
+          note:
+            'A section 8 company is a company: the Companies Act, 2013 (section 128) requires books "on accrual basis and according ' +
+            'to the double entry system" and financial statements giving a true and fair view. ' +
+            'Receipts and payments is a working report only; the accruals statements are prepared from the same records. ' +
+            IN_GST_NOTE,
+        },
+        ['inCompanyAccruals'],
+      );
+    case 'IN_CLUB':
+      return {
+        ...base,
+        incomeTax: {
+          status: 'mutuality',
+          note:
+            'A members\' club is not taxed on surplus from its own members using its facilities (mutuality); a resident ' +
+            'welfare association relies on the same principle, which turns on its facts. The Supreme Court (Secundrabad Club, 2023, under the 1961 Act) held that income from non-members and ' +
+            'interest on bank deposits are taxable like any other income. Keep member and non-member income apart. A club or ' +
+            'association with charitable objects that registers under section 332 should choose "Registered society" or "Public ' +
+            'charitable trust" instead.',
+        },
+        donationRelief: null,
+        reports: ['receipts_payments', 'gst'],
+        incomeTaxForecast: false,
+        accounts: {
+          receiptsAndPaymentsAllowed: true,
+          note:
+            'No statutory accounts format for an unregistered club or association: its own rules decide (a registered society may ' +
+            'also have duties under its societies act, not modelled here). GST for a resident welfare association: members\' charges for common use are exempt up to Rs. 7,500 a ' +
+            'member a month, and with aggregate turnover of Rs. 20 lakh or less it need not register at all.',
+        },
+        regulators: [],
+        sources: src('inClubMutuality', 'inGstRwa', 'inGstRegistration', 'inRegistration'),
+      };
+    default:
+      return null;
+  }
+}
+
 function genericRules(country: string, code: string): OrgRules | null {
   if (!(GENERIC_CODES as readonly string[]).includes(code)) return null;
   return {
@@ -509,6 +643,7 @@ export function orgRulesFor(country: string, code: string, yearEnd?: string | Da
   const k = String(code ?? '').trim().toUpperCase();
   if (c === 'GB') return gbRules(k, yearEndOf(yearEnd));
   if (c === 'AU') return auRules(k);
+  if (c === 'IN') return inRules(k);
   return genericRules(c, k);
 }
 
@@ -520,12 +655,13 @@ function yearEndOf(yearEnd?: string | Date): string {
 }
 
 /**
- * The dated figures for a country's organisations (GB: Charity Commission, OSCR, CCNI and HMRC; AU: ACNC and ATO),
- * for a financial year ending on `yearEnd` (default today). One row per figure id; empty for other countries.
+ * The dated figures for a country's organisations (GB: Charity Commission, OSCR, CCNI and HMRC; AU: ACNC and ATO;
+ * IN: Income Tax Department and CBIC), for a financial year ending on `yearEnd` (default today). One row per figure
+ * id; empty for other countries.
  */
 export function orgReportingThresholds(country: string, yearEnd?: string | Date): OrgFigure[] {
   const c = countryOf(country);
-  if (c !== 'GB' && c !== 'AU') return [];
+  if (!c || !(c in COUNTRY_TYPES)) return [];
   const ymd = yearEndOf(yearEnd);
   return ORG_FIGURES.filter((f) => f.country === c && inYear(f, ymd)).map((f) => ({ ...f, appliesTo: [...f.appliesTo] }));
 }

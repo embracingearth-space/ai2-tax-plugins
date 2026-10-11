@@ -36,10 +36,17 @@ describe('the gate itself (fixed dates)', () => {
     expect(orgRulesPastReview('2026-10-11')).toEqual([]);
   });
 
+  it('would fail on 1 April 2027 for every IN row (tax year 2027-28), and not yet for GB or AU', () => {
+    const due = orgRulesPastReview('2027-04-01');
+    expect(new Set(due.map((i) => i.country))).toEqual(new Set(['IN']));
+    expect(due.length).toBe(orgRulesInventory().filter((i) => i.country === 'IN').length);
+    expect(due.map((i) => i.series)).toEqual(expect.arrayContaining(['ORG.IN.source.inEightyFivePercent', 'ORG.IN.gst.registrationOver']));
+  });
+
   it('would fail on 6 April 2027 for every GB row, and not yet for AU', () => {
     const due = orgRulesPastReview('2027-04-06');
     expect(due.length).toBeGreaterThan(0);
-    expect(new Set(due.map((i) => i.country))).toEqual(new Set(['GB']));
+    expect(new Set(due.map((i) => i.country))).toEqual(new Set(['GB', 'IN']));
     expect(due.map((i) => i.series)).toEqual(expect.arrayContaining(['ORG.GB.source.giftAidRate', 'ORG.GB.cc.receiptsAndPaymentsUpTo@2026-09-30']));
   });
 

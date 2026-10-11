@@ -98,6 +98,12 @@ These four countries left out a published employee deduction "because it was not
   - `formatGiftAidDate(d)` formats a date as DD/MM/YY.
   - `giftAidClaimValue(total)` returns 25p per £1, to the penny.
 - The organisation sources and figures have their own freshness test and Rate Watch section, `orgRulesInventory()` and `orgRulesPastReview(asOf)`. GB rows are due for review on 5 April 2027 and AU rows on 30 June 2027. All pages were read on 11 October 2026.
+- India (IN), under the Income-tax Act, 2025 (in force 1 April 2026):
+  - types `IN_PUBLIC_TRUST`, `IN_SOCIETY`, `IN_SECTION8_COMPANY` and `IN_CLUB` (clubs and resident welfare associations);
+  - trusts, societies and section 8 companies are `exempt_if_conditions`: registered under section 332 (the successor of 12A/12AB) with 85% of regular income applied or accumulated; audit report in Form 112 (formerly 10B/10BB);
+  - clubs are `mutuality`, after the Supreme Court's Secundrabad Club judgment (2023): non-member income and bank interest are taxable;
+  - donor deduction under section 133 / approval under section 354 (the successor of 80G) as the new `donationRelief.scheme` `'donor_deduction'`, information only;
+  - the new report code `'gst'` (a GST return that is not Australia's BAS), and the 85%, 30%, Form 112 small-NPO, donor-deduction, GST registration and RWA figures, in INR. IN rows are due for review on 31 March 2027.
 
 ### Added — GST/VAT for every country, US states and Canadian provinces (rate ledger)
 
