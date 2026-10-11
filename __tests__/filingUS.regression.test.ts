@@ -278,3 +278,17 @@ describe('quarterly estimated payments net of withholding (Form 1040-ES)', () =>
     expect(n(r.quarterly_estimated)).toBe(1000); // (8,770 − 4,770) ÷ 4
   });
 });
+
+describe('home office inputs that are not usable numbers', () => {
+  inYear('2026-06-01');
+
+  it('treats a non-numeric override as blank instead of turning the return into NaN', () => {
+    const r = calc({ gross_receipts: 50000, home_office_sqft: 200, home_office_deduction: '1,500' });
+    expect(n(r.home_office_deduction)).toBe(1000); // the simplified 200 × $5
+    expect(Number.isFinite(n(r.total_tax))).toBe(true);
+  });
+
+  it('never lets a negative area add income', () => {
+    expect(n(calc({ gross_receipts: 50000, home_office_sqft: -100 }).home_office_deduction)).toBe(0);
+  });
+});
