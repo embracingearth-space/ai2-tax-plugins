@@ -458,7 +458,7 @@ giftAidClaimValue(100);                  // 25
   - An AU charity is `exempt_if_conditions`: it must be registered with the ACNC and endorsed by the ATO.
   - AU associations and clubs are `check_locally`: they self-assess under Division 50, or they are taxable.
   - Everything else is `check_locally`.
-- **Income tax forecast.** `incomeTaxForecast` is true only for `mutuality` and `taxable`.
+- **Income tax forecast.** `incomeTaxForecast` is true only for `taxable`. A `mutuality` club gets the note instead: only non-member income is taxed, and the books cannot tell it apart, so a forecast on the whole surplus would overstate the tax.
 - **Reports.** `reports` uses the vocabulary `receipts_payments` (every type), `gift_aid_schedule` (GB charities and CASCs), `vat` (GB, IE), `gst_bas` (AU) and `gst` (a GST return that is not a BAS: IN, CA, NZ, SG). No type lists an income tax return export.
 - **Accounts.** `accounts` says whether receipts and payments accounts are an allowed statutory format.
   - A charitable company must prepare accruals accounts at any size, so it is false there.
