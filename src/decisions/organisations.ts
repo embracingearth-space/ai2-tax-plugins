@@ -27,7 +27,7 @@
  *   'vat'                every GB type (any of them may be VAT registered)
  *   'gst_bas'            every AU type (any of them may be GST registered)
  *   'gst'                every type in a country whose GST return the package
- *                        files that is not a BAS: IN (GSTR-3B), CA (GST/HST). Added because
+ *                        files that is not a BAS: IN (GSTR-3B), CA (GST/HST), NZ. Added because
  *                        'gst_bas' names Australia's activity statement and
  *                        'vat' is not GST; any of these orgs may be registered.
  * US types list only 'receipts_payments': there is no federal VAT/GST, and the
@@ -82,7 +82,7 @@ export interface OrgDonationRelief {
   /**
    * 'gift_aid': the org claims tax back on donations (GB). 'dgr': donors deduct gifts (AU) — information only, nothing
    * to claim. 'donor_deduction': donors deduct gifts, or claim a credit for them, under the country's own approval (IN
-   * section 354, US 501(c)(3), CA registered charity or RCAAA) — information only for the org's tax; the note says what
+   * section 354, US 501(c)(3), CA registered charity or RCAAA, NZ donee organisation) — information only for the org's tax; the note says what
    * the org must issue or file for its donors (a certificate, a written acknowledgment, an official donation receipt).
    */
   scheme: 'gift_aid' | 'dgr' | 'donor_deduction';
@@ -174,8 +174,14 @@ const CA_TYPES: OrgType[] = [
   t('CA_RCAAA', 'Registered Canadian amateur athletic association (national)', 'CA', 'club', 'CRA'),
 ];
 
+const NZ_TYPES: OrgType[] = [
+  t('NZ_REGISTERED_CHARITY', 'Registered charity (Charities Services)', 'NZ', 'charity', 'Charities Services'),
+  t('NZ_INCORPORATED_SOCIETY', 'Incorporated society (not a registered charity)', 'NZ', 'association', 'Companies Office (Incorporated Societies Register)'),
+  t('NZ_CLUB', 'Club or group (unincorporated)', 'NZ', 'community', 'Not registered'),
+];
+
 /** The countries with their own types; every other country gets the generic ones. */
-const COUNTRY_TYPES: Record<string, OrgType[]> = { GB: GB_TYPES, AU: AU_TYPES, IN: IN_TYPES, US: US_TYPES, CA: CA_TYPES };
+const COUNTRY_TYPES: Record<string, OrgType[]> = { GB: GB_TYPES, AU: AU_TYPES, IN: IN_TYPES, US: US_TYPES, CA: CA_TYPES, NZ: NZ_TYPES };
 
 const GENERIC_CODES = ['CLUB', 'CHARITY'] as const;
 const genericTypes = (country: string): OrgType[] => [
@@ -291,6 +297,27 @@ const REGULATORS = {
     covers: 'Registered charities and registered Canadian amateur athletic associations',
     url: ORG_URLS.caCharityAdvantages,
     note: 'Registration, official donation receipts, the annual information return (T3010 for a charity, T2052 for an RCAAA) and the disbursement quota.',
+  },
+  charitiesServicesNz: {
+    name: 'Charities Services (Department of Internal Affairs)',
+    covers: 'Registered charities in New Zealand (Charities Act 2005)',
+    url: ORG_URLS.nzCsAnnualReturn,
+    note: 'Annual return within 6 months of balance date, with a Performance Report (Tier 3 or 4) or Financial Report (Tier 1 or 2); review or audit above the operating-expenditure thresholds.',
+  },
+  companiesOfficeNz: {
+    name: 'Companies Office (Incorporated Societies Register)',
+    covers: 'Incorporated societies under the Incorporated Societies Act 2022',
+    url: ORG_URLS.nzIsRegister,
+    note:
+      'Annual return and financial statements within 6 months of balance date. The 1908 Act re-registration window closed on 5 April ' +
+      '2026; a society removed for not re-registering can apply to be restored. A society that is a registered charity files with ' +
+      'Charities Services instead.',
+  },
+  inlandRevenueNz: {
+    name: 'Inland Revenue (NZ)',
+    covers: 'Income tax exemption or not-for-profit status, donee organisation approval, GST',
+    url: ORG_URLS.nzQualifyingExemption,
+    note: 'A not-for-profit that is not a registered charity applies to Inland Revenue for an exemption, or for not-for-profit status to use the $1,000 deduction.',
   },
 } satisfies Record<string, OrgRegulator>;
 
@@ -829,6 +856,88 @@ function caRules(code: string): OrgRules | null {
   }
 }
 
+const NZ_NFP_TAX_NOTE =
+  'Not exempt automatically. Inland Revenue can grant an income tax exemption to a not-for-profit set up for the public good whose ' +
+  'funds do not benefit anyone involved — for example a club set up to promote an amateur game or sport, or for public recreation ' +
+  'without significant barriers. Without one, approved as a not-for-profit, it pays no tax on the first $1,000 of net income and ' +
+  'files an IR9 above that. ' +
+  'Budget 2026 proposes (not yet law) raising the $1,000 to $10,000 and keeping member subscriptions and levies non-taxable, from ' +
+  'the 2027-28 income year. A not-for-profit with charitable purposes can register with Charities Services instead — choose ' +
+  '"Registered charity (Charities Services)".';
+
+function nzRules(code: string): OrgRules | null {
+  const base = { country: 'NZ', code };
+  switch (code) {
+    case 'NZ_REGISTERED_CHARITY':
+      return {
+        ...base,
+        incomeTax: {
+          status: 'exempt_if_conditions',
+          note:
+            'Registered charities are automatically exempt from income tax while registered with Charities Services; business ' +
+            'income not used in New Zealand may still be taxed. The charity files an annual return within 6 months of balance ' +
+            'date with a Performance Report for its tier (Tier 4, cash based, under $140,000 of operating payments; Tier 3, ' +
+            'accrual, under $5 million), reviewed or audited over $550,000 of operating expenditure and audited over $1.1 million.',
+        },
+        donationRelief: {
+          scheme: 'donor_deduction',
+          declarationRequired: false,
+          note:
+            'Information only: if Inland Revenue has approved the charity as a donee organisation, individual donors claim a tax ' +
+            'credit of one third of donations of $5 or more (up to their taxable income) with a receipt showing all the required ' +
+            'information. Budget 2026 proposes capping eligible donations at $100,000 a year from 1 April 2027 (not yet law).',
+        },
+        reports: ['receipts_payments', 'gst'],
+        incomeTaxForecast: false,
+        accounts: {
+          receiptsAndPaymentsAllowed: true,
+          currency: 'NZD',
+          thresholdId: 'NZ.cs.tier4OperatingPaymentsUnder',
+          note:
+            'Tier 4 Performance Report (cash based: the cash received and paid) while annual operating payments are under ' +
+            '$140,000 and there is no public accountability; from $140,000, Tier 3 accrual accounting. The limit is on operating ' +
+            'payments, not income.',
+        },
+        regulators: reg('charitiesServicesNz', 'inlandRevenueNz'),
+        sources: src('nzCharityExempt', 'nzCsAnnualReturn', 'nzCsTier4', 'nzCsTier3', 'nzCsAuditReview', 'nzDonationTaxCredits', 'nzBudget2026Proposals', 'nzGstRegistration'),
+      };
+    case 'NZ_INCORPORATED_SOCIETY':
+      return {
+        ...base,
+        incomeTax: { status: 'check_locally', note: `${NZ_NFP_TAX_NOTE} An incorporated society is taxed at the company rate.` },
+        donationRelief: null,
+        reports: ['receipts_payments', 'gst'],
+        incomeTaxForecast: false,
+        accounts: {
+          receiptsAndPaymentsAllowed: true,
+          currency: 'NZD',
+          thresholdId: 'NZ.is.tier4OperatingPaymentsUnder',
+          note:
+            'A small society (operating payments and current assets each under $50,000 in each of the previous 2 years, not a ' +
+            'charity or donee organisation) uses the 2022 Act\'s minimum standards; otherwise XRB Tier 4 (cash based, no audit) under ' +
+            '$140,000 of operating payments, then Tier 3 accrual. Statements and annual return go to the Companies Office within 6 ' +
+            'months of balance date, after the AGM, signed by 2 committee members. Only societies re-registered under the 2022 Act ' +
+            '(window closed 5 April 2026) remain on the register.',
+        },
+        regulators: reg('companiesOfficeNz', 'inlandRevenueNz'),
+        sources: src('nzIsTransition', 'nzIsAnnualFiling', 'nzIsReportingStandards', 'nzCharityExempt', 'nzSportsClubs', 'nzNfpDeduction', 'nzIr9', 'nzBudget2026Proposals', 'nzGstRegistration'),
+      };
+    case 'NZ_CLUB':
+      return {
+        ...base,
+        incomeTax: { status: 'check_locally', note: `${NZ_NFP_TAX_NOTE} An unincorporated club is taxed at individual rates.` },
+        donationRelief: null,
+        reports: ['receipts_payments', 'gst'],
+        incomeTaxForecast: false,
+        accounts: { receiptsAndPaymentsAllowed: true, note: 'No statutory accounts format for an unincorporated club: its own rules decide.' },
+        regulators: reg('inlandRevenueNz'),
+        sources: src('nzCharityExempt', 'nzSportsClubs', 'nzNfpDeduction', 'nzIr9', 'nzBudget2026Proposals', 'nzGstRegistration'),
+      };
+    default:
+      return null;
+  }
+}
+
 function genericRules(country: string, code: string): OrgRules | null {
   if (!(GENERIC_CODES as readonly string[]).includes(code)) return null;
   return {
@@ -861,6 +970,7 @@ export function orgRulesFor(country: string, code: string, yearEnd?: string | Da
   if (c === 'IN') return inRules(k);
   if (c === 'US') return usRules(k);
   if (c === 'CA') return caRules(k);
+  if (c === 'NZ') return nzRules(k);
   return genericRules(c, k);
 }
 
@@ -873,7 +983,7 @@ function yearEndOf(yearEnd?: string | Date): string {
 
 /**
  * The dated figures for a country's organisations (GB: Charity Commission, OSCR, CCNI and HMRC; AU: ACNC and ATO;
- * IN: Income Tax Department and CBIC; US: IRS; CA: CRA), for a financial year ending on `yearEnd` (default today). One row per figure
+ * IN: Income Tax Department and CBIC; US: IRS; CA: CRA; NZ: Charities Services, Companies Office, Inland Revenue), for a financial year ending on `yearEnd` (default today). One row per figure
  * id; empty for other countries.
  */
 export function orgReportingThresholds(country: string, yearEnd?: string | Date): OrgFigure[] {

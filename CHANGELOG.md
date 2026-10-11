@@ -113,6 +113,10 @@ These four countries left out a published employee deduction "because it was not
   - types `CA_REGISTERED_CHARITY`, `CA_NPO` (club, association or society) and `CA_RCAAA` (national amateur athletic association), all `exempt_if_conditions`;
   - the T3010 / T1044 / T2052 returns (six months), the disbursement quota (3.5% up to $1 million, 5% above, once property not used in charitable activities exceeds $100,000), the T1044 tests ($10,000 property income, $200,000 assets), subsection 149(5) for dining, recreational and sporting clubs;
   - official donation receipts for charities and RCAAAs as `'donor_deduction'`, information only; `'gst'` for the GST/HST return, with the $50,000 small-supplier and $250,000 charity gross-revenue tests. CA rows are due for review on 31 January 2027.
+- New Zealand (NZ), from Inland Revenue, Charities Services and the Companies Office:
+  - types `NZ_REGISTERED_CHARITY` (`exempt_if_conditions`: registered charities are automatically exempt), `NZ_INCORPORATED_SOCIETY` and `NZ_CLUB` (`check_locally`: an Inland Revenue exemption, e.g. amateur sport, or the $1,000 not-for-profit deduction and an IR9);
+  - Charities Services annual return within 6 months, Tier 4 cash reporting under $140,000 of operating payments, Tier 3 under $5 million, review over $550,000 and audit over $1.1 million; Incorporated Societies Act 2022 filing (re-registration closed 5 April 2026), the small-society and Tier 4 limits;
+  - donee status (one-third tax credit on donations of $5 or more) as `'donor_deduction'`, information only; `'gst'` with the $60,000 threshold. Budget 2026 proposals ($10,000 threshold, $100,000 donation cap) are named in notes as not yet law. NZ rows are due for review on 31 March 2027.
 
 ### Added — GST/VAT for every country, US states and Canadian provinces (rate ledger)
 

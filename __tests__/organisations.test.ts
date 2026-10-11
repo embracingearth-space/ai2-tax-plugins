@@ -43,7 +43,8 @@ const IN_CODES = [...IN_NPO_CODES, 'IN_CLUB'];
 const US_EXEMPT_CODES = ['US_501C3', 'US_501C7', 'US_501C4'];
 const US_CODES = [...US_EXEMPT_CODES, 'US_CLUB'];
 const CA_CODES = ['CA_REGISTERED_CHARITY', 'CA_NPO', 'CA_RCAAA'];
-const COUNTRY_CODES: Record<string, string[]> = { GB: GB_CODES, AU: AU_CODES, IN: IN_CODES, US: US_CODES, CA: CA_CODES };
+const NZ_CODES = ['NZ_REGISTERED_CHARITY', 'NZ_INCORPORATED_SOCIETY', 'NZ_CLUB'];
+const COUNTRY_CODES: Record<string, string[]> = { GB: GB_CODES, AU: AU_CODES, IN: IN_CODES, US: US_CODES, CA: CA_CODES, NZ: NZ_CODES };
 const ALL: Array<[string, string]> = [
   ...Object.entries(COUNTRY_CODES).flatMap(([country, codes]) => codes.map((c): [string, string] => [country, c])),
   ['FR', 'CLUB'],
@@ -330,7 +331,7 @@ describe('orgReportingThresholds', () => {
 });
 
 /** The currency every money figure of a country is in. */
-const CURRENCY: Record<string, string> = { GB: 'GBP', AU: 'AUD', IN: 'INR', US: 'USD', CA: 'CAD' };
+const CURRENCY: Record<string, string> = { GB: 'GBP', AU: 'AUD', IN: 'INR', US: 'USD', CA: 'CAD', NZ: 'NZD' };
 
 describe('every country: figures in its own currency, sources in its own country', () => {
   it.each(Object.keys(COUNTRY_CODES))('%s', (c) => {
@@ -560,6 +561,85 @@ describe('Canada (CA) — CRA', () => {
       expect({ id: s.id, readOn: s.readOn, reviewBy: s.reviewBy }).toEqual({ id: s.id, readOn: '2026-10-11', reviewBy: '2027-01-31' });
     }
     for (const code of CA_CODES) expect(rules('CA', code).sources.length).toBeGreaterThan(2);
+  });
+});
+
+describe('New Zealand (NZ) — Charities Services, Companies Office, Inland Revenue', () => {
+  it('types: registered charity, incorporated society, unincorporated club', () => {
+    expect(orgTypesFor('NZ').map((t) => [t.code, t.label, t.kind])).toEqual([
+      ['NZ_REGISTERED_CHARITY', 'Registered charity (Charities Services)', 'charity'],
+      ['NZ_INCORPORATED_SOCIETY', 'Incorporated society (not a registered charity)', 'association'],
+      ['NZ_CLUB', 'Club or group (unincorporated)', 'community'],
+    ]);
+  });
+
+  it('statuses: a registered charity exempt if conditions; societies and clubs check locally (exemption or the $1,000 deduction)', () => {
+    expect(rules('NZ', 'NZ_REGISTERED_CHARITY').incomeTax.status).toBe('exempt_if_conditions');
+    for (const code of ['NZ_INCORPORATED_SOCIETY', 'NZ_CLUB']) {
+      const r = rules('NZ', code);
+      expect(r.incomeTax.status).toBe('check_locally');
+      expect(r.incomeTax.note).toContain('$1,000');
+      expect(r.incomeTax.note).toContain('not yet law');
+      expect(r.incomeTax.note).toContain('amateur game or sport');
+    }
+    expect(rules('NZ', 'NZ_INCORPORATED_SOCIETY').incomeTax.note).toContain('company rate');
+    expect(rules('NZ', 'NZ_CLUB').incomeTax.note).toContain('individual rates');
+    for (const code of NZ_CODES) expect(rules('NZ', code).incomeTaxForecast).toBe(false);
+  });
+
+  it('donee status for the charity only, information only; the Budget 2026 cap is named as a proposal', () => {
+    const d = rules('NZ', 'NZ_REGISTERED_CHARITY').donationRelief!;
+    expect(d).toMatchObject({ scheme: 'donor_deduction', declarationRequired: false });
+    expect(d.note).toContain('one third');
+    expect(d.note).toContain('not yet law');
+    expect(rules('NZ', 'NZ_INCORPORATED_SOCIETY').donationRelief).toBeNull();
+    expect(rules('NZ', 'NZ_CLUB').donationRelief).toBeNull();
+  });
+
+  it('accounts: Tier 4 cash reporting under $140,000 of operating payments; the society note names the 2022 Act re-registration', () => {
+    expect(rules('NZ', 'NZ_REGISTERED_CHARITY').accounts).toMatchObject({ receiptsAndPaymentsAllowed: true, currency: 'NZD', thresholdId: 'NZ.cs.tier4OperatingPaymentsUnder' });
+    expect(rules('NZ', 'NZ_INCORPORATED_SOCIETY').accounts).toMatchObject({ receiptsAndPaymentsAllowed: true, currency: 'NZD', thresholdId: 'NZ.is.tier4OperatingPaymentsUnder' });
+    expect(rules('NZ', 'NZ_INCORPORATED_SOCIETY').accounts.note).toContain('5 April 2026');
+    for (const code of NZ_CODES) {
+      const id = rules('NZ', code).accounts.thresholdId;
+      if (id) expect(figure('NZ', id).value).toBe(140000);
+    }
+  });
+
+  it('reports and regulators', () => {
+    for (const code of NZ_CODES) expect(rules('NZ', code).reports).toEqual(['receipts_payments', 'gst']);
+    const names = (code: string) => rules('NZ', code).regulators.map((r) => r.name);
+    expect(names('NZ_REGISTERED_CHARITY')).toEqual(['Charities Services (Department of Internal Affairs)', 'Inland Revenue (NZ)']);
+    expect(names('NZ_INCORPORATED_SOCIETY')).toEqual(['Companies Office (Incorporated Societies Register)', 'Inland Revenue (NZ)']);
+    expect(names('NZ_CLUB')).toEqual(['Inland Revenue (NZ)']);
+  });
+
+  it('figures: Charities Services tiers and assurance, society filing and size, $1,000 deduction, one-third credit, $60,000 GST', () => {
+    expect(orgReportingThresholds('NZ').map((f) => [f.id, f.value, f.test, f.currency])).toEqual([
+      ['NZ.cs.annualReturnDueMonths', 6, 'or_less', null],
+      ['NZ.cs.tier4OperatingPaymentsUnder', 140000, 'under', 'NZD'],
+      ['NZ.cs.tier3OperatingPaymentsUnder', 5000000, 'under', 'NZD'],
+      ['NZ.cs.reviewOrAuditOver', 550000, 'over', 'NZD'],
+      ['NZ.cs.auditOver', 1100000, 'over', 'NZD'],
+      ['NZ.is.annualReturnDueMonths', 6, 'or_less', null],
+      ['NZ.is.smallSocietyOperatingPaymentsUnder', 50000, 'under', 'NZD'],
+      ['NZ.is.smallSocietyCurrentAssetsUnder', 50000, 'under', 'NZD'],
+      ['NZ.is.tier4OperatingPaymentsUnder', 140000, 'under', 'NZD'],
+      ['NZ.ird.nfpIncomeDeduction', 1000, 'is', 'NZD'],
+      ['NZ.ird.donationTaxCreditShare', 1 / 3, 'is', null],
+      ['NZ.ird.donationMinimum', 5, 'at_least', 'NZD'],
+      ['NZ.ird.gstRegistrationAtLeast', 60000, 'at_least', 'NZD'],
+    ]);
+  });
+
+  it('sources: every NZ row a New Zealand government page, read today, reviewed before the 2027-28 income year', () => {
+    const rows = Object.values(ORG_RULE_SOURCES).filter((s) => s.country === 'NZ');
+    expect(rows.length).toBeGreaterThan(12);
+    for (const s of rows) {
+      expect(s.sourceUrl).toMatch(/^https:\/\/(www\.ird\.govt\.nz|www\.taxpolicy\.ird\.govt\.nz|www\.charities\.govt\.nz|is-register\.companiesoffice\.govt\.nz)\//);
+      expect({ id: s.id, readOn: s.readOn, reviewBy: s.reviewBy }).toEqual({ id: s.id, readOn: '2026-10-11', reviewBy: '2027-03-31' });
+    }
+    for (const code of NZ_CODES) expect(rules('NZ', code).sources.length).toBeGreaterThan(4);
   });
 });
 

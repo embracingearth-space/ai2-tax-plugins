@@ -43,6 +43,13 @@
  * date; federal only. State charity registration and state tax are named
  * in the notes, not modelled.
  *
+ * CA rows are canada.ca (CRA) pages with their "Date modified". NZ rows are
+ * Inland Revenue pages with their "Last updated" date, and Charities
+ * Services and Companies Office pages read in a browser (they refuse plain
+ * HTTP clients) that show only a month ("Updated June 2026") or no date, so
+ * `pageLastUpdated` is null there. NZ's Budget 2026 changes are proposals,
+ * not law: they are named in notes, never used as figures.
+ *
  * Nothing here is a number the app may use without its row: a test holds
  * every figure to an https source, a read date and a review date, and the
  * freshness test fails the build once a review date passes. 2fin
@@ -63,6 +70,8 @@ const IN_REVIEW_BY = '2027-03-31';
 const US_REVIEW_BY = '2027-01-31';
 /** CA rows are re-read before the 2027 calendar year's returns, like the US rows. */
 const CA_REVIEW_BY = '2027-01-31';
+/** NZ rows are re-read before the 2027-28 income year (1 April 2027), when the Budget 2026 proposals would start. */
+const NZ_REVIEW_BY = '2027-03-31';
 
 /** The day the new Charity Commission thresholds start: financial years ENDING on or after it. */
 export const GB_CC_THRESHOLDS_FROM_YEAR_END = '2026-09-30';
@@ -172,15 +181,33 @@ export const ORG_URLS = {
   caDonors: 'https://www.canada.ca/en/revenue-agency/services/charities-giving/giving-charity-information-donors.html',
   caGstCharities: 'https://www.canada.ca/en/revenue-agency/services/forms-publications/publications/rc4082/gst-hst-information-charities.html',
   caGstNpos: 'https://www.canada.ca/en/revenue-agency/services/forms-publications/publications/rc4081/gst-hst-information-non-profit-organizations.html',
+  // New Zealand — Inland Revenue, Charities Services, Companies Office
+  nzQualifyingExemption:
+    'https://www.ird.govt.nz/roles/not-for-profits-and-charities/setting-up/tax-exemptions-and-deductions-for-nfps/income-tax/qualifying-for-an-income-tax-exemption-or-deduction',
+  nzSportsClubs: 'https://www.ird.govt.nz/roles/not-for-profits-and-charities/types-of-nfps/sports-clubs-and-societies',
+  nzNfpDeduction: 'https://www.ird.govt.nz/roles/not-for-profits-and-charities/setting-up/tax-exemptions-and-deductions-for-nfps/income-tax/income-deduction',
+  nzIr9: 'https://www.ird.govt.nz/roles/not-for-profits-and-charities/types-of-nfps/sports-clubs-and-societies/file-ir9',
+  nzDonationTaxCredits: 'https://www.ird.govt.nz/income-tax/income-tax-for-individuals/individual-tax-credits/donation-tax-credits/about-donation-tax-credits',
+  nzGstRegistration: 'https://www.ird.govt.nz/registering-for-gst',
+  nzBudget2026Proposals: 'https://www.taxpolicy.ird.govt.nz/-/media/project/ir/tp/publications/2026/is-charities-not-for-profits.pdf',
+  nzCsAnnualReturn: 'https://www.charities.govt.nz/annual-reporting/annual-return',
+  nzCsTier4: 'https://www.charities.govt.nz/annual-reporting/tier-4',
+  nzCsTier3: 'https://www.charities.govt.nz/annual-reporting/tier-3',
+  nzCsAuditReview: 'https://www.charities.govt.nz/annual-reporting/statutory-audit-and-review-requirements',
+  nzIsRegister: 'https://is-register.companiesoffice.govt.nz/',
+  nzIsAnnualFiling:
+    'https://is-register.companiesoffice.govt.nz/help-centre/meeting-your-annual-filing-requirements/filing-annual-financial-statements-and-annual-returns/',
+  nzIsLargeSocieties:
+    'https://is-register.companiesoffice.govt.nz/help-centre/meeting-your-annual-filing-requirements/financial-reporting-standards-for-large-societies/',
 } as const;
 
 const U = ORG_URLS;
 
 /** The countries with their own organisation rules. */
-export type OrgCountry = 'GB' | 'AU' | 'IN' | 'US' | 'CA';
+export type OrgCountry = 'GB' | 'AU' | 'IN' | 'US' | 'CA' | 'NZ';
 
 /** The currencies their figures are in (ISO 4217). */
-export type OrgCurrency = 'GBP' | 'AUD' | 'INR' | 'USD' | 'CAD';
+export type OrgCurrency = 'GBP' | 'AUD' | 'INR' | 'USD' | 'CAD' | 'NZD';
 
 export interface OrgSource {
   /** The key in ORG_RULE_SOURCES. */
@@ -199,7 +226,10 @@ export interface OrgSource {
     | 'CBIC (India)'
     | 'Supreme Court of India'
     | 'IRS'
-    | 'CRA';
+    | 'CRA'
+    | 'Inland Revenue (NZ)'
+    | 'Charities Services (NZ)'
+    | 'Companies Office (NZ)';
   sourceUrl: string;
   /** The page's own "last updated" date (YYYY-MM-DD), or null where it shows none. */
   pageLastUpdated: string | null;
@@ -867,18 +897,144 @@ const CA_SOURCES = {
   ),
 } satisfies Record<string, SourceRow>;
 
+const nz = (authority: OrgSource['authority'], sourceUrl: string, pageLastUpdated: string | null, claim: string): SourceRow => ({
+  country: 'NZ',
+  claim,
+  authority,
+  sourceUrl,
+  pageLastUpdated,
+  readOn: R,
+  reviewBy: NZ_REVIEW_BY,
+});
+const IRNZ = 'Inland Revenue (NZ)';
+const CSNZ = 'Charities Services (NZ)';
+const CONZ = 'Companies Office (NZ)';
+
+const NZ_SOURCES = {
+  nzCharityExempt: nz(
+    IRNZ,
+    U.nzQualifyingExemption,
+    '2025-06-23',
+    '"Registered charities are automatically exempt from income tax" (they may still pay tax on business income not used in New ' +
+      'Zealand). "Other not-for-profits, including sports clubs, can apply for an income tax exemption" if set up for the public ' +
+      'good and funds are not used for the private gain of anyone involved; otherwise "you do not pay tax on the first $1,000 your ' +
+      'not-for-profit earns each year".',
+  ),
+  nzSportsClubs: nz(
+    IRNZ,
+    U.nzSportsClubs,
+    '2024-07-01',
+    'A club may get an income tax exemption if it is "set up to promote an amateur game or sport", or for public recreation or ' +
+      'entertainment without significant barriers, and its funds cannot benefit members; otherwise it may get the $1,000 deduction ' +
+      'and files an IR9 each year. Incorporated societies are taxed at the company rate, unincorporated clubs at individual rates. ' +
+      'A club may still need to register for GST.',
+  ),
+  nzNfpDeduction: nz(
+    IRNZ,
+    U.nzNfpDeduction,
+    '2023-04-24',
+    'A not-for-profit that cannot get an exemption may reduce its income by $1,000 once Inland Revenue is satisfied it is a ' +
+      'not-for-profit. With income after expenses under $1,000 no return is needed; above it, a return is filed and tax is paid on ' +
+      'the amount over $1,000.',
+  ),
+  nzIr9: nz(
+    IRNZ,
+    U.nzIr9,
+    '2026-04-01',
+    'Clubs and societies file the IR9 income tax return; clubs with an exemption do not. "If you intend to claim the $1,000 income ' +
+      'deduction in your return, we need to approve you as a not-for-profit."',
+  ),
+  nzDonationTaxCredits: nz(
+    IRNZ,
+    U.nzDonationTaxCredits,
+    '2026-06-25',
+    'Individuals claim "1/3rd of the value of eligible donations over $5, up to their taxable income" for donations of $5 or more ' +
+      'to an approved donee organisation (charities, religious organisations, schools, kindergartens), with receipts that "clearly ' +
+      'show all required information", within 4 years.',
+  ),
+  nzGstRegistration: nz(
+    IRNZ,
+    U.nzGstRegistration,
+    '2025-02-13',
+    'Register for GST if "your turnover was at least $60,000 in the last 12 months" or you expect it to be in the next 12 months.',
+  ),
+  nzBudget2026Proposals: nz(
+    IRNZ,
+    U.nzBudget2026Proposals,
+    '2026-05-28',
+    'Budget 2026 information sheet (proposals, "may change as the legislation moves through the parliamentary process"): donations ' +
+      'eligible for the credit capped at the lower of $100,000 or taxable income from 1 April 2027; membership subscriptions and ' +
+      'levies of taxable not-for-profits to remain non-taxable from 1 April 2027; the effective tax-free threshold raised from $1,000 ' +
+      'to $10,000, with no return for income of $10,000 or less, from the 2027-28 income year.',
+  ),
+  nzCsAnnualReturn: nz(
+    CSNZ,
+    U.nzCsAnnualReturn,
+    null,
+    'Under the Charities Act 2005 "all registered charities must file an annual return within 6 months of their balance date", with ' +
+      'a Performance Report (Tiers 3 and 4) or Financial Report (Tiers 1 and 2) that meets the standards for their tier.',
+  ),
+  nzCsTier4: nz(
+    CSNZ,
+    U.nzCsTier4,
+    null,
+    'Tier 4 (updated June 2026): for a charity that "has annual operating payments under $140,000", has no public accountability and ' +
+      '"uses cash-based accounting"; its Performance Report shows what it did and "the cash your charity received and paid".',
+  ),
+  nzCsTier3: nz(
+    CSNZ,
+    U.nzCsTier3,
+    null,
+    'Tier 3 (updated June 2026): annual operating payments "of $140,000 or more, but less than $5 million", no public accountability, ' +
+      'accrual-based accounting; statements of service performance, financial performance and financial position.',
+  ),
+  nzCsAuditReview: nz(
+    CSNZ,
+    U.nzCsAuditReview,
+    null,
+    'Audit and review (updated November 2025): total operating expenditure in each of the previous two years "Over $550,000 ' +
+      '(medium)" — a review or an audit; "Over $1.1 million (large)" — an audit by a qualified auditor.',
+  ),
+  nzIsTransition: nz(
+    CONZ,
+    U.nzIsRegister,
+    null,
+    '"From 6 April 2026 there is one Act that incorporated societies need to comply with": the Incorporated Societies Act 2022. ' +
+      'Existing societies could reregister between 5 October 2023 and 5 April 2026; "That transition period has now ended"; a society ' +
+      'removed for not reregistering can apply to be restored.',
+  ),
+  nzIsAnnualFiling: nz(
+    CONZ,
+    U.nzIsAnnualFiling,
+    null,
+    'A society files its annual financial statements and an annual return "within 6 months of your balance date", after presenting ' +
+      'them at the AGM, signed by 2 committee members; a society registered with Charities Services files with Charities Services ' +
+      'instead.',
+  ),
+  nzIsReportingStandards: nz(
+    CONZ,
+    U.nzIsLargeSocieties,
+    null,
+    'A "small society" is not a registered charity or donee organisation and in each of the previous 2 financial years had "total ' +
+      'operating payments of less than $50,000, and total current assets of less than $50,000"; it uses the 2022 Act\'s minimum ' +
+      'standards. Other societies use the XRB tiers: Tier 4 (cash based, no audit) with "total operating payments of less than ' +
+      '$140,000".',
+  ),
+} satisfies Record<string, SourceRow>;
+
 export type GbOrgSourceKey = keyof typeof GB_SOURCES;
 export type AuOrgSourceKey = keyof typeof AU_SOURCES;
 export type InOrgSourceKey = keyof typeof IN_SOURCES;
 export type UsOrgSourceKey = keyof typeof US_SOURCES;
 export type CaOrgSourceKey = keyof typeof CA_SOURCES;
-export type OrgSourceKey = GbOrgSourceKey | AuOrgSourceKey | InOrgSourceKey | UsOrgSourceKey | CaOrgSourceKey;
+export type NzOrgSourceKey = keyof typeof NZ_SOURCES;
+export type OrgSourceKey = GbOrgSourceKey | AuOrgSourceKey | InOrgSourceKey | UsOrgSourceKey | CaOrgSourceKey | NzOrgSourceKey;
 
 const withIds = <K extends string>(rows: Record<K, SourceRow>): Record<K, OrgSource> =>
   Object.fromEntries(Object.entries<SourceRow>(rows).map(([id, r]) => [id, { id, ...r }])) as Record<K, OrgSource>;
 
 /** Every rule source, by key. Keys do not overlap between countries. */
-export const ORG_RULE_SOURCES: Record<OrgSourceKey, OrgSource> = { ...withIds(GB_SOURCES), ...withIds(AU_SOURCES), ...withIds(IN_SOURCES), ...withIds(US_SOURCES), ...withIds(CA_SOURCES) };
+export const ORG_RULE_SOURCES: Record<OrgSourceKey, OrgSource> = { ...withIds(GB_SOURCES), ...withIds(AU_SOURCES), ...withIds(IN_SOURCES), ...withIds(US_SOURCES), ...withIds(CA_SOURCES), ...withIds(NZ_SOURCES) };
 
 // ─── Figures ────────────────────────────────────────────────────────────────
 
@@ -917,6 +1073,8 @@ const IN_NPOS = ['IN_PUBLIC_TRUST', 'IN_SOCIETY', 'IN_SECTION8_COMPANY'];
 const IN_ALL = [...IN_NPOS, 'IN_CLUB'];
 const US_EXEMPT = ['US_501C3', 'US_501C7', 'US_501C4'];
 const CA_ALL = ['CA_REGISTERED_CHARITY', 'CA_NPO', 'CA_RCAAA'];
+const NZ_ALL = ['NZ_REGISTERED_CHARITY', 'NZ_INCORPORATED_SOCIETY', 'NZ_CLUB'];
+const NZ_TAXABLE_NFPS = ['NZ_INCORPORATED_SOCIETY', 'NZ_CLUB'];
 
 const CC = 'Charity Commission (England and Wales)';
 const NEW = GB_CC_THRESHOLDS_FROM_YEAR_END;
@@ -1075,4 +1233,18 @@ export const ORG_FIGURES: readonly OrgFigure[] = [
   fig({ id: 'CA.cra.t2052DueMonths', country: 'CA', label: 'T2052 RCAAA return due within (months after the fiscal period end)', value: 6, taxYear: 'current', currency: null, test: 'or_less', regulator: 'CRA', appliesTo: ['CA_RCAAA'], yearsEndingFrom: null, yearsEndingBefore: null, source: 'caRcaaaAdvantages', note: 'Form T2052 within six months of the fiscal period end.' }),
   fig({ id: 'CA.cra.gstSmallSupplierTaxableSuppliesUpTo', country: 'CA', label: 'GST/HST small supplier (public service body): taxable supplies up to', value: 50000, taxYear: 'current', currency: 'CAD', test: 'or_less', regulator: 'CRA', appliesTo: CA_ALL, yearsEndingFrom: null, yearsEndingBefore: null, source: 'caGstNpos', note: 'Taxable supplies of $50,000 or less in a single calendar quarter and in the last four consecutive quarters: a small supplier, registration voluntary.' }),
   fig({ id: 'CA.cra.gstCharityGrossRevenueUpTo', country: 'CA', label: 'GST/HST small supplier, charity gross revenue test: gross revenue up to', value: 250000, taxYear: 'current', currency: 'CAD', test: 'or_less', regulator: 'CRA', appliesTo: ['CA_REGISTERED_CHARITY'], yearsEndingFrom: null, yearsEndingBefore: null, source: 'caGstCharities', note: 'A charity is a small supplier if it meets either test: gross revenue of $250,000 or less in the fiscal year, or taxable supplies of $50,000 or less.' }),
+  // ─── NZ — Charities Services, Companies Office, Inland Revenue ───
+  fig({ id: 'NZ.cs.annualReturnDueMonths', country: 'NZ', label: 'Charity annual return due within (months after balance date)', value: 6, taxYear: 'current', currency: null, test: 'or_less', regulator: CSNZ, appliesTo: ['NZ_REGISTERED_CHARITY'], yearsEndingFrom: null, yearsEndingBefore: null, source: 'nzCsAnnualReturn', note: 'Every registered charity files its annual return, with its Performance or Financial Report, within 6 months of balance date.' }),
+  fig({ id: 'NZ.cs.tier4OperatingPaymentsUnder', country: 'NZ', label: 'Tier 4 (cash-based Performance Report): annual operating payments under', value: 140000, taxYear: 'current', currency: 'NZD', test: 'under', regulator: CSNZ, appliesTo: ['NZ_REGISTERED_CHARITY'], yearsEndingFrom: null, yearsEndingBefore: null, source: 'nzCsTier4', note: 'Under $140,000 of annual operating payments (and no public accountability): Tier 4, cash-based accounting.' }),
+  fig({ id: 'NZ.cs.tier3OperatingPaymentsUnder', country: 'NZ', label: 'Tier 3 (accrual Performance Report): annual operating payments under', value: 5000000, taxYear: 'current', currency: 'NZD', test: 'under', regulator: CSNZ, appliesTo: ['NZ_REGISTERED_CHARITY'], yearsEndingFrom: null, yearsEndingBefore: null, source: 'nzCsTier3', note: '$140,000 or more but under $5 million: Tier 3, accrual-based accounting. From $5 million, Tier 2 or 1 (XRB).' }),
+  fig({ id: 'NZ.cs.reviewOrAuditOver', country: 'NZ', label: 'Charity review or audit: operating expenditure in each of the previous two years over', value: 550000, taxYear: 'current', currency: 'NZD', test: 'over', regulator: CSNZ, appliesTo: ['NZ_REGISTERED_CHARITY'], yearsEndingFrom: null, yearsEndingBefore: null, source: 'nzCsAuditReview', note: 'Over $550,000 (medium): a review or an audit by a qualified auditor.' }),
+  fig({ id: 'NZ.cs.auditOver', country: 'NZ', label: 'Charity audit: operating expenditure in each of the previous two years over', value: 1100000, taxYear: 'current', currency: 'NZD', test: 'over', regulator: CSNZ, appliesTo: ['NZ_REGISTERED_CHARITY'], yearsEndingFrom: null, yearsEndingBefore: null, source: 'nzCsAuditReview', note: 'Over $1.1 million (large): an audit by a qualified auditor.' }),
+  fig({ id: 'NZ.is.annualReturnDueMonths', country: 'NZ', label: 'Society financial statements and annual return due within (months after balance date)', value: 6, taxYear: 'current', currency: null, test: 'or_less', regulator: CONZ, appliesTo: ['NZ_INCORPORATED_SOCIETY'], yearsEndingFrom: null, yearsEndingBefore: null, source: 'nzIsAnnualFiling', note: 'Within 6 months of balance date, after the AGM, signed by 2 committee members.' }),
+  fig({ id: 'NZ.is.smallSocietyOperatingPaymentsUnder', country: 'NZ', label: 'Small society: total operating payments in each of the previous 2 years under', value: 50000, taxYear: 'current', currency: 'NZD', test: 'under', regulator: CONZ, appliesTo: ['NZ_INCORPORATED_SOCIETY'], yearsEndingFrom: null, yearsEndingBefore: null, source: 'nzIsReportingStandards', note: 'With total current assets also under $50,000, and not a registered charity or donee organisation: the 2022 Act\'s minimum reporting standards.' }),
+  fig({ id: 'NZ.is.smallSocietyCurrentAssetsUnder', country: 'NZ', label: 'Small society: total current assets in each of the previous 2 years under', value: 50000, taxYear: 'current', currency: 'NZD', test: 'under', regulator: CONZ, appliesTo: ['NZ_INCORPORATED_SOCIETY'], yearsEndingFrom: null, yearsEndingBefore: null, source: 'nzIsReportingStandards', note: 'Both tests in each of the previous 2 financial years.' }),
+  fig({ id: 'NZ.is.tier4OperatingPaymentsUnder', country: 'NZ', label: 'Society on XRB Tier 4 (cash based, no audit): total operating payments under', value: 140000, taxYear: 'current', currency: 'NZD', test: 'under', regulator: CONZ, appliesTo: ['NZ_INCORPORATED_SOCIETY'], yearsEndingFrom: null, yearsEndingBefore: null, source: 'nzIsReportingStandards', note: 'A society that is not small, with operating payments under $140,000: Tier 4, cash-based.' }),
+  fig({ id: 'NZ.ird.nfpIncomeDeduction', country: 'NZ', label: 'Not-for-profit income deduction (taxable NFPs approved by Inland Revenue)', value: 1000, taxYear: 'current (a $10,000 threshold is proposed from 2027-28)', currency: 'NZD', test: 'is', regulator: IRNZ, appliesTo: NZ_TAXABLE_NFPS, yearsEndingFrom: null, yearsEndingBefore: null, source: 'nzNfpDeduction', note: 'No tax on the first $1,000 of net income; no return while income after expenses is under $1,000. Budget 2026 proposes $10,000 from the 2027-28 income year (not yet law).' }),
+  fig({ id: 'NZ.ird.donationTaxCreditShare', country: 'NZ', label: 'Donation tax credit for individual donors: share of eligible donations', value: 1 / 3, taxYear: 'current', currency: null, test: 'is', regulator: IRNZ, appliesTo: ['NZ_REGISTERED_CHARITY'], yearsEndingFrom: null, yearsEndingBefore: null, source: 'nzDonationTaxCredits', note: 'Information only: one third of eligible donations to an approved donee organisation, up to the donor\'s taxable income. Budget 2026 proposes capping eligible donations at $100,000 from 1 April 2027 (not yet law).' }),
+  fig({ id: 'NZ.ird.donationMinimum', country: 'NZ', label: 'Donation tax credit: each donation of at least', value: 5, taxYear: 'current', currency: 'NZD', test: 'at_least', regulator: IRNZ, appliesTo: ['NZ_REGISTERED_CHARITY'], yearsEndingFrom: null, yearsEndingBefore: null, source: 'nzDonationTaxCredits', note: 'Donations of $5 or more, with a receipt showing all the required information.' }),
+  fig({ id: 'NZ.ird.gstRegistrationAtLeast', country: 'NZ', label: 'GST registration: turnover in 12 months of at least', value: 60000, taxYear: 'current', currency: 'NZD', test: 'at_least', regulator: IRNZ, appliesTo: NZ_ALL, yearsEndingFrom: null, yearsEndingBefore: null, source: 'nzGstRegistration', note: 'Register when turnover was at least $60,000 in the last 12 months or is expected to be in the next 12.' }),
 ];
