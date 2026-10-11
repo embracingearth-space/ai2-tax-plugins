@@ -81,7 +81,7 @@ describe('income-tax take-home anchors', () => {
  * liability. Both figures are the live taxmcp.ai2fin.com response, not
  * hand-derived (see the website's PR history for the incident this was).
  */
-describe('AU LITO offsets the Medicare levy, not just income tax', () => {
+describe('AU LITO reduces income tax only, never the Medicare levy', () => {
   it('$9,100 → $0 total tax, and the levy is NOT charged in the first place', () => {
     const r = calcIncomeTax('AU', 9100, '2026-27')!;
     expect(r.incomeTax).toBe(0);
@@ -92,7 +92,10 @@ describe('AU LITO offsets the Medicare levy, not just income tax', () => {
     // answer for the taxpayer, honest arithmetic underneath.
     expect(sum(r.levies)).toBe(0);
     expect(r.levies).toHaveLength(0);
-    expect(sum(r.offsets)).toBe(700);
+    // LITO is non-refundable and bounded by the income tax it reduces — here
+    // nil — so no offset line appears (ATO: excess non-refundable offsets are
+    // "not offset against other liabilities").
+    expect(sum(r.offsets)).toBe(0);
     expect(r.totalTax).toBe(0);
     expect(r.takeHome).toBe(9100);
   });
@@ -145,10 +148,13 @@ describe('AU Medicare levy low-income reduction', () => {
   });
 
   it('leaves a year with no verified thresholds on the flat 2%', () => {
-    // 2024-25 used different thresholds and 2027-28's are not announced.
-    // Borrowing another year's indexed figures would be inventing them.
-    expect(levy(30000, '2024-25')).toBe(600);
+    // 2027-28's thresholds are not announced. Borrowing another year's
+    // indexed figures would be inventing them.
     expect(levy(30000, '2027-28')).toBe(600);
+  });
+
+  it('uses the 2024-25 thresholds ($27,222 / $34,027, ATO M1 2025)', () => {
+    expect(levy(30000, '2024-25')).toBe(278);
   });
 });
 

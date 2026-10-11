@@ -6,9 +6,9 @@
  * places that had already drifted from each other: the website's
  * lib/incomeTaxCalc.ts, the public Tax MCP's inline INCOME map, and this
  * engine's `{country}-IT` FILING plugins. Two confirmed production bugs came
- * from exactly that split — AU's Medicare levy not being offset by LITO below
- * ~$35k (the website and the MCP computed the combination in a different
- * order), and the MCP serving New Zealand's 2025-26 bracket set for months
+ * from exactly that split — the website and the MCP combined AU's LITO and
+ * Medicare levy in different orders below ~$35k (see the LITO note below for
+ * which order the law takes), and the MCP serving New Zealand's 2025-26 bracket set for months
  * into 2026-27 because only the website had added the new year. This is now
  * the one implementation; the website and the Tax MCP both render it rather
  * than each holding their own copy.
@@ -32,9 +32,14 @@
  * tax on the taxable amount → offsets(ctx) → credits that reduce the tax (AU
  * LITO; IN s.87A rebate with marginal relief) → levies(ctx) → charges that
  * compound on the POST-OFFSET base (AU Medicare; UK National Insurance; IN
- * surcharge + cess). Order matters: AU's LITO must be free to spill over and
- * offset the Medicare levy too, not just the income tax component, which is
- * exactly the bug this file's history records.
+ * surcharge + cess). Order matters for charges that compound on the post-offset
+ * tax (IN surcharge + cess). It does NOT let AU's LITO reach the Medicare levy:
+ * a non-refundable offset reduces income tax only, and any excess is lost —
+ * the ATO's myTax estimate says it is "not offset against other liabilities",
+ * and the levy is imposed by its own Act. An earlier version of this comment
+ * said the opposite; the AU scheme now bounds LITO by the income tax. (In
+ * practice it bit only in years without Medicare low-income thresholds, since
+ * LITO exceeds the tax only below ~$22,900, where the levy is already nil.)
  */
 import { resolveEffectiveDated, addOneYear } from './effectiveDating';
 import { FI_EARNED_INCOME_YEARS, finnishMunicipalities, finnishWageTax, type FinnishEarnedIncomeYear } from './finland';
@@ -463,11 +468,9 @@ function liabilityAt(
   const incomeTax = q.round(set.tariff && !(regional?.region.mode === 'replacesBands') ? set.tariff(taxable, q) : progressive(taxable, bands));
 
   // 3. Offsets (rebates) reduce the tax first → baseTax. NOT floored at zero
-  //    here: AU's LITO can exceed incomeTax at low incomes, and the leftover
-  //    must still be able to offset the levy added in step 4 — one combined
-  //    max(0, incomeTax + levy - offset) rather than two separately-floored
-  //    steps. India's 87A rebate is self-bounded to incomeTax by its own
-  //    offsets() above, so this changes nothing for IN.
+  //    here, so a credit that genuinely reaches a levy can; a NON-refundable
+  //    offset must bound itself to incomeTax in its own offsets() — AU's LITO
+  //    and India's 87A rebate both do, so neither spills onto a levy.
   let offsets = c.offsets({ gross: g, taxable, incomeTax, ...year });
 
   // 3a. A region charged on top of the national tax (a province, a state)
@@ -839,14 +842,16 @@ function inSurcharge(taxable: number, baseTax: number): number {
  * KEYED BY YEAR ON PURPOSE. These thresholds are indexed annually. A year with
  * no entry here keeps the flat 2% rather than borrowing another year's
  * thresholds — inventing an indexed figure is the failure this whole effort
- * exists to remove. 2024-25 used different (lower) thresholds that are not
- * verified here, and 2027-28's are not announced yet; both therefore stay flat
- * until someone verifies and adds them.
+ * exists to remove. 2027-28's are not announced yet, so that year stays flat
+ * (and the result says so) until someone verifies and adds them. 2024-25's
+ * lower thresholds come from the ATO's 2025 return instructions (M1).
  */
 const AU_MEDICARE_LOW_INCOME: Record<string, { lower: number; upper: number }> = {
   // Carried forward per the Act until amended — the same treatment the bands get.
   '2026-27': { lower: 28011, upper: 35013 },
   '2025-26': { lower: 28011, upper: 35013 },
+  // ATO, Individual tax return 2025 instructions, M1 Medicare levy reduction.
+  '2024-25': { lower: 27222, upper: 34027 },
 };
 
 /** The Medicare levy actually payable on `taxable` for a given AU tax year. */
@@ -880,21 +885,22 @@ export const INCOME_TAX_SCHEMES: Record<string, IncomeTaxScheme> = {
       const reduced = Boolean(AU_MEDICARE_LOW_INCOME[taxYearLabel]) && levy < q.round(taxable * 0.02);
       return [{ name: reduced ? 'Medicare levy (reduced, low income)' : 'Medicare levy (2%)', amount: levy }];
     },
-    offsets: ({ taxable, q }) => {
+    offsets: ({ taxable, incomeTax, q }) => {
       // LITO (ATO schedule): $700 up to $37,500; less 5c per $1 to $45,000
-      // (→ $325); less 1.5c per $1 to $66,667 (→ $0).
+      // (→ $325); less 1.5c per $1 to $66,667 (→ $0). Non-refundable: it
+      // reduces income tax to nil and never the Medicare levy (see the header).
       let lito = 0;
       if (taxable <= 37500) lito = 700;
       else if (taxable <= 45000) lito = q.round(700 - (taxable - 37500) * 0.05);
       else if (taxable <= 66667) lito = q.round(325 - (taxable - 45000) * 0.015);
-      lito = Math.max(0, lito);
+      lito = Math.min(Math.max(0, lito), Math.max(0, incomeTax));
       return lito > 0 ? [{ name: 'Low Income Tax Offset', amount: lito }] : [];
     },
     assumptions: ({ taxYearLabel }) =>
       AU_MEDICARE_LOW_INCOME[taxYearLabel]
         ? []
         : [`The Medicare levy low-income reduction is not on file for ${taxYearLabel}, so the full 2% is charged — below about $35,000 the levy shown may be too high.`],
-    note: 'Includes the Medicare levy low-income reduction for the years its thresholds are on file (2025-26 and 2026-27: nil to $28,011, shaded in at 10% of the excess to $35,013). Excludes HECS/HELP, the Medicare levy surcharge, the seniors and pensioners thresholds, family thresholds and other offsets.',
+    note: 'Includes the Medicare levy low-income reduction for the years its thresholds are on file (2025-26 and 2026-27: nil to $28,011, shaded in at 10% of the excess to $35,013; 2024-25: $27,222 to $34,027). LITO reduces income tax only, never the levy. Excludes HECS/HELP, the Medicare levy surcharge, the seniors and pensioners thresholds, family thresholds and other offsets.',
     incomeBasis: {
       default: 'any',
       selfEmployed: 'differs',

@@ -92,8 +92,21 @@ describe('US / CA — federal-only figures say so', () => {
 
 describe('AU — Medicare low-income reduction', () => {
   it('says when a year has no thresholds on file', () => {
-    expect(calcIncomeTax('AU', 30000, '2024-25')!.assumptions).toContainEqual(expect.stringMatching(/not on file for 2024-25/));
+    expect(calcIncomeTax('AU', 30000, '2027-28')!.assumptions).toContainEqual(expect.stringMatching(/not on file for 2027-28/));
     expect(calcIncomeTax('AU', 30000, '2025-26')!.assumptions).not.toContainEqual(expect.stringMatching(/not on file/));
+  });
+
+  it('applies the 2024-25 thresholds ($27,222 / $34,027)', () => {
+    // (30,000 − 27,222) × 10% = 277.80, below the full 2% (600).
+    expect(calcIncomeTax('AU', 30000, '2024-25')!.levies).toEqual([{ name: 'Medicare levy (reduced, low income)', amount: 278 }]);
+  });
+
+  it('never lets LITO reduce the Medicare levy (non-refundable offset)', () => {
+    // 2027-28 has no low-income thresholds, so the flat 2% levy applies at $22,000.
+    // Tax (22,000 − 18,200) × 14% = 532; LITO is capped at that 532, not 700.
+    const r = calcIncomeTax('AU', 22000, '2027-28')!;
+    expect(r.offsets).toEqual([{ name: 'Low Income Tax Offset', amount: 532 }]);
+    expect(r.totalTax).toBe(440); // the full levy — was 272 when LITO spilled over
   });
 });
 
