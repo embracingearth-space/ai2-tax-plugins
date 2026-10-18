@@ -133,3 +133,24 @@ export {
   getRetirementInfo,
   getSuperannuationEstimate,
 } from './superannuation';
+
+// Filing and payment due dates — rules, effective-dated, authority-cited
+export type {
+  DueDate,
+  DueFrequency,
+  DueObligation,
+  DueAction,
+  NonBusinessDayRule,
+  DueDateRuleSource,
+  IndirectDueOptions,
+  IncomeTaxDueOptions,
+} from './dueDates';
+export {
+  indirectReturnDueDates,
+  incomeTaxDueDates,
+  dueDateCoverage,
+  dueDateRuleSources,
+  dueDateRulesPastReview,
+  indiaQrmpReturnDay,
+  paymentDueDate,
+} from './dueDates';

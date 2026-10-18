@@ -2,6 +2,26 @@
 
 ## 2.2.0 — Unreleased
 
+### Added — filing and payment due dates, as rules
+
+`indirectReturnDueDates(country, period, frequency, opts)` and `incomeTaxDueDates(country, taxYear, opts)` (`src/data/dueDates.ts`) say when a GST/VAT activity statement is lodged and paid, and when the self-employed pay income tax. Both are rules, not lists of dates, so they stay right for future years. A change in the law is a new effective-dated row, not an edit to an old one.
+
+- **GST/VAT returns:**
+  - AU BAS: monthly 21st; quarterly 28th, with October–December due 28 February; annual 31 October, or 28 February with no tax return.
+  - GB VAT Return: 1 month and 7 days after the period; the Annual Accounting Scheme 2 months after.
+  - CA GST/HST: 1 month after the period; annual 3 months after, or for individuals with business income, pay by 30 April and file by 15 June.
+  - NZ GST: the 28th of the next month, with 7 May and 15 January as the exceptions.
+  - IN GSTR-3B: monthly 20th; under QRMP, PMT-06 on the 25th and the return on the 22nd or 24th by state (`indiaQrmpReturnDay`).
+- **Income tax for the self-employed:**
+  - AU: PAYG instalments, the 31 October return and the 21 November bill.
+  - GB: payments on account (31 January and 31 July) and the balancing payment.
+  - CA: instalments on the 15th of March, June, September and December; the balance on 30 April and the return on 15 June.
+  - US: estimated tax on 15 April, 15 June, 15 September and 15 January, and the return on 15 April.
+  - IN: advance tax of 15 / 45 / 75 / 100%, or one instalment on 15 March for presumptive income.
+- **Each result** gives the statutory date and the date after the authority's weekend rule. GB has none: a payment must clear by the date. Public holidays are described in `holidayNote`, never computed. Each result also says who it applies to, cites its source, and marks a date it couldn't pin down as `approximate`, giving the earlier of the possibilities.
+- **Not covered:** a country, or a period before the rules were checked, returns null.
+- **The rate watch** lists every rule past its `reviewBy` (`dueDateRulesPastReview`). `__tests__/dueDates.test.ts` checks the rules against dates the authorities publish.
+
 ### Fixed — the individual-return plugins tax self-employed income correctly
 
 An audit of the five individual-return plugins (IN-IT, US-IT, GB-SA, CA-IT, AU-IT), run against each authority's own pages, found salaried rules applied to self-employed income and the reverse, along with code that disagreed with its own help text. Every fix has a worked-example regression test (`__tests__/incomeTaxSelfEmployed.regression.test.ts`, `__tests__/filing{US,GB,CA,AU}.regression.test.ts`).
