@@ -695,6 +695,23 @@ export {
   listRetirementCountries,
   getRetirementInfo,
   getSuperannuationEstimate,
+  // Filing and payment due dates (GST/VAT returns; self-employed income tax)
+  indirectReturnDueDates,
+  incomeTaxDueDates,
+  dueDateCoverage,
+  dueDateRuleSources,
+  dueDateRulesPastReview,
+  indiaQrmpReturnDay,
+} from './data';
+export type {
+  DueDate,
+  DueFrequency,
+  DueObligation,
+  DueAction,
+  NonBusinessDayRule,
+  DueDateRuleSource,
+  IndirectDueOptions,
+  IncomeTaxDueOptions,
 } from './data';
 
 export type {

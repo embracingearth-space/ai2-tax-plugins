@@ -38,6 +38,8 @@ jest.mock(
   () => ({ orgRulesPastReview: (...a: unknown[]) => orgRulesPastReview(...a) }),
   { virtual: true },
 );
+// Due-date rules past review: none in these runs.
+jest.mock('../dist/data/dueDates', () => ({ dueDateRulesPastReview: () => [] }), { virtual: true });
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const runner = require('../scripts/rate-watch/run.cjs');
