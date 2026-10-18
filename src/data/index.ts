@@ -137,6 +137,7 @@ export {
 // Filing and payment due dates — rules, effective-dated, authority-cited
 export type {
   DueDate,
+  DuePeriod,
   DueFrequency,
   DueObligation,
   DueAction,

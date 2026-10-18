@@ -706,6 +706,7 @@ export {
 } from './data';
 export type {
   DueDate,
+  DuePeriod,
   DueFrequency,
   DueObligation,
   DueAction,

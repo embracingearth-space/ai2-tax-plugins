@@ -7,9 +7,10 @@
  * due 28 February"). Stored as a rule it is right for every future year the
  * rule stands, and a change in the law is a NEW effective-dated row, never an
  * edit to an old one. Every row carries the authority page it was read from,
- * the day it was read and a review-by date; rateWatch.analyzeDueDateRules
- * flags a row whose citation is stale or past review, exactly as it does for
- * rates.
+ * the day it was read and a review-by date (a year after reading).
+ * dueDateRulesPastReview (below) lists every row past its review-by date or
+ * not verified, and the weekly Rate Watch report prints them, as it does for
+ * the home and organisation rules.
  *
  * WHAT A RESULT PROMISES:
  *   • `ymd`         the statutory date, a plain calendar date (no timezone)
@@ -85,12 +86,14 @@ export interface IncomeTaxDueOptions {
   presumptive?: boolean;
 }
 
-interface Period {
+/** A filing period or tax year, as plain calendar dates. */
+export interface DuePeriod {
   /** First day, YYYY-MM-DD. */
   start: string;
   /** Last day, YYYY-MM-DD. */
   end: string;
 }
+type Period = DuePeriod;
 
 interface CountryDueRules {
   countryCode: string;
