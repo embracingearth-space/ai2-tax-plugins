@@ -12,6 +12,7 @@ import {
   incomeTaxDueDates,
   indiaQrmpReturnDay,
   indirectReturnDueDates,
+  paymentDueDate,
 } from '../src';
 
 const pick = (rows: ReturnType<typeof indirectReturnDueDates>) =>
@@ -204,5 +205,20 @@ describe('honest edges', () => {
     const later = dueDateRulesPastReview('2027-10-20');
     expect(later).toHaveLength(10);
     expect(later[0]).toMatchObject({ file: 'src/data/dueDates.ts', reviewBy: '2027-10-19' });
+  });
+});
+
+describe('paymentDueDate — when the money is due', () => {
+  test('Canada annual individual: 30 April, not the 15 June filing date', () => {
+    const rows = indirectReturnDueDates('CA', { start: '2026-01-01', end: '2026-12-31' }, 'annual', { individualWithBusinessIncome: true });
+    expect(paymentDueDate(rows)!.ymd).toBe('2027-04-30');
+  });
+  test('India QRMP: the final payment (the return), not the first PMT-06', () => {
+    const rows = indirectReturnDueDates('IN', { start: '2026-07-01', end: '2026-09-30' }, 'quarterly', { region: 'DL' });
+    expect([paymentDueDate(rows)!.title, paymentDueDate(rows)!.ymd]).toEqual(['GSTR-3B', '2026-10-24']);
+  });
+  test('nothing to pay, or nothing known: null', () => {
+    expect(paymentDueDate(null)).toBeNull();
+    expect(paymentDueDate([])).toBeNull();
   });
 });

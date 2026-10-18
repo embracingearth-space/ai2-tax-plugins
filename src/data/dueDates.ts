@@ -547,3 +547,15 @@ export function dueDateRulesPastReview(
       verified: s.verified,
     }));
 }
+
+/**
+ * The date the money is due, from a set of due dates for one period: the last
+ * row that pays (`pay` or `lodge_and_pay`). Where the authority splits paying
+ * from filing (Canada's annual filer pays 30 April and files 15 June) it is
+ * the payment date; where several payments fall in a period (India's QRMP)
+ * it is the final one. Null when there is nothing to pay.
+ */
+export function paymentDueDate(rows: DueDate[] | null | undefined): DueDate | null {
+  const paying = (rows ?? []).filter((r) => r.action !== 'lodge');
+  return paying.length ? [...paying].sort((a, b) => a.ymd.localeCompare(b.ymd))[paying.length - 1] : null;
+}
