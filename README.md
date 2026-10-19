@@ -507,4 +507,6 @@ npm run build
 
 ## License
 
-MIT
+Proprietary. Copyright (c) 2026 AI2FIN PTY LTD. All rights reserved. See [LICENSE](LICENSE).
+
+Versions published before 19 October 2026 were released under the MIT licence; every later version is proprietary.
