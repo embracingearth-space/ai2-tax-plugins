@@ -236,6 +236,7 @@ const AU: HomeRules = {
     },
   ],
   notes: [
+    { id: 'au-self-rent', text: "A sole trader renting their own home to their own business is not described on the authority pages read: a sole trader and their business are one taxpayer, so rent they pay themselves is not what the pages describe. The pages describe occupancy costs (interest or rent you pay to someone else, rates, insurance) at the floor-area share for a place of business, with the main residence exemption reduced; the ATO pages could not be opened for this check (access refused). For an accountant before any rent is recorded.", forAccountant: true, status: 'unverified' },
     { id: 'au-fixed-rate-2026-27', text: 'The working from home fixed rate for 2026-27 has not been published (workFromHomeFixedRate returns none).', forAccountant: false, status: 'verified', citation: cite('https://www.ato.gov.au/individuals-and-families/income-deductions-offsets-and-records/deductions-you-can-claim/work-related-deductions/working-from-home-expenses/fixed-rate-method') },
     { id: 'au-employee-place-of-business', text: 'An employee can reach occupancy costs only with an area that is a place of business and no alternative place provided by the employer.', forAccountant: true, status: 'judgement', citation: cite(ATO.occupancy) },
     { id: 'au-small-business-concessions', text: 'The small business CGT concessions rarely apply to a home: the active asset test is applied to the whole home.', forAccountant: true, status: 'verified', citation: cite(ATO.homeBusinessCgt) },
@@ -382,6 +383,7 @@ const GB: HomeRules = {
     },
   ],
   notes: [
+    { id: 'gb-self-rent', text: "A sole trader renting their own home to their own business is not described on the authority pages read: a sole trader and their business are one taxpayer, so rent they pay themselves is not what the pages describe. HMRC describes the business share of the home's own costs, or the flat rate by monthly hours; the simplified expenses page read does not mention rent. For an accountant before any rent is recorded.", forAccountant: true, status: 'unverified' },
     { id: 'gb-final-9-months', text: 'The final 9 months of ownership always qualify for Private Residence Relief (36 months if disabled or in a care home).', forAccountant: false, status: 'verified', citation: cite(GOVUK.hs283) },
     { id: 'gb-director', text: 'A company director: a homeworking allowance from the company (s316A, £6 a week in a search excerpt) or rent under an agreement — for an accountant.', forAccountant: true, status: 'search-excerpt' },
     { id: 'gb-family-costs', text: 'Whether family members paying toward bills is income: no HMRC page found.', forAccountant: true, status: 'unverified' },
@@ -507,6 +509,7 @@ const US: HomeRules = {
     },
   ],
   notes: [
+    { id: 'us-self-rent', text: 'A sole proprietor who owns the home cannot deduct rent to their own business: IRS Publication 587 says "If you own your home, you cannot deduct the fair rental value of your home." The home office deduction is the business share of the actual expenses (or the simplified method).', forAccountant: false, status: 'verified', citation: cite(IRS.p587, '2026-10-20') },
     { id: 'us-separate-structure', text: 'A separate structure used for the business: the gain is allocated and reported on Form 4797 unless you also lived in that part for 2 of the 5 years.', forAccountant: true, status: 'verified', citation: cite(IRS.p587) },
     { id: 'us-relative-below-rent', text: 'Days a relative pays less than fair rent count as personal-use days, which limits expenses.', forAccountant: true, status: 'verified', citation: cite(IRS.tc415) },
     { id: 'us-recapture-rate', text: 'The depreciation portion of the gain at sale (unrecaptured section 1250 gain) is taxed at a maximum 25% rate.', forAccountant: false, status: 'verified', citation: cite('https://www.irs.gov/taxtopics/tc409') },
@@ -656,6 +659,7 @@ const CA: HomeRules = {
     },
   ],
   notes: [
+    { id: 'ca-self-rent', text: "A sole trader renting their own home to their own business is not described on the authority pages read: a sole trader and their business are one taxpayer, so rent they pay themselves is not what the pages describe. The CRA business-use-of-home page could not be opened for this check (not found at the address tried). For an accountant before any rent is recorded.", forAccountant: true, status: 'unverified' },
     { id: 'ca-ancillary', text: 'Whether rental or business use is "ancillary", and the timing of s45(2)/(3) elections, are for an accountant.', forAccountant: true, status: 'judgement', citation: cite(CRA.folio) },
     { id: 'ca-flipping', text: 'A home owned under 365 days is business income unless a listed life event applies.', forAccountant: true, status: 'verified', citation: cite('https://www.canada.ca/en/revenue-agency/services/tax/individuals/topics/about-your-tax-return/tax-return/completing-a-tax-return/personal-income/line-12700-capital-gains/principal-residence-other-real-estate.html') },
     { id: 'ca-inclusion-rate', text: 'The capital gains inclusion rate stays one half (the increase was cancelled) — seen in a search excerpt only.', forAccountant: true, status: 'search-excerpt' },
@@ -781,6 +785,7 @@ const NZ: HomeRules = {
     },
   ],
   notes: [
+    { id: 'nz-self-rent', text: "A sole trader renting their own home to their own business is not described on the authority pages read: a sole trader and their business are one taxpayer, so rent they pay themselves is not what the pages describe. The IRD home office page could not be opened for this check (not found at the address tried). For an accountant before any rent is recorded.", forAccountant: true, status: 'unverified' },
     { id: 'nz-brightline', text: 'Selling within 2 years of title transfer (from 1 July 2024): the main home exclusion needs over half the area used as your main home for over half the time.', forAccountant: true, status: 'verified', citation: cite(IRD.qb2402) },
     { id: 'nz-2027-rates', text: 'The 2027 income year square-metre rate and boarder standard cost were not found.', forAccountant: true, status: 'unverified' },
     { id: 'nz-dedicated-area', text: 'Whether the square-metre method needs a dedicated area was implied, not quoted.', forAccountant: true, status: 'unverified' },
@@ -826,6 +831,7 @@ const IN: HomeRules = {
     },
   ],
   notes: [
+    { id: 'in-self-rent', text: "A sole trader renting their own home to their own business is not described on the authority pages read: a sole trader and their business are one taxpayer, so rent they pay themselves is not what the pages describe. No CBDT page on it was read. For an accountant before any rent is recorded.", forAccountant: true, status: 'unverified' },
     { id: 'in-no-home-office', text: 'No working-from-home deduction for salaried people appears in the official salaried deduction list (an absence finding).', forAccountant: false, status: 'verified', citation: cite(INCOME_TAX_IN.salaried) },
     { id: 'in-no-main-residence-exemption', text: 'There is no main-residence exemption: a gain on selling a home is taxable unless reinvested in a residential house (s54 of the 1961 Act).', forAccountant: false, status: 'verified', citation: cite(INCOME_TAX_IN.s54) },
     { id: 'in-new-act', text: 'The Income-tax Act, 2025 applies from 1 April 2026. Section numbers here are 1961 Act numbers; the only confirmed mappings are s115BAC → s202 and s44AD/44ADA/44AE → s58. The mapping for s54 and the house-property sections is not confirmed.', forAccountant: true, status: 'verified', citation: cite(INCOME_TAX_IN.newAct) },

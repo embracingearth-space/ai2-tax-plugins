@@ -343,3 +343,31 @@ describe('Rate Watch — the home-rule figures', () => {
     }
   });
 });
+
+describe('a sole trader renting their own home to their own business', () => {
+  const ids = { AU: 'au-self-rent', GB: 'gb-self-rent', US: 'us-self-rent', CA: 'ca-self-rent', NZ: 'nz-self-rent', IN: 'in-self-rent' } as const;
+
+  it.each(Object.entries(ids))('%s says so, once', (cc, id) => {
+    const notes = homeRulesFor(cc as string);
+    if (!notes.supported) throw new Error('unsupported');
+    expect(notes.notes.filter((n) => n.id === id)).toHaveLength(1);
+  });
+
+  it('the US note is verified, quotes IRS Publication 587 and carries the day it was read', () => {
+    const us = homeRulesFor('US');
+    if (!us.supported) throw new Error('unsupported');
+    const n = us.notes.find((x) => x.id === 'us-self-rent')!;
+    expect(n).toMatchObject({ status: 'verified', forAccountant: false });
+    expect(n.text).toContain('If you own your home, you cannot deduct the fair rental value of your home.');
+    expect(n.citation).toEqual({ url: 'https://www.irs.gov/publications/p587', readOn: '2026-10-20' });
+  });
+
+  it.each(['AU', 'GB', 'CA', 'NZ', 'IN'])('%s is not claimed as verified: for an accountant, with no invented citation', (cc) => {
+    const r = homeRulesFor(cc);
+    if (!r.supported) throw new Error('unsupported');
+    const n = r.notes.find((x) => x.id === ids[cc as keyof typeof ids])!;
+    expect(n).toMatchObject({ status: 'unverified', forAccountant: true });
+    expect(n.citation).toBeUndefined();
+    expect(n.text).toMatch(/one taxpayer/);
+  });
+});
