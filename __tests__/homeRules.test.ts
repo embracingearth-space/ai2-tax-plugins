@@ -369,5 +369,8 @@ describe('a sole trader renting their own home to their own business', () => {
     expect(n).toMatchObject({ status: 'unverified', forAccountant: true });
     expect(n.citation).toBeUndefined();
     expect(n.text).toMatch(/one taxpayer/);
+    // Never claims a page was read when it was not (CodeRabbit #90).
+    expect(n.text).toMatch(/^Not verified/);
+    expect(n.text).not.toMatch(/authority pages read/);
   });
 });
