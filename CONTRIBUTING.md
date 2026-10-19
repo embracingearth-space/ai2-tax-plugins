@@ -1,5 +1,7 @@
 # Contributing to @ai2/tax-plugins
 
+This package is proprietary to AI2FIN PTY LTD (see LICENSE). By submitting a contribution you assign to AI2FIN PTY LTD all copyright in it, or, where an assignment is not possible, grant AI2FIN PTY LTD an exclusive, perpetual, irrevocable, worldwide, royalty-free licence to use, modify and license it, and you confirm you have the right to do so.
+
 Thanks for contributing to `@ai2/tax-plugins` for `ai2fin.com`.
 
 ## Scope
